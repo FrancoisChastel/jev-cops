@@ -166,7 +166,7 @@ export const DEFAULT_CONTEXT_CONFIG: Readonly<ContextConfig> = deepFreeze({
   },
   taint: { minLength: 4, maxCandidatesPerEvent: 500, outputTaint: 1 },
   scope: {
-    tmpDirs: ["/tmp"],
+    tmpDirs: ["/tmp", "/private/tmp"],
     registries: {
       "package-lock.json": NPM,
       "npm-shrinkwrap.json": NPM,

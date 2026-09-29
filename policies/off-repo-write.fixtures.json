@@ -145,7 +145,7 @@
       }
     },
     {
-      "name": "a write under /private/tmp (macOS /tmp) is not matched; the floor alone annotates it (core scope.tmpDirs is /tmp only)",
+      "name": "a write under /private/tmp (macOS /tmp) is scratch space: not matched, allow",
       "event": {
         "schema": "jevdict.event/1",
         "id": "evt_01M3PP8RW04010000000000000",
@@ -187,7 +187,7 @@
         }
       },
       "expect": {
-        "verdict": "annotate",
+        "verdict": "allow",
         "riskMax": 0.5
       }
     },
