@@ -31,17 +31,27 @@ Updated: 2026-09-29
   named with the spec's required outcome (see `tests/tamper/README.md`). 274 tests.
   Decisions D-020–D-027.
 
-**Totals:** 878 tests + 12 todo, `bun run check` green, 42 commits.
+- **M0 step 4 (core) — judge** (`packages/core/src/judge`): provider-agnostic `Judge`
+  interface with typed noul/choice/score questions and answers, mock + disabled judges,
+  LRU/TTL cache, timeout + question-limit + validation guards, `buildJudgeState` that
+  never carries agent prose. Decisions D-002, D-032.
+- **M0 step 5 — policy engine** (`packages/core/src/policy`): floor formula and bands,
+  `PolicyDefinition` contract (spec example type-checks unchanged), `PolicyEvent`/
+  `PolicyContext` views, loader with 2 ms `when` cap, `combine` implementing spec rules
+  1–5 + budget + precedents with a named test per rule, `createPolicyEngine` (139 lines).
+  T6 floor-cap test live. 178 tests. Decisions D-028–D-037.
+
+**Totals:** 1056 tests + 11 todo, `bun run check` green.
 
 ## In progress
 
-- Nothing. Session boundary reached (schema, normalizer, context engine delivered).
+- M0 step 6–7: `@jevdict/sdk` (`definePolicy`, `jev.*` builders, fixture runner) and the
+  starter policies with `*.fixtures.json`.
 
-## Next (after this session)
+## Next
 
-- M0 step 4: `Judge` interface + providers (`mock`, `jev`, `openrouter`, `vercel-ai`), cache.
-- M0 step 5: floor risk, policy loader, monotonic combination (−0.2 max) with its test.
-- M0 steps 6–10: SDK, three starter policies + fixtures, daemon, `jevdict test`/`explain`, Pi adapter.
+- M0 step 4 (providers): `@jevdict/judge` package with `jev`, `openrouter`, `vercel-ai`.
+- M0 steps 8–10: daemon, `jevdict test`/`explain`, Pi adapter.
 
 ## Known gaps carried forward (from the normalizer report)
 
@@ -52,6 +62,9 @@ Updated: 2026-09-29
   python/node code is flagged opaque but not parsed.
 - `bun build --compile` will need the grammar `.wasm` embedded (M0 step 10).
 - Coverage report: `bunfig.toml` has `coverage = false`; enable in CI once the threshold is met.
+- Policy engine: hot reload needs Bun's `import()` cache busted (daemon, step 8);
+  `when`-overrun/degraded state is in-memory only; headless `hold → deny` (D-008) is the
+  daemon/adapter's mapping, not `combine`'s.
 - Context engine: `taintFraction` scans the whole taint set per event (~0.7 ms/event at
   1,600 calls) — needs an index before M4; `chargeHold` must be paired with `charge` by
   the daemon (types do not enforce it); SQLite schema has no migrations yet; in-repo
