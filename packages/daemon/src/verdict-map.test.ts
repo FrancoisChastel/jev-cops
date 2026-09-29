@@ -7,11 +7,17 @@ import {
   type PolicyDefinition,
   type PreEvent,
   parseEvent,
+  parseVerdict,
   resolvePolicyConfig,
   type Verdict,
 } from "@jevdict/core";
 import { loadEventFixture } from "../../../tests/fixtures/events/index.ts";
-import { HEADLESS_HOLD_DENIED, harnessVerdict, OBSERVE_ONLY } from "./verdict-map.ts";
+import {
+  HARNESS_RISK_STEP,
+  HEADLESS_HOLD_DENIED,
+  harnessVerdict,
+  OBSERVE_ONLY,
+} from "./verdict-map.ts";
 
 const EVENT = (() => {
   const parsed = parseEvent(loadEventFixture("pre-bash"));
@@ -47,6 +53,34 @@ describe("harnessVerdict", () => {
     const { response } = harnessVerdict(d, EVENT.id, "enforce", "interactive");
     expect(response).not.toHaveProperty("detail");
     expect(JSON.stringify(response)).not.toContain("human-only detail");
+  });
+
+  test("scores never reach the harness: no features, no judge answers, risk to one decimal (T6)", async () => {
+    const d = await decide("hold");
+    const asked: Decision = {
+      ...d,
+      risk: 0.6789,
+      jev: [{ question: "fixed/safe", type: "noul", p: 0.83, confidence: 0.7 }],
+    };
+    expect(Object.keys(asked.features)).toHaveLength(5);
+    const { response } = harnessVerdict(asked, EVENT.id, "enforce", "interactive");
+    expect(response).toMatchObject({ features: {}, jev: [], risk: 0.7 });
+    expect(response.policies).toEqual([...d.policies]);
+    expect(response.budget).toEqual(d.budget);
+    expect(parseVerdict(response).ok).toBe(true);
+    expect(HARNESS_RISK_STEP).toBe(0.1);
+  });
+
+  test.each([
+    [0, 0],
+    [0.04, 0],
+    [0.05, 0.1],
+    [0.34999, 0.3],
+    [0.95, 1],
+    [1, 1],
+  ])("risk %p is returned as %p", async (risk, shown) => {
+    const d = { ...(await decide("allow")), risk };
+    expect(harnessVerdict(d, EVENT.id, "enforce", "interactive").response.risk).toBe(shown);
   });
 
   test("enforce + interactive returns the verdict as is", async () => {

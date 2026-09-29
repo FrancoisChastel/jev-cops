@@ -10,7 +10,9 @@
  * flagged", and the floor −0.2 cap through the policy engine with a judge that answers
  * every question "safe" at full confidence. The audit-log flag is live through the daemon:
  * the `judge` line (command) and the `observe` line (output head) carry
- * `flags: ["prompt-like-string"]` with the pattern names.
+ * `flags: ["prompt-like-string"]` with the pattern names. The daemon gives no oracle for
+ * tuning an injection: a verdict on an agent channel carries no features and no judge
+ * answers, and its risk only to one decimal; the audit line keeps the full values.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -23,6 +25,7 @@ import {
   findPromptLikeStrings,
   type PolicyDefinition,
   type PreEvent,
+  parseVerdict,
   type Question,
   resolveContextConfig,
   resolvePolicyConfig,
@@ -113,6 +116,50 @@ describe("T6 judge injection: prompt-like text changes no deterministic feature"
         ["observe", ["prompt-like-string"]],
       ]);
       expect(flagged[0]?.payload.prompt_like).toContain("safety-assertion");
+    } finally {
+      await td.stop();
+    }
+  });
+});
+
+describe("T6 judge injection: no score oracle for whoever calls the socket", () => {
+  const ASKS = policyModule(
+    "asks",
+    1,
+    "annotate",
+    'ask: () => [{ kind: "noul", name: "safe", text: "Is this safe?" }],',
+  );
+
+  test("the verdict carries no features and no judge answers; the audit line keeps them", async () => {
+    const td = await startTestDaemon({
+      policies: { "asks.ts": ASKS },
+      judge: createMockJudge({ "asks/safe": { kind: "noul", p: 0.83, confidence: 0.9 } }),
+      policy: { ask: { min: 0 } },
+    });
+    try {
+      const pre = withFreshId(
+        buildEvent({ tool: "Bash", kind: "exec", input: { command: `ls # ${INJECTION}` } }),
+      );
+      const res = await td.call("POST", "/v1/judge", pre);
+      const body = res.body as Record<string, unknown>;
+      expect(res.status).toBe(200);
+      expect(body).toMatchObject({ features: {}, jev: [] });
+      expect(Number.isInteger((body.risk as number) * 10)).toBe(true);
+      expect(parseVerdict(body).ok).toBe(true);
+      const line = td.audit().find((l) => l.event_id === pre.id && l.kind === "judge");
+      const payload = line?.payload as {
+        decision: { jev: { p: number }[]; features: Record<string, number>; risk: number };
+        returned: Record<string, unknown>;
+      };
+      expect(payload.decision.jev).toEqual([expect.objectContaining({ p: 0.83, confidence: 0.9 })]);
+      expect(Object.keys(payload.decision.features).sort()).toEqual([
+        "environment",
+        "reversibility",
+        "scope",
+        "sequence",
+        "taint",
+      ]);
+      expect(payload.returned).toMatchObject({ features: {}, jev: [], risk: body.risk });
     } finally {
       await td.stop();
     }

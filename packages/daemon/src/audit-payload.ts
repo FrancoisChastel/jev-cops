@@ -2,6 +2,7 @@ import {
   type Answer,
   findPromptLikeStrings,
   findSecretPatterns,
+  type JevAnswer,
   type Judgement,
   type PostEvent,
   type PreEvent,
@@ -22,12 +23,18 @@ export function promptFlags(texts: readonly string[]): {
   return names.length === 0 ? {} : { flags: [PROMPT_LIKE_FLAG], prompt_like: names };
 }
 
-/** What the harness received for a judged event (never `detail`, never the raw hold token). */
+/**
+ * What the harness received for a judged event (never `detail`, never the raw hold
+ * token; scores as stripped for agent channels, the full ones are under `decision`).
+ */
 export interface ReturnedVerdict {
   readonly verdict: Verdict;
   readonly reason: string;
   readonly context_note: string | null;
   readonly updated_input: Record<string, unknown> | null;
+  readonly risk?: number;
+  readonly features?: Readonly<Record<string, number>>;
+  readonly jev?: readonly JevAnswer[];
   /** First hex characters of the SHA-256 of the hold token, when one was issued. */
   readonly hold_token_sha256?: string;
 }

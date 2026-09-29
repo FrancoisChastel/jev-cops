@@ -102,6 +102,9 @@ export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
     reason: response.reason,
     context_note: response.context_note,
     updated_input: response.updated_input,
+    risk: response.risk,
+    features: response.features,
+    jev: response.jev,
     ...(token === null ? {} : { hold_token_sha256: token.hash.slice(0, HOLD_TOKEN_HASH_PREFIX) }),
   };
   const record = {
