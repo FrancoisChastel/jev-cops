@@ -37,6 +37,8 @@ export interface TestDaemonOptions {
   /** Replaces the real git runner (timeouts, counting). */
   gitRunner?: GitRunner;
   http?: HttpBind | null;
+  /** `[daemon] hook_binary`; default none. */
+  hookBinary?: string;
   context?: ContextConfigInput;
   policy?: PolicyConfigInput;
   now?: () => number;
@@ -120,6 +122,7 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
       judgeDeadlineMs: opts.deadlineMs ?? 12_000,
       holdTokenTtlMs: opts.holdTokenTtlMs ?? 600_000,
       gitProbeTimeoutMs: opts.gitProbeTimeoutMs ?? 5_000,
+      hookBinary: opts.hookBinary ?? null,
     },
     policies: { dir: join(dir, "policies") },
     judge: {
@@ -155,6 +158,8 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
   const config = testConfig(dir, opts);
   const daemon = await startDaemon(config, {
     log: SILENT_LOGGER,
+    // As if loaded from `<dir>/jevdict.toml`; never the developer's own config file.
+    inputs: { configFiles: [join(dir, "jevdict.toml")], selfBinary: null },
     ...(opts.judge === undefined ? {} : { judge: opts.judge }),
     ...(opts.now === undefined ? {} : { now: opts.now }),
     ...(opts.gitRunner === undefined ? {} : { gitRunner: opts.gitRunner }),

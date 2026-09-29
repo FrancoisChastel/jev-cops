@@ -21,6 +21,7 @@ import {
 } from "@jevdict/core";
 import { type AuditLine, type Precedent, PrecedentStore, withDerivedGit } from "@jevdict/daemon";
 import { FIXTURE_WHEN_BUDGET_MS } from "@jevdict/sdk";
+import { isLatchedLine, latchedView, sessionPromptTask } from "./audit-session.ts";
 import {
   derivedGitOf,
   type JudgePayload,
@@ -41,9 +42,27 @@ export interface ReplayEvent {
   readonly notes: readonly string[];
 }
 
+/**
+ * A call the kill latch answered. No policy ran for it, so it is replayed as `kill` and
+ * kept apart from {@link ReplayEvent}s: the latch is session state, not a policy decision,
+ * and is never a delta.
+ */
+export interface ReplayLatched {
+  readonly eventId: string;
+  readonly sessionId: string;
+  readonly verdict: "kill";
+  /** What latched the session: `kill` or `config-change`. */
+  readonly cause: string;
+  /** The judged call or session report that latched it. */
+  readonly latchedBy: string;
+  readonly notes: readonly string[];
+}
+
 /** Everything a replay found. */
 export interface ReplayReport {
   readonly events: readonly ReplayEvent[];
+  /** Calls answered by the kill latch, in log order. */
+  readonly latched: readonly ReplayLatched[];
   readonly deltas: number;
   /** Lines that could not be replayed at all. */
   readonly problems: readonly string[];
@@ -65,6 +84,8 @@ interface State {
   store: InMemoryCaseFileStore | null;
   readonly precedents: PrecedentStore;
   readonly histories: Map<string, History>;
+  /** The replayed verdict per event id, for the notes of calls a latch answered. */
+  readonly replayed: Map<string, Verdict>;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -167,6 +188,7 @@ async function onJudge(
   }
   if (p.returned.verdict !== "deny" && p.returned.verdict !== "kill")
     history.awaitingPost.add(event.call.id);
+  s.replayed.set(event.id, decision.verdict);
   return {
     eventId: event.id,
     sessionId: event.session.id,
@@ -208,6 +230,40 @@ function onPrecedent(s: State, line: AuditLine): void {
   }
 }
 
+/**
+ * A `session` line: the root's first prompt sets the case-file task (the daemon writes the
+ * task on that line only, T11); a root's `end` ends its precedents as `/v1/session` does.
+ * Start, later prompts, config changes, latch and unlatch change no case file: a latch is
+ * carried by the judge lines it answered.
+ */
+function onSession(s: State, line: AuditLine): void {
+  const prompt = sessionPromptTask(line);
+  if (prompt !== null) {
+    openCaseFile(storeOf(s), prompt.sessionId, null).setTaskOnce(prompt.task);
+    return;
+  }
+  const rootEnd = line.payload.report === "end" && line.payload.parent_id === null;
+  if (rootEnd && line.session_id !== undefined) s.precedents.expireSession(line.session_id);
+}
+
+/** A judge line the kill latch answered: `kill`, with why, never a policy verdict. */
+function onLatched(s: State, line: AuditLine): ReplayLatched | string {
+  const view = latchedView(line);
+  if (!view.ok) return view.error;
+  const l = view.payload.latched;
+  const notes = [
+    `session latched since ${l.event_id} (cause ${l.cause}); the latch is state, not a policy decision: replayed as kill`,
+  ];
+  const origin = s.replayed.get(l.event_id);
+  if (l.cause === "kill" && origin !== undefined && origin !== "kill") {
+    notes.push(
+      `the call that latched it (${l.event_id}) now replays as ${origin}: without the latch this call would be judged by the policies`,
+    );
+  }
+  const ids = { eventId: line.event_id ?? "?", sessionId: line.session_id ?? "?" };
+  return { ...ids, verdict: "kill", cause: l.cause, latchedBy: l.event_id, notes };
+}
+
 function onBoot(s: State, line: AuditLine): void {
   const cfg = line.payload.config;
   if (line.payload.event !== "boot" || !isRecord(cfg)) return;
@@ -216,13 +272,56 @@ function onBoot(s: State, line: AuditLine): void {
   if (typeof line.payload.home === "string") s.home = line.payload.home;
 }
 
+/** What the replay collects, in log order. */
+interface Found {
+  readonly events: ReplayEvent[];
+  readonly latched: ReplayLatched[];
+  readonly problems: string[];
+}
+
+/** A judge line: re-judged by the policies, or, when the latch answered it, reported apart. */
+async function onJudgeLine(
+  s: State,
+  line: AuditLine,
+  policies: readonly PolicyDefinition[],
+  found: Found,
+): Promise<void> {
+  if (isLatchedLine(line)) {
+    const r = onLatched(s, line);
+    if (typeof r === "string") found.problems.push(r);
+    else found.latched.push(r);
+    return;
+  }
+  const r = await onJudge(s, line, policies);
+  if (typeof r === "string") found.problems.push(r);
+  else found.events.push(r);
+}
+
+async function onLine(
+  s: State,
+  line: AuditLine,
+  policies: readonly PolicyDefinition[],
+  found: Found,
+): Promise<void> {
+  s.at = line.at;
+  if (line.kind === "boot") onBoot(s, line);
+  else if (line.kind === "precedent") onPrecedent(s, line);
+  else if (line.kind === "session") onSession(s, line);
+  else if (line.kind === "observe") {
+    const problem = await onObserve(s, line);
+    if (problem !== null) found.problems.push(problem);
+  } else if (line.kind === "judge") await onJudgeLine(s, line, policies, found);
+}
+
 /**
  * Re-judges every recorded pre event with `policies` (spec §Policy DSL: "runs the current
  * policy set over past sessions and prints verdict deltas"). Each session is rebuilt in a
- * fresh in-memory case file from its logged pre and post lines, in order, on the logged
- * clock; recorded judge answers are fed back through the mock judge; granted precedents,
- * budget resets and session closes are replayed. What the log cannot rebuild (post output,
- * posts never logged) is reported per event, never guessed.
+ * fresh in-memory case file from its logged pre, post and `session` lines, in order, on
+ * the logged clock (the task from the root's first prompt when the events carry none);
+ * recorded judge answers are fed back through the mock judge; granted precedents, budget
+ * resets and session closes and ends are replayed. Calls the kill latch answered are
+ * replayed as `kill` and listed apart, never as deltas or problems. What the log cannot
+ * rebuild (post output, posts never logged) is reported per event, never guessed.
  */
 export async function replayAudit(
   lines: readonly AuditLine[],
@@ -239,25 +338,14 @@ export async function replayAudit(
       rootOf: (id) => storeOf(state).rootOf(id),
     }),
     histories: new Map(),
+    replayed: new Map(),
   };
-  const events: ReplayEvent[] = [];
-  const problems: string[] = [];
+  const found: Found = { events: [], latched: [], problems: [] };
   try {
-    for (const line of lines) {
-      state.at = line.at;
-      if (line.kind === "boot") onBoot(state, line);
-      else if (line.kind === "precedent") onPrecedent(state, line);
-      else if (line.kind === "observe") {
-        const problem = await onObserve(state, line);
-        if (problem !== null) problems.push(problem);
-      } else if (line.kind === "judge") {
-        const r = await onJudge(state, line, policies);
-        if (typeof r === "string") problems.push(r);
-        else events.push(r);
-      }
-    }
+    for (const line of lines) await onLine(state, line, policies, found);
   } finally {
     state.precedents.close();
   }
-  return { events, deltas: events.filter((e) => e.old !== e.next).length, problems };
+  const deltas = found.events.filter((e) => e.old !== e.next).length;
+  return { ...found, deltas };
 }

@@ -12,6 +12,7 @@ import {
 } from "./config.ts";
 import { DAEMON_VERSION } from "./daemon.ts";
 import { stderrLogger } from "./log.ts";
+import { protectedPathCount } from "./protected-paths.ts";
 import { type RunningDaemon, startDaemon } from "./server.ts";
 
 export const DAEMON_USAGE = `jevdictd ${DAEMON_VERSION} — the Jevdict judging daemon
@@ -114,6 +115,7 @@ function bootLine(d: RunningDaemon): string {
     `jevdictd listening on ${d.listening.socket}${http}`,
     `admin ${d.listening.adminSocket}`,
     `${count} ${count === 1 ? "policy" : "policies"}`,
+    `${protectedPathCount(d.runtime.config)} protected paths`,
     `judge ${judge}`,
     `enforcement ${d.runtime.config.enforcement.mode}`,
   ].join(" · ");
@@ -135,7 +137,8 @@ async function boot(argv: readonly string[]): Promise<RunningDaemon | number> {
     );
     for (const r of loaded.rejected) process.stderr.write(`WARNING: ${r}\n`);
     const log = stderrLogger(Date.now, { debug: process.env.JEVDICT_DEBUG === "1" });
-    const daemon = await startDaemon(applyArgs(loaded.config, args.value), { log });
+    const inputs = { configFiles: loaded.inputs };
+    const daemon = await startDaemon(applyArgs(loaded.config, args.value), { log, inputs });
     process.stderr.write(`${bootLine(daemon)}\n`);
     for (const w of daemon.runtime.warnings) process.stderr.write(`WARNING: ${w}\n`);
     return daemon;

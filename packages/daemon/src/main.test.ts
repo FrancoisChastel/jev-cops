@@ -109,8 +109,10 @@ describe("jevdictd process", () => {
     expect(stderr).toContain("judge off");
     expect(stderr).toContain("WARNING: enforcement = observe");
     expect(stderr).toContain("WARNING: judge = off");
-    const kinds = readAudit(join(dir, "audit.jsonl")).lines.map((l) => l.payload.event);
-    expect(kinds).toEqual(["boot", "shutdown"]);
+    const lines = readAudit(join(dir, "audit.jsonl")).lines;
+    expect(lines.map((l) => l.payload.event)).toEqual(["boot", "shutdown"]);
+    const config = lines[0]?.payload.config as { policy: { protectedPaths: string[] } } | undefined;
+    expect(config?.policy.protectedPaths).toContain(join(dir, "j.toml"));
     expect(existsSync(socket)).toBe(false);
     expect(existsSync(join(dir, "a.sock"))).toBe(false);
   });
@@ -197,6 +199,7 @@ describe("main, in process", () => {
     }
     expect(err.join("")).toContain(`jevdictd listening on ${socket}`);
     expect(err.join("")).toContain("enforcement enforce");
+    expect(err.join("")).toMatch(/ · \d+ protected paths/);
     expect(err.join("")).toContain("WARNING: judge = off");
     expect(process.listeners("SIGTERM")).toHaveLength(1);
     process.emit("SIGTERM");

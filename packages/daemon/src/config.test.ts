@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { ConfigError, DEFAULT_DAEMON_CONFIG, loadConfig, parseHttpBind } from "./config.ts";
 
 let root: string;
@@ -44,6 +44,7 @@ describe("defaults", () => {
       judgeDeadlineMs: 12_000,
       holdTokenTtlMs: 600_000,
       gitProbeTimeoutMs: 300,
+      hookBinary: null,
     });
     expect(config.audit).toEqual({ path: join(home, ".jevdict", "audit.jsonl"), forward: null });
     expect(config.store.path).toBe(join(home, ".jevdict", "jevdict.sqlite"));
@@ -185,6 +186,43 @@ describe("repo override can only tighten", () => {
   test("a repo value equal to the base is not a change", () => {
     write(join(cwd, ".jevdict.toml"), '[judge]\nprovider = "off"\n');
     expect(load().rejected).toEqual([]);
+  });
+
+  test("protectedPaths and the hook binary cannot be changed from the repo", () => {
+    write(userFile(), '[policy]\nprotectedPaths = ["~/bin/tool"]\n');
+    write(
+      join(cwd, ".jevdict.toml"),
+      '[daemon]\nhook_binary = "/tmp/fake-hook"\n[policy]\nprotectedPaths = []\n',
+    );
+    const { config, rejected } = load();
+    expect(config.policy.protectedPaths).toEqual(["~/bin/tool"]);
+    expect(config.daemon.hookBinary).toBeNull();
+    expect(rejected.map((r) => r.split(":")[0]).sort()).toEqual([
+      "daemon.hook_binary",
+      "policy.protectedPaths",
+    ]);
+  });
+});
+
+describe("[daemon] hook_binary and the config files the daemon trusts", () => {
+  test("hook_binary defaults to none and expands ~ when set", () => {
+    expect(load().config.daemon.hookBinary).toBeNull();
+    write(userFile(), '[daemon]\nhook_binary = "~/bin/jevdict-hook"\n');
+    expect(load().config.daemon.hookBinary).toBe(join(home, "bin", "jevdict-hook"));
+  });
+
+  test("inputs: the user file even when absent, then $JEVDICT_CONFIG and --config", () => {
+    expect(load().inputs).toEqual([userFile()]);
+    const envFile = write(join(root, "env.toml"), "");
+    const flagFile = write(join(root, "flag.toml"), "");
+    const both = load({ env: { JEVDICT_CONFIG: envFile }, configPath: flagFile });
+    expect(both.inputs).toEqual([userFile(), envFile, flagFile]);
+  });
+
+  test("inputs are absolute; the repo override is not one (config-tamper covers it)", () => {
+    write(join(cwd, ".jevdict.toml"), '[enforcement]\nmode = "enforce"\n');
+    const { inputs } = load({ env: { JEVDICT_CONFIG: "not-yet/jevdict.toml" } });
+    expect(inputs).toEqual([userFile(), resolve("not-yet/jevdict.toml")]);
   });
 });
 

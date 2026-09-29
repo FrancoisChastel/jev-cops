@@ -67,6 +67,7 @@ describe("jevdict explain", () => {
     expect(text).toContain("guard@1");
     expect(text).toContain("budget");
     expect(text).toContain("command: rm -rf /srv/data #");
+    expect(text).toMatch(/^task: t$/m);
     expect(text).toContain("HUMAN DETAIL LINE");
     expect(text).toContain("prompt-like");
     expect(text).toContain("grant by alice");

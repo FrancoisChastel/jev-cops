@@ -57,6 +57,8 @@ export interface DaemonConfig {
     readonly holdTokenTtlMs: number;
     /** Budget for deriving `env.git` from an event's cwd, all git calls included (D-058). */
     readonly gitProbeTimeoutMs: number;
+    /** The harness hook binary (`jevdict install` sets it); protected like the daemon's own. */
+    readonly hookBinary: string | null;
   };
   readonly policies: { readonly dir: string };
   readonly judge: {
@@ -108,6 +110,7 @@ const fileSchema = z.strictObject({
       judge_deadline_ms: z.int().positive().optional(),
       hold_token_ttl_ms: z.int().positive().optional(),
       git_probe_timeout_ms: z.int().positive().optional(),
+      hook_binary: text.optional(),
     })
     .optional(),
   policies: z.strictObject({ dir: text.optional() }).optional(),
@@ -162,6 +165,7 @@ const PATH_KEYS: ReadonlyArray<readonly [string, string]> = [
   ["daemon", "socket"],
   ["daemon", "admin_socket"],
   ["daemon", "home"],
+  ["daemon", "hook_binary"],
   ["policies", "dir"],
   ["audit", "path"],
   ["store", "path"],
@@ -241,6 +245,13 @@ export interface LoadedConfig {
   config: DaemonConfig;
   sources: string[];
   rejected: string[];
+  /**
+   * The files the daemon's own settings come from, absolute, whether or not they exist
+   * yet: the user file, `$JEVDICT_CONFIG`, `--config`. The repo override is not one (it
+   * may only tighten, and `config-tamper` guards every `.jevdict.toml`). The daemon
+   * protects these: a file created later is loaded at the next start.
+   */
+  inputs: string[];
 }
 
 function toConfig(t: Table, home: string): DaemonConfig {
@@ -256,6 +267,7 @@ function toConfig(t: Table, home: string): DaemonConfig {
       judgeDeadlineMs: f.daemon?.judge_deadline_ms ?? 12_000,
       holdTokenTtlMs: f.daemon?.hold_token_ttl_ms ?? DEFAULT_HOLD_TOKEN_TTL_MS,
       gitProbeTimeoutMs: f.daemon?.git_probe_timeout_ms ?? DEFAULT_GIT_PROBE_TIMEOUT_MS,
+      hookBinary: f.daemon?.hook_binary ?? null,
     },
     policies: { dir: f.policies?.dir ?? "" },
     judge: {
@@ -290,7 +302,8 @@ export function loadConfig(opts: LoadConfigOptions = {}): LoadedConfig {
   if (opts.configPath !== undefined && !existsSync(opts.configPath)) {
     throw new ConfigError(`${opts.configPath}: config file not found`);
   }
-  const user = existing(join(home, ".config", "jevdict", "jevdict.toml"));
+  const userPath = join(home, ".config", "jevdict", "jevdict.toml");
+  const user = existing(userPath);
   const repo = existing(join(cwd, ".jevdict.toml"));
   const envFile = existing(env.JEVDICT_CONFIG);
   let merged = resolvePaths(DEFAULT_TABLE, cwd, home);
@@ -308,7 +321,12 @@ export function loadConfig(opts: LoadConfigOptions = {}): LoadedConfig {
   apply(repo, true);
   apply(envFile, false);
   apply(opts.configPath ?? null, false);
-  return { config: toConfig(merged, home), sources, rejected };
+  const named = [env.JEVDICT_CONFIG, opts.configPath].filter(
+    (p): p is string => p !== undefined && p !== "",
+  );
+  // Resolved like the reads above: against the process's cwd.
+  const inputs = [userPath, ...named.map((p) => resolve(p))];
+  return { config: toConfig(merged, home), sources, rejected, inputs };
 }
 
 /** The defaults as resolved for the current user and working directory. Frozen. */

@@ -1,0 +1,131 @@
+import { realpathSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import type { DaemonConfig } from "./config.ts";
+
+/**
+ * The judge protects its own inputs (PLAN-M1 §4.5, "Jevdict" row): `config-tamper` only
+ * knows the paths the daemon hands it in `[policy] protectedPaths`, so the daemon appends
+ * everything it reads or writes to that list whenever it builds a runtime from config.
+ */
+
+/** What the daemon knows about itself beyond its resolved config. */
+export interface JudgeInputs {
+  /** Config files its settings come from (`LoadedConfig.inputs`), absolute. */
+  readonly configFiles: readonly string[];
+  /** The running daemon binary when compiled; null under `bun run`/`bun test`. */
+  readonly selfBinary: string | null;
+  /** The OS user's home: the defaults live in its `~/.jevdict/`, whatever `[daemon] home` says. */
+  readonly osHome: string;
+  /** The daemon's working directory; it and every directory above it are shared. */
+  readonly cwd: string;
+}
+
+/** Where a `bun build --compile` binary sees its own entry point (POSIX, Windows). */
+const COMPILED_ROOTS = ["/$bunfs/", "B:/~BUN/"];
+/** Files SQLite keeps next to a database. */
+const SQLITE_SIDE_FILES = ["-wal", "-shm", "-journal"];
+/** System temp directories: shared by every process, never protected whole. */
+const SHARED_TMP = ["/tmp", "/var/tmp"];
+
+/** `execPath` when `main` is the entry point of a compiled binary, else null. */
+export function compiledBinary(
+  main: string = Bun.main,
+  execPath: string = process.execPath,
+): string | null {
+  return COMPILED_ROOTS.some((root) => main.startsWith(root)) ? execPath : null;
+}
+
+/** The inputs of this process: the default user config file, `process.execPath` when compiled. */
+export function defaultJudgeInputs(): JudgeInputs {
+  const osHome = homedir();
+  return {
+    configFiles: [join(osHome, ".config", "jevdict", "jevdict.toml")],
+    selfBinary: compiledBinary(),
+    osHome,
+    cwd: process.cwd(),
+  };
+}
+
+/**
+ * `path` with symlinks resolved as far as it exists: the deepest existing ancestor goes
+ * through `realpath`, the rest is appended (a socket or log not created yet).
+ */
+function realPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    const parent = dirname(path);
+    return parent === path ? path : join(realPath(parent), basename(path));
+  }
+}
+
+function ancestorsOf(path: string): string[] {
+  const parent = dirname(path);
+  return parent === path ? [path] : [path, ...ancestorsOf(parent)];
+}
+
+/**
+ * Directories other processes write to all the time: the filesystem root, the homes, the
+ * daemon's cwd and every directory above them, the system temp directories. A file of the
+ * judge's that sits in one is protected alone, never the whole directory (killing every
+ * write to `/tmp` or `~` would end ordinary sessions).
+ */
+function sharedDirs(config: DaemonConfig, inputs: JudgeInputs): Set<string> {
+  const roots = [inputs.osHome, config.daemon.home, inputs.cwd, tmpdir(), ...SHARED_TMP];
+  const all = roots
+    .map((r) => resolve(r))
+    .flatMap((r) => [...ancestorsOf(r), ...ancestorsOf(realPath(r))]);
+  return new Set(all);
+}
+
+/** A file the judge reads or writes, and the directory it lives in unless that is shared. */
+function fileAndDir(file: string, shared: ReadonlySet<string>, sideFiles: readonly string[]) {
+  const dir = dirname(file);
+  const isShared = shared.has(dir) || shared.has(realPath(dir));
+  return isShared ? [file, ...sideFiles.map((s) => `${file}${s}`)] : [file, dir];
+}
+
+/**
+ * Every path the judge depends on: the policies directory (whole), the audit log, the
+ * store, both sockets and each config file with their directories (just the file when
+ * the directory is shared), the audit's file forward, `~/.jevdict/` under the OS home and
+ * `[daemon] home`, the running daemon binary when compiled and `[daemon] hook_binary`.
+ * Each entry is also listed under its real path when a symlink leads to it. Absolute,
+ * deduplicated, in a stable order.
+ */
+export function judgeInputPaths(config: DaemonConfig, inputs: JudgeInputs): string[] {
+  const shared = sharedDirs(config, inputs);
+  const forward = config.audit.forward?.kind === "file" ? [config.audit.forward.target] : [];
+  const binaries = [inputs.selfBinary, config.daemon.hookBinary].filter((b) => b !== null);
+  const paths = [
+    config.policies.dir,
+    ...fileAndDir(config.audit.path, shared, []),
+    ...forward,
+    ...fileAndDir(config.store.path, shared, SQLITE_SIDE_FILES),
+    ...fileAndDir(config.daemon.socket, shared, []),
+    ...fileAndDir(config.daemon.adminSocket, shared, []),
+    ...inputs.configFiles.flatMap((f) => fileAndDir(f, shared, [])),
+    join(inputs.osHome, ".jevdict"),
+    join(config.daemon.home, ".jevdict"),
+    ...binaries,
+  ];
+  return [...new Set(paths.flatMap((p) => [p, realPath(p)]))];
+}
+
+/** How many paths `config`'s `[policy] protectedPaths` holds (`/v1/health`, the boot line). */
+export function protectedPathCount(config: DaemonConfig): number {
+  return config.policy.protectedPaths?.length ?? 0;
+}
+
+/**
+ * `config` with {@link judgeInputPaths} appended to `[policy] protectedPaths`: the
+ * configured entries stay first and are never dropped, so neither the user config nor a
+ * repo override (which may not change the list at all) can remove the judge's own paths.
+ * Returns a new config; `config` is untouched.
+ */
+export function protectJudgeInputs(config: DaemonConfig, inputs: JudgeInputs): DaemonConfig {
+  const configured = config.policy.protectedPaths ?? [];
+  const protectedPaths = [...new Set([...configured, ...judgeInputPaths(config, inputs)])];
+  return { ...config, policy: { ...config.policy, protectedPaths } };
+}

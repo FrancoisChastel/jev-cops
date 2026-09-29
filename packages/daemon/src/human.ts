@@ -2,6 +2,7 @@ import { eventIdSchema, sessionIdSchema } from "@jevdict/core";
 import { z } from "zod";
 import { readAudit } from "./audit.ts";
 import { DAEMON_VERSION, type Runtime } from "./daemon.ts";
+import { protectedPathCount } from "./protected-paths.ts";
 import type { Reply } from "./service.ts";
 
 /**
@@ -100,7 +101,9 @@ export function handleBudgetReset(rt: Runtime, body: unknown): Reply {
 
 /**
  * `GET /v1/health`: version, policies with degraded flags, judge, enforcement, both
- * sockets, how many root sessions are latched killed, uptime.
+ * sockets, how many paths `[policy] protectedPaths` holds (the judge's own included; the
+ * list itself stays on the boot audit line), how many root sessions are latched killed,
+ * uptime.
  */
 export function handleHealth(rt: Runtime): Reply {
   const policies = rt.policies.current().policies.map((p) => ({
@@ -117,6 +120,7 @@ export function handleHealth(rt: Runtime): Reply {
       judge: rt.judgeName,
       enforcement: rt.config.enforcement.mode,
       sockets: { agent: rt.config.daemon.socket, admin: rt.config.daemon.adminSocket },
+      protected_paths: protectedPathCount(rt.config),
       latched_sessions: rt.latch.count(),
       uptime: Math.max(0, Math.round((rt.now() - rt.startedAt) / 1000)),
     },
