@@ -43,7 +43,7 @@ async function hold(eventId: string, command: string, task: string | null = TASK
     eventId,
     sessionId: CTX_SESSION,
     scope: proposeScope(n, task),
-    policies: ["off-repo-write@1"],
+    policies: ["off-repo-write"],
   });
 }
 
@@ -84,7 +84,7 @@ describe("grant and lookup", () => {
       sessionId: CTX_SESSION,
       riskDelta: 0.3,
       expiresAt: null,
-      policies: ["off-repo-write@1"],
+      policies: ["off-repo-write"],
       by: "alice",
       scope: { commandPrefix: "rm -rf", pathPrefix: "/home/dev/build" },
     });
@@ -99,7 +99,7 @@ describe("grant and lookup", () => {
     await hold("evt_1", "rm -rf /home/dev/build");
     store.grant("evt_1", "alice");
     const match = store.lookup(await event("rm -rf /home/dev/build/cache"), NO_CTX);
-    expect(match).toMatchObject({ riskDelta: 0.3, policies: ["off-repo-write@1"] });
+    expect(match).toMatchObject({ riskDelta: 0.3, policies: ["off-repo-write"] });
   });
 
   test("the narrowest matching precedent wins", async () => {

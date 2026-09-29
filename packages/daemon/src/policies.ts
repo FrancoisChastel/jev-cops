@@ -51,7 +51,7 @@ export class PolicySet {
   private constructor(
     readonly dir: string,
     policies: readonly PolicyDefinition[],
-    private readonly opts: PolicySetOptions,
+    private opts: PolicySetOptions,
   ) {
     this.snapshot = { policies, generation: 1, loadedAt: this.now() };
   }
@@ -65,6 +65,11 @@ export class PolicySet {
     const loaded = await loadPolicies(dir, { cacheBust: true });
     if (loaded.problems.length > 0) throw new PolicyLoadError(loaded.problems);
     return new PolicySet(dir, Object.freeze([...loaded.policies]), opts);
+  }
+
+  /** Replaces the callbacks (the daemon opens its audit log after a clean boot load). */
+  setCallbacks(opts: PolicySetOptions): void {
+    this.opts = { ...opts };
   }
 
   /** The set in force. */

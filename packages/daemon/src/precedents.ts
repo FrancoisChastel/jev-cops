@@ -25,7 +25,7 @@ export interface Precedent {
   readonly riskDelta: number;
   readonly grantedAt: number;
   readonly expiresAt: number | null;
-  /** `name@version` of the policies whose non-deny verdict the human overrode. */
+  /** Names of the policies whose non-deny verdict the human overrode (core waives by name). */
   readonly policies: readonly string[];
   readonly eventId: string;
   readonly by: string;
