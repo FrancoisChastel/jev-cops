@@ -106,14 +106,20 @@ const ANSI_C_SIMPLE: Readonly<Record<string, string>> = {
   "?": "?",
 };
 
+const MAX_CODE_POINT = 0x10ffff;
+
+function fromCodePoint(value: number): string {
+  return value <= MAX_CODE_POINT ? String.fromCodePoint(value) : "\uFFFD";
+}
+
 function decodeAnsiC(body: string): string {
   const pattern = /\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|.)/gs;
   return body.replace(pattern, (whole, esc: string) => {
     const head = esc[0] ?? "";
     if (head === "x" || head === "u" || head === "U") {
-      return String.fromCodePoint(Number.parseInt(esc.slice(1), 16));
+      return fromCodePoint(Number.parseInt(esc.slice(1), 16));
     }
-    if (/^[0-7]/.test(esc)) return String.fromCodePoint(Number.parseInt(esc, 8));
+    if (/^[0-7]/.test(esc)) return fromCodePoint(Number.parseInt(esc, 8));
     return ANSI_C_SIMPLE[esc] ?? whole;
   });
 }

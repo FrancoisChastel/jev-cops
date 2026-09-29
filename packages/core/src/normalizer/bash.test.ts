@@ -119,6 +119,12 @@ describe("parseScript: words", () => {
     ]);
   });
 
+  test("an out-of-range $'\\U…' escape decodes to U+FFFD instead of failing", async () => {
+    const script = await parse("echo $'\\U7FFFFFFF'");
+    expect(argvs(script)).toEqual([["echo", "\uFFFD"]]);
+    expect(script.opaque).toEqual([]);
+  });
+
   test("an escaped dollar is a literal, not an expansion", async () => {
     const script = await parse("echo \\$HOME");
     expect(argvs(script)).toEqual([["echo", "$HOME"]]);
