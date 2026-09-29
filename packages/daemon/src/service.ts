@@ -46,11 +46,19 @@ function policyName(key: string): string {
 
 /**
  * Records a hold the harness will show a human, with the daemon's proposed precedent
- * scope and a fresh single-use token (only its hash is stored; the token expires after
- * `daemon.hold_token_ttl_ms`). Returns the token for the adapter.
+ * scope, a fresh single-use token (only its hash is stored; the token expires after
+ * `daemon.hold_token_ttl_ms`) and the confirm view the token unlocks. Returns the token
+ * for the adapter.
  */
-function recordHold(rt: Runtime, event: PreEvent, cf: CaseFile, j: Judgement): MintedHoldToken {
+function recordHold(
+  rt: Runtime,
+  event: PreEvent,
+  cf: CaseFile,
+  j: Judgement,
+  reason: string,
+): MintedHoldToken {
   const minted = mintHoldToken();
+  const expiresAt = rt.now() + rt.config.daemon.holdTokenTtlMs;
   rt.precedents.recordHold(
     {
       eventId: event.id,
@@ -58,8 +66,10 @@ function recordHold(rt: Runtime, event: PreEvent, cf: CaseFile, j: Judgement): M
       scope: proposeScope(j.normalized, cf.task),
       policies: j.decision.policies.map(policyName),
     },
-    { hash: minted.hash, expiresAt: rt.now() + rt.config.daemon.holdTokenTtlMs },
+    { hash: minted.hash, expiresAt },
   );
+  const view = { event_id: event.id, verdict: "hold", reason, raw: j.normalized.raw } as const;
+  rt.confirmViews.put({ ...view, detail: j.decision.detail }, expiresAt);
   return minted;
 }
 
@@ -85,7 +95,8 @@ export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
   rt.degraded.update(decision.trace);
   const mode = rt.config.enforcement.mode;
   const { response, mapping } = harnessVerdict(decision, event.id, mode, event.session.mode);
-  const token = response.verdict === "hold" ? recordHold(rt, event, cf, judgement) : null;
+  const token =
+    response.verdict === "hold" ? recordHold(rt, event, cf, judgement, response.reason) : null;
   const returned = {
     verdict: response.verdict,
     reason: response.reason,

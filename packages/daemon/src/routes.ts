@@ -1,3 +1,4 @@
+import { handleConfirmView } from "./confirm-view.ts";
 import type { Runtime } from "./daemon.ts";
 import {
   handleBudget,
@@ -15,7 +16,9 @@ import { handleJudge, handleObserve, type Reply } from "./service.ts";
  */
 export type Surface = "agent" | "admin";
 
-type Route = (rt: Runtime, body: unknown, param: string) => Reply | Promise<Reply>;
+type Route = (rt: Runtime, body: unknown) => Reply | Promise<Reply>;
+/** A GET handler: the path parameter and the request's `Authorization` header. */
+type GetRoute = (rt: Runtime, param: string, authorization: string | null) => Reply;
 
 function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -81,15 +84,29 @@ const POST_ROUTES: Readonly<Record<Surface, Readonly<Record<string, Route>>>> = 
   },
 };
 
-/** GET routes: health and explain on both surfaces, the budget read on the agent's. */
-function getRoute(path: string, surface: Surface): { route: Route; param: string } | null {
+/**
+ * GET routes per surface. Health on both. Explain on both, but agent channels get only
+ * the T8 confirm view of a pending hold, and only with its token; the full audit line is
+ * the admin socket's. The budget read is the agent's.
+ */
+const GET_ROUTES: Readonly<Record<Surface, Readonly<Record<string, GetRoute>>>> = {
+  agent: {
+    explain: (rt, id, authorization) => handleConfirmView(rt, id, authorization),
+    budget: (rt, sessionId) => handleBudget(rt, sessionId),
+  },
+  admin: {
+    explain: (rt, id) => handleExplain(rt, id),
+  },
+};
+
+function getRoute(path: string, surface: Surface): { route: GetRoute; param: string } | null {
   if (path === "/v1/health") return { route: (rt) => handleHealth(rt), param: "" };
   const m = /^\/v1\/(explain|budget)\/([^/]+)$/.exec(path);
-  if (m === null || (m[1] === "budget" && surface !== "agent")) return null;
-  const param = decodeURIComponent(m[2] ?? "");
-  const route: Route =
-    m[1] === "explain" ? (rt, _b, p) => handleExplain(rt, p) : (rt, _b, p) => handleBudget(rt, p);
-  return { route, param };
+  const routes = GET_ROUTES[surface];
+  const name = m?.[1] ?? "";
+  const route = Object.hasOwn(routes, name) ? routes[name] : undefined;
+  if (route === undefined) return null;
+  return { route, param: decodeURIComponent(m?.[2] ?? "") };
 }
 
 const NOT_FOUND: Reply = { status: 404, body: { error: "not found" } };
@@ -100,14 +117,15 @@ export async function dispatch(rt: Runtime, req: Request, surface: Surface): Pro
   if (req.method === "GET") {
     const found = getRoute(path, surface);
     if (found === null) return NOT_FOUND;
-    return safely(rt, path, async () => found.route(rt, null, found.param));
+    const authorization = req.headers.get("authorization");
+    return safely(rt, path, async () => found.route(rt, found.param, authorization));
   }
   const routes = POST_ROUTES[surface];
   const route = Object.hasOwn(routes, path) ? routes[path] : undefined;
   if (req.method !== "POST" || route === undefined) return NOT_FOUND;
   const json = await readJson(req);
   if (!json.ok) return { status: 400, body: { error: "invalid JSON" } };
-  return safely(rt, path, async () => route(rt, json.body, ""));
+  return safely(rt, path, async () => route(rt, json.body));
 }
 
 function toResponse(r: Reply): Response {

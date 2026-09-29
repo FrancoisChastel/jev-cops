@@ -55,10 +55,14 @@ const pick = (v: unknown, ...keys: string[]): unknown =>
 const why = (e: unknown): string =>
   e instanceof Error && e.message === TIMEOUT ? TIMEOUT : `judge unreachable (${String(e)})`;
 
-/** One JSON request over the Unix socket (`node:http`: Pi runs on Node, not Bun). */
-function send(socket: string, method: string, path: string, body: unknown, ms: number) {
+/**
+ * One JSON request over the Unix socket (`node:http`: Pi runs on Node, not Bun); a null
+ * body sends none. A hold token goes in the `Authorization` header, never in the path.
+ */
+function send(socket: string, method: string, path: string, body: unknown, ms: number, token = "") {
   return new Promise<Reply>((resolve, reject) => {
-    const headers = { "content-type": "application/json" };
+    const auth = token === "" ? {} : { authorization: `Bearer ${token}` };
+    const headers = { "content-type": "application/json", ...auth };
     const req = request({ socketPath: socket, method, path, headers }, (res) => {
       const status = res.statusCode ?? 0;
       readText(res)
@@ -70,7 +74,7 @@ function send(socket: string, method: string, path: string, body: unknown, ms: n
       req.destroy();
     }, ms);
     req.on("error", reject).on("close", () => clearTimeout(timer));
-    req.end(body === undefined ? "" : JSON.stringify(body));
+    req.end(body === null ? "" : JSON.stringify(body));
   });
 }
 
@@ -96,8 +100,8 @@ export function register(pi: PiApi, opts: JevdictOptions): void {
   const shortMs = opts.observeTimeoutMs ?? 2_000;
   let session = { task: null as string | null, startedAt: new Date().toISOString() };
   const notes = new Map<string, string>();
-  const call = (method: string, path: string, body: unknown, ms: number) =>
-    send(opts.socket, method, path, body, ms);
+  const call = (method: string, path: string, body: unknown, ms: number, token?: string) =>
+    send(opts.socket, method, path, body, ms, token);
   const blocked = (r: string): PiToolCallResult => ({ block: true, reason: `jevdict: ${r}` });
 
   const base = (e: PiToolCallEvent | PiToolResultEvent, ctx: PiContext, phase: string) => ({
@@ -131,20 +135,21 @@ export function register(pi: PiApi, opts: JevdictOptions): void {
   };
 
   /**
-   * Interactive hold: ask with the daemon's normalized raw command and detail (T8); the
-   * answer carries the verdict's `hold_token`, which never reaches the model (T7).
+   * Interactive hold: ask with the daemon's normalized raw command and detail (T8), read
+   * from the confirm view that only the verdict's `hold_token` unlocks; the answer
+   * carries the same token, which never reaches the model (T7). No token, no view: block.
    */
   const hold = async (v: Judged, id: string, ctx: PiContext) => {
-    if (!ctx.hasUI) return blocked(v.reason); // D-008: headless hold is a deny
-    const shown = await call("GET", `/v1/explain/${id}`, undefined, judgeMs).catch(() => null);
-    const payload = shown?.status === 200 ? pick(shown.body, "line", "payload") : undefined;
-    const raw = pick(payload, "raw");
+    if (!ctx.hasUI || v.token === null) return blocked(v.reason); // D-008: headless → deny
+    const shown = await call("GET", `/v1/explain/${id}`, null, judgeMs, v.token).catch(() => null);
+    const view = shown?.status === 200 ? shown.body : null;
+    const raw = pick(view, "raw");
     if (typeof raw !== "string") return blocked(v.reason);
-    const detail = pick(payload, "decision", "detail");
+    const detail = pick(view, "detail");
     const message = typeof detail === "string" ? `${raw}\n\n${detail}` : raw;
     const yes = await ctx.ui.confirm(`Jevdict hold: ${v.reason}`, message);
-    const decision = { event_id: id, decision: yes ? "allow" : "deny", by: "pi-user" };
-    const answer = v.token === null ? decision : { ...decision, hold_token: v.token };
+    const decision = yes ? "allow" : "deny";
+    const answer = { event_id: id, decision, by: "pi-user", hold_token: v.token };
     await call("POST", "/v1/resolve", answer, shortMs).catch((err: unknown) =>
       warn(ctx, `jevdict: resolve not recorded: ${why(err)}`),
     );

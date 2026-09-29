@@ -49,6 +49,7 @@ export function handleResolve(rt: Runtime, body: unknown): Reply {
   const held = redeemed.hold;
   const precedent = decision === "allow" ? rt.precedents.grant(event_id, by) : null;
   if (decision === "deny") rt.precedents.dropHold(event_id);
+  rt.confirmViews.delete(event_id);
   rt.audit.append({
     kind: "precedent",
     event_id,
@@ -59,8 +60,9 @@ export function handleResolve(rt: Runtime, body: unknown): Reply {
 }
 
 /**
- * `GET /v1/explain/:event_id`: the full `judge` audit line (with the human `detail`) and
- * every other line naming the event. Only served on the socket and loopback HTTP.
+ * `GET /v1/explain/:event_id` on the admin socket: the full `judge` audit line (with the
+ * human `detail`, trace and features' evidence) and every other line naming the event.
+ * Agent channels serve only the confirm view (`confirm-view.ts`).
  */
 export function handleExplain(rt: Runtime, eventId: string): Reply {
   const { lines } = readAudit(rt.config.audit.path);

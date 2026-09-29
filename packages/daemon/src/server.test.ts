@@ -123,16 +123,7 @@ describe("POST /v1/observe", () => {
   });
 });
 
-describe("explain, resolve and precedents", () => {
-  test("GET /v1/explain returns the full decision with detail; 404 when unknown", async () => {
-    td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
-    const { event } = await judge("rm -rf /srv/data");
-    const res = await td.call("GET", `/v1/explain/${event.id}`);
-    expect(res.status).toBe(200);
-    expect(JSON.stringify(res.body)).toContain("HUMAN-ONLY-DETAIL");
-    expect((await td.call("GET", "/v1/explain/evt_01M3PP723DWGXKY6ZN6TC6ZMX0")).status).toBe(404);
-  });
-
+describe("resolve and precedents", () => {
   test("resolve allow → precedent → the next matching event has lower risk", async () => {
     td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
     const first = await judge("rm -rf /srv/data/cache");
@@ -289,14 +280,6 @@ describe("hold tokens (T7/T8: only the adapter that got the hold can resolve it)
     expect((await resolve(held.event.id, held.body.hold_token)).status).toBe(403);
     expect(td.audit().at(-1)?.payload).toMatchObject({ why: "expired" });
     expect(grants()).toBe(0);
-  });
-
-  test("explain never returns the raw token", async () => {
-    td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
-    const held = await judge("rm -rf /srv/data");
-    const shown = await td.call("GET", `/v1/explain/${held.event.id}`);
-    expect(shown.status).toBe(200);
-    expect(JSON.stringify(shown.body)).not.toContain(String(held.body.hold_token));
   });
 });
 

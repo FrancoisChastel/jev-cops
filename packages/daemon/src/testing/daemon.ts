@@ -43,9 +43,9 @@ export interface TestDaemon {
   readonly dir: string;
   readonly config: DaemonConfig;
   /** A request on the agent socket (what an adapter, or an agent, can reach). */
-  call(method: Method, path: string, body?: unknown): Promise<HttpReply>;
+  call(method: Method, path: string, body?: unknown, headers?: Headers): Promise<HttpReply>;
   /** A request on the admin socket (human-only routes). */
-  callAdmin(method: Method, path: string, body?: unknown): Promise<HttpReply>;
+  callAdmin(method: Method, path: string, body?: unknown, headers?: Headers): Promise<HttpReply>;
   audit(): AuditLine[];
   writePolicy(file: string, source: string): void;
   stop(): Promise<void>;
@@ -53,14 +53,21 @@ export interface TestDaemon {
 
 type Method = "GET" | "POST";
 type HttpReply = { status: number; body: unknown };
+type Headers = Readonly<Record<string, string>>;
 
 /** One JSON request over the Unix socket at `socket`; a string body is sent verbatim. */
-async function request(socket: string, method: Method, path: string, body?: unknown) {
+async function request(
+  socket: string,
+  method: Method,
+  path: string,
+  body?: unknown,
+  headers: Headers = {},
+) {
   const res = await fetch(`http://localhost${path}`, {
     method,
     unix: socket,
     ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
   const text = await res.text();
   return { status: res.status, body: text === "" ? null : (JSON.parse(text) as unknown) };
@@ -123,8 +130,10 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     daemon,
     dir,
     config,
-    call: (method, path, body) => request(config.daemon.socket, method, path, body),
-    callAdmin: (method, path, body) => request(config.daemon.adminSocket, method, path, body),
+    call: (method, path, body, headers) =>
+      request(config.daemon.socket, method, path, body, headers),
+    callAdmin: (method, path, body, headers) =>
+      request(config.daemon.adminSocket, method, path, body, headers),
     audit: () => readAudit(config.audit.path).lines,
     writePolicy(file, source) {
       writeFileSync(join(dir, "policies", file), source);

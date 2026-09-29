@@ -299,13 +299,17 @@ describe("Pi adapter failure modes (T2, T3)", () => {
     [true, "allow"],
     [false, "deny"],
   ] as const)(
-    "interactive hold, confirm %p: resolve carries the hold_token, the model never sees it",
+    "interactive hold, confirm %p: view and resolve carry the hold_token, the model never sees it",
     async (confirm, decision) => {
       const token = "T".repeat(43);
       const resolves: unknown[] = [];
+      const views: (string | null)[] = [];
       const socket = serve(async (req) => {
         const path = new URL(req.url).pathname;
-        if (req.method === "GET") return Response.json({ line: { payload: { raw: "rm -rf x" } } });
+        if (req.method === "GET") {
+          views.push(req.headers.get("authorization"));
+          return Response.json({ raw: "rm -rf x", detail: "HUMAN DETAIL" });
+        }
         const body = (await req.json()) as { id: string };
         if (path === "/v1/resolve") {
           resolves.push(body);
@@ -316,17 +320,25 @@ describe("Pi adapter failure modes (T2, T3)", () => {
       });
       const { pi, ctx } = await session(socket, { hasUI: true, confirm });
       const run = await pi.run(ctx, "bash", { command: "rm -rf x" }, "done");
+      expect(views).toEqual([`Bearer ${token}`]);
+      expect(ctx.log.confirms).toEqual([
+        { title: "Jevdict hold: Needs a human.", message: "rm -rf x\n\nHUMAN DETAIL" },
+      ]);
       expect(resolves).toEqual([expect.objectContaining({ decision, hold_token: token })]);
       const seen = JSON.stringify([run.blocked ?? null, run.content, ctx.log.confirms]);
       expect(seen).not.toContain(token);
     },
   );
 
-  test("an interactive hold whose details cannot be loaded is blocked, never asked", async () => {
+  test.each([
+    ["the view is 404", "T".repeat(43)],
+    ["the verdict carries no hold_token", null],
+  ] as const)("an interactive hold is blocked, never asked, when %s", async (_name, token) => {
     const socket = serve(async (req) => {
       if (req.method === "GET") return Response.json({ error: "gone" }, { status: 404 });
       const body = (await req.json()) as { id: string };
-      return Response.json({ event_id: body.id, verdict: "hold", reason: "Needs a human." });
+      const held = { event_id: body.id, verdict: "hold", reason: "Needs a human." };
+      return Response.json(token === null ? held : { ...held, hold_token: token });
     });
     const { pi, ctx } = await session(socket, { hasUI: true, confirm: true });
     const run = await pi.run(ctx, "bash", { command: "ls" });

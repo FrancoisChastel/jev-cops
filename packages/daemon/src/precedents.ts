@@ -184,11 +184,11 @@ export class PrecedentStore implements PrecedentLookup {
   }
 
   /**
-   * Checks `token` against the hold of `eventId` and spends it: the hash is compared in
-   * constant time, and a token works once, before it expires, while its hold is pending.
-   * The caller then grants or drops the hold; nothing else resolves one.
+   * Checks `token` against the hold of `eventId` without spending it: the hash is
+   * compared in constant time, and the token must be unused and unexpired while its hold
+   * is pending. The confirm view (`GET /v1/explain` on agent channels) uses this.
    */
-  redeem(eventId: string, token: string | undefined): Redeemed {
+  check(eventId: string, token: string | undefined): Redeemed {
     if (token === undefined || token === "") return { ok: false, why: "no-token" };
     const row = this.st.token.get({ eventId }) as TokenRow | null;
     if (row === null) return { ok: false, why: "no-hold" };
@@ -196,9 +196,17 @@ export class PrecedentStore implements PrecedentLookup {
     if (row.used_at !== null) return { ok: false, why: "reused" };
     if (row.expires_at <= this.now()) return { ok: false, why: "expired" };
     const hold = this.pendingHold(eventId);
-    if (hold === null) return { ok: false, why: "no-hold" };
-    this.st.useToken.run({ eventId, now: this.now() });
-    return { ok: true, hold };
+    return hold === null ? { ok: false, why: "no-hold" } : { ok: true, hold };
+  }
+
+  /**
+   * {@link check}s `token` and spends it: a token works once. The caller then grants or
+   * drops the hold; nothing else resolves one.
+   */
+  redeem(eventId: string, token: string | undefined): Redeemed {
+    const checked = this.check(eventId, token);
+    if (checked.ok) this.st.useToken.run({ eventId, now: this.now() });
+    return checked;
   }
 
   /** The pending hold for `eventId`, or null (unknown, resolved, or older than 24 h). */

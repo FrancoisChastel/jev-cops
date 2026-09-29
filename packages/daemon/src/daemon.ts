@@ -14,6 +14,7 @@ import {
 import { createJudge, type ProviderConfig } from "@jevdict/judge";
 import { AuditLog } from "./audit.ts";
 import type { DaemonConfig } from "./config.ts";
+import { ConfirmViews } from "./confirm-view.ts";
 import { JudgeRecorder } from "./judge-recorder.ts";
 import { type Logger, stderrLogger } from "./log.ts";
 import { PolicySet, type PolicySetOptions } from "./policies.ts";
@@ -53,6 +54,8 @@ export interface Runtime {
   readonly audit: AuditLog;
   readonly sessions: SessionStore;
   readonly precedents: PrecedentStore;
+  /** Confirm views of pending holds (memory only), served with the hold's token. */
+  readonly confirmViews: ConfirmViews;
   readonly policies: PolicySet;
   readonly recorder: JudgeRecorder;
   readonly repoHints: RepoHintsCache;
@@ -250,6 +253,7 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
     audit,
     sessions,
     precedents,
+    confirmViews: new ConfirmViews(),
     policies,
     recorder,
     repoHints: new RepoHintsCache(lockfiles, now),
