@@ -5,8 +5,7 @@
  * (absent, `""` or `"*"`; `UserPromptSubmit` has no matcher), a handler that is this very
  * hook: exec form, the same executable (after `${CLAUDE_PROJECT_DIR}`, PATH and symlinks),
  * the same leading arguments, `--harness claude-code`, the same socket, no `if`, not async,
- * and a timeout above the hook's own deadline (post events may instead use the daemon's
- * loopback HTTP route); and nothing disables it (`disableAllHooks` anywhere for a
+ * and a timeout above the hook's own deadline; and nothing disables it (`disableAllHooks` anywhere for a
  * non-managed install, or in managed settings; `allowManagedHooksOnly` in managed settings
  * over a non-managed install). A changed file that is not valid JSON is not intact.
  */
@@ -56,8 +55,6 @@ export interface IntactCheck {
 type Json = Record<string, unknown>;
 const MATCH_ALL: ReadonlySet<unknown> = new Set([undefined, "", "*"]);
 const NO_MATCHER: ReadonlySet<string> = new Set(["UserPromptSubmit"]);
-const POSTS: ReadonlySet<string> = new Set(["PostToolUse", "PostToolUseFailure"]);
-const LOOPBACK: ReadonlySet<string> = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 
 function isRecord(value: unknown): value is Json {
   return Object.prototype.toString.call(value) === "[object Object]";
@@ -103,16 +100,6 @@ function isOurCommand(h: Json, id: HookIdentity): boolean {
   return flags.ok && resolve(flags.socket) === resolve(id.socket);
 }
 
-function isOurHttpPost(h: Json): boolean {
-  if (h.type !== "http" || typeof h.url !== "string") return false;
-  try {
-    const url = new URL(h.url);
-    return LOOPBACK.has(url.hostname) && url.pathname === "/v1/hooks/claude-code";
-  } catch {
-    return false; // not a URL: not the daemon's route
-  }
-}
-
 /** True when `handler`, in `group`, is this hook on every call of `event`. */
 export function isJevdictHandler(
   event: RequiredEvent,
@@ -122,7 +109,7 @@ export function isJevdictHandler(
 ): boolean {
   if (!NO_MATCHER.has(event) && !MATCH_ALL.has(group.matcher)) return false;
   if (!settled(event, handler)) return false;
-  return isOurCommand(handler, id) || (POSTS.has(event) && isOurHttpPost(handler));
+  return isOurCommand(handler, id);
 }
 
 function registers(groups: unknown, event: RequiredEvent, id: HookIdentity): boolean {

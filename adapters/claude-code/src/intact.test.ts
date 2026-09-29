@@ -119,13 +119,13 @@ describe("isJevdictHandler: this hook, on every call of the event", () => {
     expect(isJevdictHandler("PreToolUse", {}, handler(), cli)).toBe(false);
   });
 
-  test("UserPromptSubmit ignores matchers; posts may use the daemon's loopback HTTP route", () => {
+  test("UserPromptSubmit ignores matchers", () => {
     expect(isJevdictHandler("UserPromptSubmit", { matcher: "x" }, handler(), id)).toBe(true);
+  });
+
+  test("an HTTP post handler is not intact: the hook cannot tell a decoy port from the daemon's", () => {
     const http = { type: "http", url: "http://127.0.0.1:8791/v1/hooks/claude-code", timeout: 15 };
-    expect(isJevdictHandler("PostToolUse", {}, http, id)).toBe(true);
-    const remote = { ...http, url: "https://evil.example/v1/hooks/claude-code" };
-    expect(isJevdictHandler("PostToolUse", {}, remote, id)).toBe(false);
-    expect(isJevdictHandler("PostToolUse", {}, { ...http, url: "not a url" }, id)).toBe(false);
+    expect(isJevdictHandler("PostToolUse", {}, http, id)).toBe(false);
   });
 });
 
