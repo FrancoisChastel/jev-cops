@@ -12,7 +12,7 @@ required outcome, until its milestone. Do not delete or weaken one (CONTRIBUTING
 | T3 | Hook timeout | `T03-hook-timeout.test.ts` | todo | M0 step 8 (daemon), step 10 (Pi adapter) |
 | T4 | Harness gap | `T04-harness-gap.test.ts` | todo | M2 (OpenShell compiler); M1/M3 installers |
 | T5 | Obfuscation | `T05-obfuscation.test.ts` | live (core) | policy judging on file content: M0 step 5 |
-| T6 | Judge injection | `T06-judge-injection.test.ts` | live (core); 2 todo | floor −0.2 cap: M0 step 5; audit flag: M0 step 8 |
+| T6 | Judge injection | `T06-judge-injection.test.ts` | live (core + policy engine); 1 todo | audit flag: M0 step 8 |
 | T7 | Precedent farming | `T07-precedent-farming.test.ts` | live (budget 2x); 2 todo | precedent scope/TTL: M0 step 8, M2 |
 | T8 | Social engineering the human | `T08-social-engineering.test.ts` | todo | M1 (hold-to-ask confirm prompt) |
 | T9 | TOCTOU | `T09-toctou.test.ts` | live (opaque); 1 todo | rewrite pinning: M0 steps 5 and 10 |
