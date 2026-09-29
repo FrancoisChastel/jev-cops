@@ -107,7 +107,8 @@ export interface ContextConfig {
 /** Recursive partial; arrays and scalars replace, objects merge. */
 export type ContextConfigInput = DeepPartial<ContextConfig>;
 
-type DeepPartial<T> = {
+/** Recursive partial used by every mergeable config: arrays and scalars replace, objects merge. */
+export type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends ReadonlyArray<unknown>
     ? T[K]
     : T[K] extends object
@@ -120,7 +121,8 @@ const NPM = ["npmjs.org"];
 const PYPI = ["pypi.org"];
 const GO = ["proxy.golang.org", "github.com"];
 
-function deepFreeze<T>(value: T): T {
+/** Freezes `value` and everything reachable from it; returns the same reference. */
+export function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === "object") {
     for (const child of Object.values(value)) deepFreeze(child);
     Object.freeze(value);
@@ -213,10 +215,19 @@ function merge(base: unknown, patch: unknown): unknown {
 }
 
 /**
+ * `base` deep-merged with `patch` as a fresh object: objects merge key by key, arrays and
+ * scalars replace, `__proto__`/`constructor`/`prototype` keys are dropped. Neither input
+ * is touched. Shared by every config module so all of them merge the same way.
+ */
+export function mergeConfig<T>(base: T, patch: DeepPartial<T> = {} as DeepPartial<T>): T {
+  return merge(base, patch) as T;
+}
+
+/**
  * The defaults deep-merged with `partial`: objects merge key by key, arrays and scalars
  * replace. Returns a fresh object; neither the defaults nor `partial` are touched, and
  * `__proto__`/`constructor`/`prototype` keys are dropped.
  */
 export function resolveContextConfig(partial: ContextConfigInput = {}): ContextConfig {
-  return merge(DEFAULT_CONTEXT_CONFIG, partial) as ContextConfig;
+  return mergeConfig<ContextConfig>(DEFAULT_CONTEXT_CONFIG, partial);
 }
