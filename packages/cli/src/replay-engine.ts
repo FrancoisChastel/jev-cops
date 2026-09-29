@@ -19,9 +19,15 @@ import {
   resolvePolicyConfig,
   type Verdict,
 } from "@jevdict/core";
-import { type AuditLine, type Precedent, PrecedentStore } from "@jevdict/daemon";
+import { type AuditLine, type Precedent, PrecedentStore, withDerivedGit } from "@jevdict/daemon";
 import { FIXTURE_WHEN_BUDGET_MS } from "@jevdict/sdk";
-import { type JudgePayload, judgeView, precedentSchema, recordedAnswers } from "./audit-view.ts";
+import {
+  derivedGitOf,
+  type JudgePayload,
+  judgeView,
+  precedentSchema,
+  recordedAnswers,
+} from "./audit-view.ts";
 
 /** One re-judged event: the recorded and the new engine verdict, and honesty notes. */
 export interface ReplayEvent {
@@ -143,7 +149,8 @@ async function onJudge(
   const parsed = parseEvent(p.event);
   if (!parsed.ok || parsed.value.phase !== "pre")
     return `line ${line.seq}: recorded event is not a valid pre event`;
-  const event = parsed.value;
+  // The daemon judged with the env.git it derived from cwd (D-058); replay does too.
+  const event = withDerivedGit(parsed.value, derivedGitOf(line.payload));
   s.home = p.home;
   const history = historyOf(s, event.session.id);
   const notes = historyNotes(history, event.call.id);
@@ -175,7 +182,7 @@ async function onObserve(s: State, line: AuditLine): Promise<string | null> {
   const parsed = parseEvent(line.payload.event);
   if (!parsed.ok || parsed.value.phase !== "post")
     return `line ${line.seq}: recorded event is not a valid post event`;
-  const post = parsed.value;
+  const post = withDerivedGit(parsed.value, derivedGitOf(line.payload));
   const cf: CaseFile = openCaseFile(storeOf(s), post.session.id, post.session.parent_id);
   if (post.session.task !== undefined && post.session.task !== "")
     cf.setTaskOnce(post.session.task);

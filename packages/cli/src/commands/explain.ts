@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { FEATURE_NAMES } from "@jevdict/core";
+import { FEATURE_NAMES, gitSchema } from "@jevdict/core";
 import { type AuditLine, readAudit } from "@jevdict/daemon";
 import { type JudgePayload, judgeView } from "../audit-view.ts";
 import { configuredPaths } from "../config-paths.ts";
@@ -19,12 +19,34 @@ function header(line: AuditLine, p: JudgePayload): string[] {
   ];
 }
 
+/** `env.git` as judged, and where it came from: the adapter, or jevdictd's derivation (D-058). */
+function gitLine(p: JudgePayload): string {
+  const env = typeof p.event === "object" && p.event !== null ? Reflect.get(p.event, "env") : null;
+  const sent = gitSchema.safeParse(typeof env === "object" && env !== null ? env.git : undefined);
+  const adapter = sent.success ? sent.data : {};
+  const derived = p.derived?.git ?? {};
+  const git = { ...derived, ...adapter };
+  if (Object.keys(git).length === 0) return "env.git: none (repo and branch unknown)";
+  const dirty = git.dirty === undefined ? "unknown" : git.dirty ? "yes" : "no";
+  const fields = [
+    `repo ${git.repo ?? "unknown"}`,
+    `branch ${git.branch ?? "unknown"}`,
+    `default ${git.default_branch ?? "unknown"}`,
+    `dirty ${dirty}`,
+  ];
+  const keys = Object.keys(derived);
+  const from =
+    keys.length === 0 ? "sent by the adapter" : `derived by jevdictd from cwd: ${keys.join(", ")}`;
+  return `env.git: ${fields.join(" · ")} (${from})`;
+}
+
 function command(p: JudgePayload): string[] {
   const n = p.normalized;
   const opaque = n.opaque.map((o) => o.reason).join(", ") || "none";
   return [
     `command: ${p.raw}`,
     `normalized: kind ${n.kind} · paths ${n.paths.join(", ") || "none"} · hosts ${n.hosts.join(", ") || "none"} · opaque ${opaque}`,
+    gitLine(p),
   ];
 }
 

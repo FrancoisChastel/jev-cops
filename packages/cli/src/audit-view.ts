@@ -1,4 +1,11 @@
-import { type Answer, CALL_KINDS, type JevQuestionType, verdictSchema } from "@jevdict/core";
+import {
+  type Answer,
+  CALL_KINDS,
+  type GitInfo,
+  gitSchema,
+  type JevQuestionType,
+  verdictSchema,
+} from "@jevdict/core";
 import type { AuditLine } from "@jevdict/daemon";
 import { fixtureAnswerSchema } from "@jevdict/sdk";
 import { z } from "zod";
@@ -50,6 +57,8 @@ const repoHintsSchema = z.looseObject({
 /** The payload of a `judge` line as the daemon writes it (`judgePayload`). */
 export const judgePayloadSchema = z.looseObject({
   event: z.unknown(),
+  /** The `env.git` fields jevdictd derived from cwd (D-058); absent when none. */
+  derived: z.looseObject({ git: gitSchema }).optional(),
   raw: z.string(),
   stateHash: z.string(),
   normalized: z.looseObject({
@@ -89,6 +98,14 @@ export function judgeView(
   if (parsed.success) return { ok: true, payload: parsed.data };
   const issue = parsed.error.issues[0];
   return { ok: false, error: `line ${line.seq}: ${issue?.path.join(".")}: ${issue?.message}` };
+}
+
+/** The `derived.git` of any audit payload, or null when absent or not a valid `env.git`. */
+export function derivedGitOf(payload: Readonly<Record<string, unknown>>): GitInfo | null {
+  const derived = payload.derived;
+  const git = typeof derived === "object" && derived !== null ? Reflect.get(derived, "git") : null;
+  const parsed = gitSchema.safeParse(git);
+  return parsed.success ? parsed.data : null;
 }
 
 /** The recorded full answers, typed as core answers. */
