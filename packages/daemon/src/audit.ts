@@ -16,7 +16,7 @@ import { canonicalJson, sha256Hex } from "@jevdict/core";
 export const AUDIT_GENESIS = "0".repeat(64);
 
 /** What an audit line records. */
-export const AUDIT_KINDS = ["judge", "observe", "anomaly", "precedent", "boot"] as const;
+export const AUDIT_KINDS = ["judge", "observe", "anomaly", "precedent", "boot", "session"] as const;
 export type AuditKind = (typeof AUDIT_KINDS)[number];
 
 /** What a caller appends; the log adds `seq`, `at`, `prev` and `hash`. */

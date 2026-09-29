@@ -70,12 +70,28 @@ export class SessionStore {
    * first sight. Sets the task once from `session.task` and marks the root active.
    */
   open(event: Event): CaseFile {
-    const cf = openCaseFile(this.cases, event.session.id, event.session.parent_id);
+    const cf = this.openSession(event.session.id, event.session.parent_id);
     if (event.session.task !== undefined && event.session.task !== "") {
       cf.setTaskOnce(event.session.task);
     }
-    this.st.touch.run({ sid: this.rootOf(event.session.id), now: this.now() });
     return cf;
+  }
+
+  /**
+   * The case file of session `sessionId` (linked under `parentId` when set), created on
+   * first sight; marks its root active. `/v1/session` reports open sessions this way.
+   */
+  openSession(sessionId: string, parentId: string | null): CaseFile {
+    const cf = openCaseFile(this.cases, sessionId, parentId);
+    this.st.touch.run({ sid: this.rootOf(sessionId), now: this.now() });
+    return cf;
+  }
+
+  /** Closes `sessionId`'s root now (a session `end` report); false when unknown or closed. */
+  closeRoot(sessionId: string): boolean {
+    if (!this.isOpen(sessionId)) return false;
+    this.st.close.run({ sid: this.rootOf(sessionId), now: this.now() });
+    return true;
   }
 
   /** The root session `sessionId` belongs to (itself when not a subagent). */
