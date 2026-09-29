@@ -188,10 +188,11 @@ export const DEFAULT_CONTEXT_CONFIG: Readonly<ContextConfig> = deepFreeze({
   reversibility: {
     irreversibleVerbs: ["force", "hard", "irreversible", "privilege"],
     netWriteMethods: ["POST", "PUT", "DELETE", "PATCH", "OTHER"],
-    credentialName: String.raw`token|secret|passw|api[_-]?key|credential|private[_-]?key|^aws_`,
+    credentialName: "token|secret|passw|api[_-]?key|credential|private[_-]?key|^aws_",
   },
   secrets: {
-    pathGlobs: ["**/.env*", "**/*.pem", "**/*.key", "~/.ssh/**", "~/.aws/**"],
+    // The spec's `**/.env*`, narrowed so `.environment.md`-style docs are not secrets.
+    pathGlobs: ["**/.env{,.*,-*,_*,rc}", "**/*.pem", "**/*.key", "~/.ssh/**", "~/.aws/**"],
   },
 } satisfies ContextConfig);
 
