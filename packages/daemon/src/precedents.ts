@@ -1,0 +1,235 @@
+import { Database, type Statement } from "bun:sqlite";
+import type { PolicyContext, PolicyEvent, PrecedentLookup, PrecedentMatch } from "@jevdict/core";
+import { matchScore, type PrecedentScope, scopeKey, taskHash } from "./precedent-scope.ts";
+
+export {
+  matchScore,
+  type PrecedentScope,
+  proposeScope,
+  type ScopeSource,
+  scopeKey,
+  taskHash,
+} from "./precedent-scope.ts";
+
+/** Hard cap on a precedent's life, whatever its session does (and on a pending hold's). */
+export const PRECEDENT_MAX_AGE_MS = 24 * 3_600_000;
+/** How far a precedent lowers risk; core caps it at 0.3 too (spec §Precedents). */
+export const PRECEDENT_RISK_DELTA = 0.3;
+
+/** A human-granted precedent. `expiresAt` null: valid until its session closes. */
+export interface Precedent {
+  readonly key: string;
+  /** The root session it belongs to; subagents share it. */
+  readonly sessionId: string;
+  readonly scope: PrecedentScope;
+  readonly riskDelta: number;
+  readonly grantedAt: number;
+  readonly expiresAt: number | null;
+  /** `name@version` of the policies whose non-deny verdict the human overrode. */
+  readonly policies: readonly string[];
+  readonly eventId: string;
+  readonly by: string;
+}
+
+/** A `hold` the harness showed a human, waiting for `POST /v1/resolve`. */
+export interface PendingHold {
+  readonly eventId: string;
+  readonly sessionId: string;
+  readonly scope: PrecedentScope;
+  readonly policies: readonly string[];
+}
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS precedents (
+  key TEXT NOT NULL, session_id TEXT NOT NULL, scope TEXT NOT NULL, risk_delta REAL NOT NULL,
+  granted_at INTEGER NOT NULL, expires_at INTEGER, policies TEXT NOT NULL,
+  event_id TEXT NOT NULL, granted_by TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS precedents_session ON precedents (session_id);
+CREATE TABLE IF NOT EXISTS holds (
+  event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, scope TEXT NOT NULL,
+  policies TEXT NOT NULL, at INTEGER NOT NULL);
+`;
+
+const SQL = {
+  insert: `INSERT INTO precedents (key, session_id, scope, risk_delta, granted_at, expires_at,
+    policies, event_id, granted_by) VALUES ($key, $sid, $scope, $delta, $granted, $expires,
+    $policies, $eventId, $by)`,
+  active: `SELECT * FROM precedents WHERE session_id = $sid AND granted_at > $oldest
+    AND (expires_at IS NULL OR expires_at > $now) ORDER BY granted_at DESC, rowid DESC`,
+  expire: `UPDATE precedents SET expires_at = $now WHERE session_id = $sid
+    AND (expires_at IS NULL OR expires_at > $now)`,
+  putHold: `INSERT OR REPLACE INTO holds (event_id, session_id, scope, policies, at)
+    VALUES ($eventId, $sid, $scope, $policies, $now)`,
+  hold: "SELECT * FROM holds WHERE event_id = $eventId AND at > $oldest",
+  dropHold: "DELETE FROM holds WHERE event_id = $eventId",
+} as const;
+
+type Bindings = Record<string, string | number | null>;
+type Statements = { [K in keyof typeof SQL]: Statement<unknown, [Bindings]> };
+
+interface PrecedentRow {
+  key: string;
+  session_id: string;
+  scope: string;
+  risk_delta: number;
+  granted_at: number;
+  expires_at: number | null;
+  policies: string;
+  event_id: string;
+  granted_by: string;
+}
+
+interface HoldRow {
+  event_id: string;
+  session_id: string;
+  scope: string;
+  policies: string;
+}
+
+function toPrecedent(r: PrecedentRow): Precedent {
+  return {
+    key: r.key,
+    sessionId: r.session_id,
+    scope: JSON.parse(r.scope) as PrecedentScope,
+    riskDelta: r.risk_delta,
+    grantedAt: r.granted_at,
+    expiresAt: r.expires_at,
+    policies: JSON.parse(r.policies) as string[],
+    eventId: r.event_id,
+    by: r.granted_by,
+  };
+}
+
+/** Clock and session-root resolution the store needs from the daemon. */
+export interface PrecedentStoreOptions {
+  now?: () => number;
+  /** Root session of a (sub)agent session; precedents live on roots. */
+  rootOf?: (sessionId: string) => string;
+}
+
+/**
+ * Precedents in SQLite, implementing core {@link PrecedentLookup}. A precedent exists
+ * only because a human allowed a `hold` the daemon recorded, and its scope is the one the
+ * daemon proposed at hold time: {@link grant} takes an event id and nothing else (T7/T8).
+ * TTL: until the session closes ({@link expireSession}) and at most 24 h. Core caps the
+ * risk delta at 0.3 and ignores precedents when a policy says `kill`.
+ */
+export class PrecedentStore implements PrecedentLookup {
+  private readonly db: Database;
+  private readonly st: Statements;
+  private readonly now: () => number;
+  private readonly rootOf: (sessionId: string) => string;
+  private closed = false;
+
+  constructor(path: string, opts: PrecedentStoreOptions = {}) {
+    this.db = new Database(path, { create: true, strict: true });
+    this.db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+    this.db.exec(SCHEMA);
+    const entries = Object.entries(SQL).map(([k, sql]) => [k, this.db.prepare(sql)]);
+    this.st = Object.fromEntries(entries) as Statements;
+    this.now = opts.now ?? Date.now;
+    this.rootOf = opts.rootOf ?? ((id) => id);
+  }
+
+  /** Remembers a hold shown to a human, with the scope the daemon proposes for it. */
+  recordHold(h: PendingHold): void {
+    this.st.putHold.run({
+      eventId: h.eventId,
+      sid: this.rootOf(h.sessionId),
+      scope: JSON.stringify(h.scope),
+      policies: JSON.stringify(h.policies),
+      now: this.now(),
+    });
+  }
+
+  /** The pending hold for `eventId`, or null (unknown, resolved, or older than 24 h). */
+  pendingHold(eventId: string): PendingHold | null {
+    const oldest = this.now() - PRECEDENT_MAX_AGE_MS;
+    const row = this.st.hold.get({ eventId, oldest }) as HoldRow | null;
+    if (row === null) return null;
+    return {
+      eventId: row.event_id,
+      sessionId: row.session_id,
+      scope: JSON.parse(row.scope) as PrecedentScope,
+      policies: JSON.parse(row.policies) as string[],
+    };
+  }
+
+  /** Drops a pending hold (resolved with deny, or granted). */
+  dropHold(eventId: string): void {
+    this.st.dropHold.run({ eventId });
+  }
+
+  /** A human allowed held event `eventId`: records its precedent once; null if not held. */
+  grant(eventId: string, by: string): Precedent | null {
+    const held = this.pendingHold(eventId);
+    if (held === null) return null;
+    const precedent: Precedent = {
+      key: scopeKey(held.scope),
+      sessionId: held.sessionId,
+      scope: held.scope,
+      riskDelta: PRECEDENT_RISK_DELTA,
+      grantedAt: this.now(),
+      expiresAt: null,
+      policies: held.policies,
+      eventId,
+      by,
+    };
+    this.db.transaction(() => {
+      this.insert(precedent);
+      this.dropHold(eventId);
+    })();
+    return precedent;
+  }
+
+  /** Stores a precedent as given (replay rebuilds recorded grants with this). */
+  insert(p: Precedent): void {
+    this.st.insert.run({
+      key: p.key,
+      sid: p.sessionId,
+      scope: JSON.stringify(p.scope),
+      delta: Math.min(PRECEDENT_RISK_DELTA, Math.max(0, p.riskDelta)),
+      granted: p.grantedAt,
+      expires: p.expiresAt,
+      policies: JSON.stringify(p.policies),
+      eventId: p.eventId,
+      by: p.by,
+    });
+  }
+
+  /** Precedents of `sessionId`'s root that are still valid now, newest first. */
+  active(sessionId: string): Precedent[] {
+    const now = this.now();
+    const rows = this.st.active.all({
+      sid: this.rootOf(sessionId),
+      oldest: now - PRECEDENT_MAX_AGE_MS,
+      now,
+    }) as PrecedentRow[];
+    return rows.map(toPrecedent);
+  }
+
+  /** The narrowest valid precedent matching `e`; ties go to the most recent grant. */
+  lookup(e: PolicyEvent, _ctx: PolicyContext): PrecedentMatch | null {
+    const task = taskHash(e.session.task);
+    let best: { p: Precedent; score: number } | null = null;
+    for (const p of this.active(e.session.id)) {
+      const score = matchScore(p.scope, e, task);
+      if (score >= 0 && (best === null || score > best.score)) best = { p, score };
+    }
+    if (best === null) return null;
+    return { key: best.p.key, riskDelta: best.p.riskDelta, policies: [...best.p.policies] };
+  }
+
+  /** Ends every open precedent of a closed session; returns how many it ended. */
+  expireSession(sessionId: string): number {
+    return this.st.expire.run({ sid: this.rootOf(sessionId), now: this.now() }).changes;
+  }
+
+  /** Idempotent. */
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    for (const s of Object.values(this.st)) s.finalize();
+    this.db.close();
+  }
+}
