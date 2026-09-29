@@ -21,12 +21,21 @@ Updated: 2026-09-29
   73-row command table at `tests/fixtures/commands/commands.json`. 477 tests.
   Decisions D-013–D-019.
 
+- **M0 step 3 — context engine** (`packages/core/src/context`): case file (in-memory +
+  bun:sqlite, one contract suite run against all three stores), secrets (path globs +
+  content patterns), prompt-injection detector, taint with T10 laundering through
+  self-written files, deterministic scope with task allowlist, four sequence patterns,
+  environment, reversibility, risk budget with T7 hold doubling, `computeFeatures` with
+  per-feature evidence. Spec worked examples asserted at the feature level.
+  `tests/tamper/` T01–T13: T05/T06/T07/T09/T10/T11 live against core, the rest `todo`
+  named with the spec's required outcome (see `tests/tamper/README.md`). 274 tests.
+  Decisions D-020–D-027.
+
+**Totals:** 878 tests + 12 todo, `bun run check` green, 42 commits.
+
 ## In progress
 
-- **M0 step 3 — context engine** (`packages/core/src/context`): case file (in-memory +
-  bun:sqlite), secrets, taint (with T10 laundering), scope, sequence, environment,
-  reversibility, risk budget (with T7 hold doubling), `computeFeatures`; `tests/tamper/`
-  T01–T13 files (T05/T06/T07/T09/T10/T11 live, rest `todo`).
+- Nothing. Session boundary reached (schema, normalizer, context engine delivered).
 
 ## Next (after this session)
 
@@ -43,6 +52,10 @@ Updated: 2026-09-29
   python/node code is flagged opaque but not parsed.
 - `bun build --compile` will need the grammar `.wasm` embedded (M0 step 10).
 - Coverage report: `bunfig.toml` has `coverage = false`; enable in CI once the threshold is met.
+- Context engine: `taintFraction` scans the whole taint set per event (~0.7 ms/event at
+  1,600 calls) — needs an index before M4; `chargeHold` must be paired with `charge` by
+  the daemon (types do not enforce it); SQLite schema has no migrations yet; in-repo
+  `rm -f` scores reversibility 1 (D-026) — revisit with the starter policies.
 
 ## Blocked / waiting on owner
 
