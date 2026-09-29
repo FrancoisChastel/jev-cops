@@ -5,6 +5,8 @@
 export * from "./config.ts";
 export * from "./context.ts";
 export * from "./duration.ts";
+export * from "./evaluate.ts";
 export * from "./event.ts";
 export * from "./floor.ts";
+export * from "./loader.ts";
 export type * from "./types.ts";
