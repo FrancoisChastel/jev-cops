@@ -1,5 +1,9 @@
 [test]
 root = "."
-coverage = false
+# `bun test --coverage` (CI) fails when any single file is under 80 % of its functions or
+# lines. Plain `bun test` does not collect coverage.
 coverageThreshold = 0.8
 coverageSkipTestFiles = true
+# Test artifacts written outside the repository (policy modules in temp directories, the
+# Pi extension copied by the installer test) are not source files.
+coveragePathIgnorePatterns = ["../**"]
