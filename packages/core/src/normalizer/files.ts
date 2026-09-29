@@ -94,3 +94,47 @@ export function sedMode(args: ReadonlyArray<string>): "write" | "read" | null {
   if (inPlace) return "write";
   return hasOption(parsed, ["-n", "--quiet", "--silent"]) ? "read" : null;
 }
+
+const SED_ADDRESS = String.raw`(?:\d+|\$|\/(?:[^/\\]|\\.)*\/)`;
+const SED_RANGE = `(?:${SED_ADDRESS}(?:\\s*,\\s*${SED_ADDRESS})?)?`;
+const SED_EXEC = new RegExp(String.raw`(?:^|[;\n{}])\s*${SED_RANGE}\s*e(?:\s|;|$)`);
+const SED_SUBST_EXEC = /(?:^|[;\n{}\s])s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiImM0-9]*e/;
+const SED_WRITE = new RegExp(String.raw`(?:^|[;\n{}])\s*${SED_RANGE}\s*[wW]\s+([^\n]+)`, "g");
+const SED_SUBST_WRITE =
+  /(?:^|[;\n{}\s])s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiImMe0-9]*w\s+([^\n]+)/g;
+
+/** A sed script as written, with the argv index of the word holding it. */
+interface SedScript {
+  text: string;
+  index: number;
+}
+
+function sedScripts(args: ReadonlyArray<string>, base: number): SedScript[] {
+  const parsed = parseArgs(args, new Set(SED_VALUE));
+  const inline = parsed.options.filter((o) => ["-e", "--expression"].includes(o.name));
+  if (inline.length > 0) return inline.map((o) => ({ text: o.value ?? "", index: base + o.index }));
+  if (hasOption(parsed, SED_PATTERN)) return [];
+  const first = parsed.positionals[0];
+  return first === undefined ? [] : [{ text: first.value, index: base + first.index }];
+}
+
+/**
+ * What sed scripts do beyond reading: `e` and `s///e` execute shell commands (the
+ * script is returned as `code`), `w file` and `s///w file` write files. Heuristic:
+ * it errs towards flagging, never towards hiding.
+ */
+export function sedEffects(
+  args: ReadonlyArray<string>,
+  base: number,
+): { code: string | null; writes: PathArg[] } {
+  const scripts = sedScripts(args, base);
+  const executes = scripts.find((s) => SED_EXEC.test(s.text) || SED_SUBST_EXEC.test(s.text));
+  const writes = scripts.flatMap((s) =>
+    [...s.text.matchAll(SED_WRITE), ...s.text.matchAll(SED_SUBST_WRITE)].map((m) => ({
+      value: (m[m.length - 1] ?? "").trim(),
+      index: s.index,
+      access: "write" as const,
+    })),
+  );
+  return { code: executes?.text ?? null, writes: writes.filter((w) => w.value !== "") };
+}

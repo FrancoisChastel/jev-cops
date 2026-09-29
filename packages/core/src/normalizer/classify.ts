@@ -1,11 +1,11 @@
 import { posix } from "node:path";
 import type { CallKind } from "../schema/event.ts";
-import { type Classification, maxKind, plain } from "./classification.ts";
-import { filePaths, rmVerbs, sedMode } from "./files.ts";
+import { type Classification, type InterpreterInfo, maxKind, plain } from "./classification.ts";
+import { filePaths, rmVerbs, sedEffects, sedMode } from "./files.ts";
 import { GIT_SUBCOMMAND_KINDS, readGit } from "./git.ts";
 import { classifyInterpreter } from "./interpreters.ts";
 import { readCurl, readWget, urlHost, verbHosts } from "./net.ts";
-import { lookup, type Positional, parseArgs } from "./options.ts";
+import { hasOption, lookup, type Positional, parseArgs } from "./options.ts";
 import { looksLikePath } from "./paths.ts";
 import type { PathArg } from "./types.ts";
 
@@ -83,6 +83,7 @@ export const WRAPPERS: Readonly<Record<string, WrapperRule>> = {
   nice: wrapper(["nice"], false, ["-n", "--adjustment"]),
   time: wrapper(["time"], false, ["-f", "-o", "--format", "--output"]),
   command: wrapper(["command"], false),
+  builtin: wrapper(["builtin"], false),
   exec: wrapper(["exec"], false, ["-a"]),
   stdbuf: wrapper(["stdbuf"], false, ["-i", "-o", "-e"]),
 };
@@ -164,17 +165,39 @@ function classifySubcommand(name: string, args: ReadonlyArray<string>): Classifi
   });
 }
 
+function inlineCode(code: string): InterpreterInfo {
+  return { shell: false, code, stdin: false, eval: false };
+}
+
 function classifySed(args: ReadonlyArray<string>, base: number): Classification {
   const mode = sedMode(args);
+  const effects = sedEffects(args, base);
+  const paths = [...effects.writes, ...filePaths("sed", args, base, mode ?? "read")];
+  if (effects.code !== null)
+    return plain("exec", ["sed"], { interpreter: inlineCode(effects.code), paths });
   const kind = mode === "write" ? "fs.write" : mode === "read" ? "fs.read" : "exec";
-  return plain(kind, ["sed"], { paths: filePaths("sed", args, base, mode ?? "read") });
+  return plain(effects.writes.length > 0 ? maxKind(kind, "fs.write") : kind, ["sed"], { paths });
+}
+
+const AWK_SHELL_OUT = /\bsystem\s*\(|\|\s*&?\s*getline|\|\s*&?\s*"/;
+
+/** awk is a read unless its program shells out (`system()`, `cmd | getline`, `print | "cmd"`). */
+function classifyAwk(args: ReadonlyArray<string>, base: number): Classification {
+  const paths = filePaths("awk", args, base);
+  const parsed = parseArgs(args, new Set(["-F", "-v", "-f"]));
+  const program = hasOption(parsed, ["-f"]) ? undefined : parsed.positionals[0]?.value;
+  if (program === undefined || !AWK_SHELL_OUT.test(program))
+    return plain("fs.read", ["awk"], { paths });
+  return plain("exec", ["awk"], { interpreter: inlineCode(program), paths });
 }
 
 function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): Classification {
   switch (name) {
     case "git": {
       const git = readGit(args, base);
-      return plain(git.kind, git.verbs, { paths: git.paths, hosts: git.hosts });
+      const interpreter = git.code === null ? null : { ...inlineCode(git.code), shell: true };
+      const kind = interpreter === null ? git.kind : "exec";
+      return plain(kind, git.verbs, { paths: git.paths, hosts: git.hosts, interpreter });
     }
     case "curl":
     case "wget": {
@@ -191,6 +214,8 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
     }
     case "find":
       return classifyFind(args, base);
+    case "awk":
+      return classifyAwk(args, base);
   }
   if (lookup(SUBCOMMAND_KINDS, name) !== undefined) return classifySubcommand(name, args);
   return plain(lookup(VERB_KINDS, name) ?? "exec", [name], {

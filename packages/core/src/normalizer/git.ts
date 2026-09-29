@@ -37,6 +37,27 @@ const PATH_SUBCOMMANDS: Readonly<Record<string, PathAccess>> = {
   rm: "delete",
 };
 const NET_SUBCOMMANDS = new Set(["push", "fetch", "pull", "clone"]);
+const SHELL_CONFIG_KEYS = new Set(
+  ["core.sshcommand", "core.pager", "core.editor", "core.fsmonitor", "core.askpass"].concat([
+    "core.gitproxy",
+    "sequence.editor",
+    "credential.helper",
+    "diff.external",
+    "gpg.program",
+  ]),
+);
+const SHELL_CONFIG_PATTERN =
+  /^pager\.|\.(?:command|cmd|textconv|driver|process|clean|smudge|helper|program|tool)$/;
+
+/** The shell code a `-c key=value` makes git run: `!` aliases and command-valued keys. */
+function configCode(setting: string): string | null {
+  const eq = setting.indexOf("=");
+  if (eq < 0) return null;
+  const key = setting.slice(0, eq).toLowerCase();
+  const value = setting.slice(eq + 1);
+  if (key.startsWith("alias.")) return value.startsWith("!") ? value.slice(1) : null;
+  return SHELL_CONFIG_KEYS.has(key) || SHELL_CONFIG_PATTERN.test(key) ? value : null;
+}
 const FORCE = ["force", "irreversible"];
 
 function forcedPush(parsed: ParsedArgs): boolean {
@@ -79,18 +100,25 @@ export interface GitReading {
   verbs: string[];
   paths: PathArg[];
   hosts: string[];
+  /** Shell code smuggled in through `-c` config (aliases, pagers, ssh commands, …). */
+  code: string | null;
 }
 
 /**
  * Classifies `git <args>`; `base` is the argv index of `args[0]`. Global options
  * (`-C dir`, `-c k=v`, …) are skipped to find the subcommand. Irreversible forms
  * (force push, `reset --hard`, `checkout -- .`, `clean -f`, `branch -D`, `rebase`)
- * add verbs; they never change the kind.
+ * add verbs; they never change the kind. Shell code in `-c` config is returned as `code`.
  */
 export function readGit(args: ReadonlyArray<string>, base: number): GitReading {
   const global = parseArgs(args, GLOBAL_VALUE_OPTS, true);
   const first = global.positionals[0];
-  if (first === undefined) return { kind: "exec", verbs: ["git"], paths: [], hosts: [] };
+  const code =
+    global.options
+      .filter((o) => o.name === "-c" && o.value !== null)
+      .map((o) => configCode(o.value ?? ""))
+      .find((c) => c !== null) ?? null;
+  if (first === undefined) return { kind: "exec", verbs: ["git"], paths: [], hosts: [], code };
   const sub = first.value;
   const subArgs = args.slice(first.index + 1);
   const subBase = base + first.index + 1;
@@ -108,5 +136,6 @@ export function readGit(args: ReadonlyArray<string>, base: number): GitReading {
     verbs: ["git", sub, ...irreversibleVerbs(sub, parsed, subArgs)],
     paths,
     hosts,
+    code,
   };
 }
