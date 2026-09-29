@@ -389,3 +389,22 @@ describe("classifyArgv: wrappers", () => {
     expect(classifyArgv(argv).kind).toBe(kind);
   });
 });
+
+describe("classifyArgv: hostile names", () => {
+  test.each([
+    [["constructor"]],
+    [["toString", "x"]],
+    [["hasOwnProperty", "-c", "x"]],
+    [["__proto__"]],
+    [["valueOf"]],
+  ])("the Object.prototype member %p is a plain exec", (argv) => {
+    expect(classifyArgv(argv)).toMatchObject({ kind: "exec", verbs: [argv[0]], wrapped: false });
+  });
+
+  test.each([[["git", "constructor"]], [["docker", "__proto__"]], [["npm", "toString"]]])(
+    "the subcommand %p is a plain exec",
+    (argv) => {
+      expect(classifyArgv(argv).kind).toBe("exec");
+    },
+  );
+});

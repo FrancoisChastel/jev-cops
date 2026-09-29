@@ -1,5 +1,5 @@
 import { type Classification, type InterpreterInfo, plain } from "./classification.ts";
-import { optionValue, parseArgs } from "./options.ts";
+import { lookup, optionValue, parseArgs } from "./options.ts";
 import type { PathArg } from "./types.ts";
 
 /** Shells: always interpreters; `-c` code is parsed recursively as bash. */
@@ -59,7 +59,7 @@ function classifyShell(name: string, args: ReadonlyArray<string>, base: number):
 }
 
 function langKey(name: string): string | null {
-  if (INTERPRETER_INLINE_FLAGS[name] !== undefined) return name;
+  if (lookup(INTERPRETER_INLINE_FLAGS, name) !== undefined) return name;
   if (/^python[0-9.]+$/.test(name)) return "python3";
   return name === "nodejs" ? "node" : null;
 }
@@ -70,8 +70,8 @@ function classifyLang(
   args: ReadonlyArray<string>,
   base: number,
 ): Classification {
-  const inline = INTERPRETER_INLINE_FLAGS[key] ?? [];
-  const parsed = parseArgs(args, new Set([...inline, ...(LANG_VALUE_OPTS[key] ?? [])]));
+  const inline = lookup(INTERPRETER_INLINE_FLAGS, key) ?? [];
+  const parsed = parseArgs(args, new Set([...inline, ...(lookup(LANG_VALUE_OPTS, key) ?? [])]));
   const code = optionValue(parsed, inline);
   if (code !== null) return interpreted(name, info(false, code, false));
   if (parsed.options.some((o) => o.name === "-m")) return plain("exec", [name]);

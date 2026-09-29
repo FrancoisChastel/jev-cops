@@ -5,7 +5,7 @@ import { filePaths, rmVerbs, sedMode } from "./files.ts";
 import { GIT_SUBCOMMAND_KINDS, readGit } from "./git.ts";
 import { classifyInterpreter } from "./interpreters.ts";
 import { readCurl, readWget, urlHost, verbHosts } from "./net.ts";
-import { type Positional, parseArgs } from "./options.ts";
+import { lookup, type Positional, parseArgs } from "./options.ts";
 import { looksLikePath } from "./paths.ts";
 import type { PathArg } from "./types.ts";
 
@@ -155,9 +155,10 @@ function classifyFind(args: ReadonlyArray<string>, base: number): Classification
 }
 
 function classifySubcommand(name: string, args: ReadonlyArray<string>): Classification {
-  const globals = SUBCOMMAND_GLOBALS[name] ?? new Set<string>();
+  const globals = lookup(SUBCOMMAND_GLOBALS, name) ?? new Set<string>();
   const sub = parseArgs(args, globals, true).positionals[0]?.value;
-  const kind = sub === undefined ? undefined : SUBCOMMAND_KINDS[name]?.[sub];
+  const table = lookup(SUBCOMMAND_KINDS, name);
+  const kind = sub === undefined || table === undefined ? undefined : lookup(table, sub);
   return plain(kind ?? "exec", sub === undefined ? [name] : [name, sub], {
     hosts: verbHosts(name, args),
   });
@@ -191,8 +192,8 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
     case "find":
       return classifyFind(args, base);
   }
-  if (SUBCOMMAND_KINDS[name] !== undefined) return classifySubcommand(name, args);
-  return plain(VERB_KINDS[name] ?? "exec", [name], {
+  if (lookup(SUBCOMMAND_KINDS, name) !== undefined) return classifySubcommand(name, args);
+  return plain(lookup(VERB_KINDS, name) ?? "exec", [name], {
     paths: filePaths(name, args, base),
     hosts: verbHosts(name, args),
   });
@@ -229,7 +230,7 @@ function classifyAt(argv: ReadonlyArray<string>, base: number): Classification {
   if (argv.length === 0) return plain("other", []);
   const name = posix.basename(argv[0] ?? "");
   const args = argv.slice(1);
-  const rule = WRAPPERS[name];
+  const rule = lookup(WRAPPERS, name);
   if (rule !== undefined) return classifyWrapper(rule, args, base + 1);
   const c = classifyInterpreter(name, args, base + 1) ?? classifyVerb(name, args, base + 1);
   return withGenericArgs(c, argv, base);

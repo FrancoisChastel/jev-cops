@@ -1,6 +1,6 @@
 import type { CallKind } from "../schema/event.ts";
 import { scpHost } from "./net.ts";
-import { hasOption, type ParsedArgs, parseArgs } from "./options.ts";
+import { hasOption, lookup, type ParsedArgs, parseArgs } from "./options.ts";
 import type { PathAccess, PathArg } from "./types.ts";
 
 /** git subcommand → kind; subcommands not listed are `exec`. */
@@ -94,8 +94,8 @@ export function readGit(args: ReadonlyArray<string>, base: number): GitReading {
   const sub = first.value;
   const subArgs = args.slice(first.index + 1);
   const subBase = base + first.index + 1;
-  const parsed = parseArgs(subArgs, SUB_VALUE_OPTS[sub] ?? new Set());
-  const access = PATH_SUBCOMMANDS[sub];
+  const parsed = parseArgs(subArgs, lookup(SUB_VALUE_OPTS, sub) ?? new Set());
+  const access = lookup(PATH_SUBCOMMANDS, sub);
   const paths =
     access === undefined
       ? []
@@ -104,7 +104,7 @@ export function readGit(args: ReadonlyArray<string>, base: number): GitReading {
     ? parsed.positionals.map((p) => scpHost(p.value)).filter((h): h is string => h !== null)
     : [];
   return {
-    kind: GIT_SUBCOMMAND_KINDS[sub] ?? "exec",
+    kind: lookup(GIT_SUBCOMMAND_KINDS, sub) ?? "exec",
     verbs: ["git", sub, ...irreversibleVerbs(sub, parsed, subArgs)],
     paths,
     hosts,

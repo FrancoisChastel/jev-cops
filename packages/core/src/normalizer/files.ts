@@ -1,4 +1,4 @@
-import { hasOption, parseArgs } from "./options.ts";
+import { hasOption, lookup, parseArgs } from "./options.ts";
 import type { PathAccess, PathArg } from "./types.ts";
 
 /**
@@ -64,7 +64,7 @@ export function filePaths(
   base: number,
   access?: PathAccess,
 ): PathArg[] {
-  const rule = FILE_RULES[name];
+  const rule = lookup(FILE_RULES, name);
   if (rule === undefined) return [];
   const parsed = parseArgs(args, new Set(rule.valueOpts ?? []));
   const needsPattern = rule.patternOpts !== undefined && !hasOption(parsed, rule.patternOpts);

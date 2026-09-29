@@ -101,3 +101,12 @@ export function optionValue(parsed: ParsedArgs, names: ReadonlyArray<string>): s
   const found = parsed.options.filter((o) => names.includes(o.name) && o.value !== null);
   return found.at(-1)?.value ?? null;
 }
+
+/**
+ * `table[key]` when `key` is the table's own property, else undefined. Every lookup
+ * keyed by untrusted text (a command name, a tool name) goes through this, so names
+ * like `constructor` or `__proto__` never reach Object.prototype.
+ */
+export function lookup<T>(table: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
