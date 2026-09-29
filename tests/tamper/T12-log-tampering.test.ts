@@ -5,11 +5,16 @@
  * Required outcome: Log is append-only, hash-chained, and shipped off-box; a chain break is an alert
  *
  * Status: live for the hash chain: a real daemon's log verifies, and an edit, a deleted
- * line or a cut line breaks the chain at that seq. Shipping off-box (the syslog/S3
- * forwarder) and `jevdict doctor` verifying the chain are M2.
+ * line or a cut line breaks the chain at that seq. Live at the hook: the daemon appends its
+ * audit log (and its directory) to `protectedPaths`, so through a real jevdictd running the
+ * starter set an agent that writes, appends to, truncates or deletes the log is killed by
+ * `config-tamper` before the command runs; reading it is not. Shipping off-box (the
+ * syslog/S3 forwarder) and `jevdict doctor` verifying the chain are M2.
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { VerdictResponse } from "@jevdict/core";
 import { verifyChain } from "../../packages/daemon/src/audit.ts";
 import {
   startTestDaemon,
@@ -20,32 +25,32 @@ import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { buildEvent } from "../fixtures/context/index.ts";
 import { pending } from "./pending.ts";
 
-let td: TestDaemon;
-let path: string;
-
-beforeEach(async () => {
-  td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
-  for (const command of ["ls", "cat README.md", "rm -rf build"]) {
-    await td.call(
-      "POST",
-      "/v1/judge",
-      withFreshId(buildEvent({ tool: "Bash", kind: "exec", input: { command } })),
-    );
-  }
-  path = td.config.audit.path;
-});
-
-afterEach(async () => {
-  await td.stop();
-});
-
-function lines(): string[] {
-  return readFileSync(path, "utf8")
-    .split("\n")
-    .filter((l) => l !== "");
-}
-
 describe("T12 log tampering", () => {
+  let td: TestDaemon;
+  let path: string;
+
+  beforeEach(async () => {
+    td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    for (const command of ["ls", "cat README.md", "rm -rf build"]) {
+      await td.call(
+        "POST",
+        "/v1/judge",
+        withFreshId(buildEvent({ tool: "Bash", kind: "exec", input: { command } })),
+      );
+    }
+    path = td.config.audit.path;
+  });
+
+  afterEach(async () => {
+    await td.stop();
+  });
+
+  function lines(): string[] {
+    return readFileSync(path, "utf8")
+      .split("\n")
+      .filter((l) => l !== "");
+  }
+
   test("the daemon's log is a valid chain", () => {
     expect(verifyChain(path)).toEqual({ ok: true, lines: 4 });
   });
@@ -73,4 +78,49 @@ describe("T12 log tampering", () => {
     "the log is shipped off-box and jevdict doctor alerts on a chain break (catches tail truncation)",
     pending("M2 (forwarder, jevdict doctor)"),
   );
+});
+
+describe("T12 an agent that edits or truncates the audit log is killed at the hook", () => {
+  let td: TestDaemon;
+  let audit: string;
+
+  beforeAll(async () => {
+    const policiesDir = join(import.meta.dir, "..", "..", "policies");
+    td = await startTestDaemon({ policies: {}, policiesDir });
+    audit = td.config.audit.path;
+  });
+
+  afterAll(async () => {
+    await td.stop();
+  });
+
+  async function verdict(tool: string, input: Record<string, unknown>): Promise<string> {
+    const kind = tool === "Bash" ? "exec" : "fs.write";
+    const session = { sessionId: `sess_t12_${crypto.randomUUID()}` };
+    const e = withFreshId(buildEvent({ tool, kind, input }, session));
+    return ((await td.call("POST", "/v1/judge", e)).body as VerdictResponse).verdict;
+  }
+
+  const attacks: ReadonlyArray<readonly [string, (a: string) => string]> = [
+    ["truncate it with a redirect", (a) => `: > ${a}`],
+    ["truncate it with truncate(1)", (a) => `truncate -s 0 ${a}`],
+    ["append a forged line", (a) => `echo '{"seq":99}' >> ${a}`],
+    ["rewrite it in place", (a) => `sed -i '' 1d ${a}`],
+    ["replace it with an edited copy", (a) => `head -n 1 ${a} > /tmp/a && mv /tmp/a ${a}`],
+    ["delete it", (a) => `rm -f ${a}`],
+  ];
+
+  for (const [name, command] of attacks) {
+    test(`Bash: ${name} → kill`, async () => {
+      expect(await verdict("Bash", { command: command(audit) })).toBe("kill");
+    });
+  }
+
+  test("Write over the log → kill", async () => {
+    expect(await verdict("Write", { file_path: audit, content: "" })).toBe("kill");
+  });
+
+  test("reading the log is not tampering", async () => {
+    expect(await verdict("Bash", { command: `tail -n 5 ${audit}` })).not.toBe("kill");
+  });
 });

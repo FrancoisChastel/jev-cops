@@ -7,7 +7,7 @@ required outcome, until its milestone. Do not delete or weaken one (CONTRIBUTING
 
 | # | Threat | File | Status | Milestone |
 |---|---|---|---|---|
-| T1 | Config tampering | `T01-config-tamper.test.ts` | live (daemon: a Claude Code config change reported to `/v1/session` with the jevdict hook block removed or altered latches the session killed, as does any `kill` verdict; every later call of the session and its subagents is `kill` (`sessionKilled`, no policy runs), its prompts report `killed: true`; `policy_settings` is report-only; only the admin socket unlatches); 1 todo | `config-tamper` policy (M1 step 2), Claude Code `ConfigChange` hook (M1 step 5); M2 (OpenShell) |
+| T1 | Config tampering | `T01-config-tamper.test.ts` | live (daemon: a Claude Code config change reported to `/v1/session` with the jevdict hook block removed or altered latches the session killed, as does any `kill` verdict; every later call of the session and its subagents is `kill` (`sessionKilled`, no policy runs), its prompts report `killed: true`; `policy_settings` is report-only; only the admin socket unlatches. Daemon + starter set: `config-tamper` kills an Edit of `~/.claude/settings.json`, a write to `~/.codex/hooks.json`, an OpenCode plugin or a Pi extension file, and a write to the daemon's own `policies/`, which the daemon adds to `protectedPaths` itself); 1 todo | Claude Code `ConfigChange` hook (M1 step 5); M2 (OpenShell) |
 | T2 | Daemon killed or unreachable | `T02-daemon-unreachable.test.ts` | live (daemon: 500 + anomaly, refused socket; Pi adapter: exec/write/other fail closed, reads fail open and warn); 1 todo | Claude Code hook: M1 |
 | T3 | Hook timeout | `T03-hook-timeout.test.ts` | live (daemon: 504 "judge timeout" at the deadline; Pi adapter: blocked with "judge timeout"); 1 todo | Claude Code hook: M1 |
 | T4 | Harness gap | `T04-harness-gap.test.ts` | todo | M2 (OpenShell compiler); M1/M3 installers |
@@ -18,7 +18,7 @@ required outcome, until its milestone. Do not delete or weaken one (CONTRIBUTING
 | T9 | TOCTOU | `T09-toctou.test.ts` | live (core: opaque; Pi adapter: `rewrite` pins resolved paths in place); 1 todo | Claude Code `updatedInput`: M1 |
 | T10 | Taint laundering | `T10-taint-laundering.test.ts` | live (core) | — |
 | T11 | Task drift by rewrite | `T11-task-drift.test.ts` | live (core; the Pi adapter sends the first prompt only, `adapters/pi/jevdict.test.ts`; daemon: the first prompt reported to `/v1/session` pins the task, a later or subagent prompt is ignored and logged, and an event restating a wider task does not widen scope) | subagent-spawn policy: M0 step 7; Claude Code `UserPromptSubmit` hook: M1 step 5 |
-| T12 | Log tampering | `T12-log-tampering.test.ts` | live (daemon hash chain: edit, delete, cut line); 1 todo | shipped off-box + `doctor` verify: M2 |
+| T12 | Log tampering | `T12-log-tampering.test.ts` | live (daemon hash chain: edit, delete, cut line; daemon + starter set: the audit log is in the daemon's own `protectedPaths`, so a Write over it or a Bash truncate, append, in-place edit, replace or delete is `kill` at the hook, while reading it is not); 1 todo | shipped off-box + `doctor` verify: M2 |
 | T13 | Jev exfil path | `T13-jev-exfil-path.test.ts` | todo | M2 (OpenShell policy compilation) |
 
 "Live (core)" means the assertions run against `@jevdict/core` today; "live (daemon)" means

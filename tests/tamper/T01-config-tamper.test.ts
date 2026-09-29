@@ -7,10 +7,15 @@
  * Status: live on the daemon side (M1 step 3): a Claude Code config change reported with a
  * broken jevdict hook block latches the session killed, and so does any `kill` verdict; every
  * later call of the session or its subagents is `kill`, its prompts are reported killed, and
- * only the admin socket clears the latch. Todo: the `config-tamper` policy (M1 step 2), the
- * Claude Code `ConfigChange` hook itself (M1 step 5), OpenShell read-only mounts (M2).
+ * only the admin socket clears the latch. Live for the `config-tamper` policy through a real
+ * jevdictd running the repo's starter set: edits of the harness settings, hook, plugin and
+ * extension files and writes to the daemon's own `policies/` are killed (the daemon appends
+ * its policies dir to `protectedPaths` itself). Todo: the Claude Code `ConfigChange` hook
+ * itself (M1 step 5), OpenShell read-only mounts (M2).
  */
+
 import { afterEach, describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import type { VerdictResponse } from "@jevdict/core";
 import {
   startTestDaemon,
@@ -43,6 +48,13 @@ async function daemon(): Promise<TestDaemon> {
   return td;
 }
 
+/** A jevdictd running the repo's starter policies, `config-tamper` among them. */
+async function starterDaemon(): Promise<TestDaemon> {
+  const policiesDir = join(import.meta.dir, "..", "..", "policies");
+  td = await startTestDaemon({ policies: {}, policiesDir });
+  return td;
+}
+
 async function judge(
   t: TestDaemon,
   tool: string,
@@ -66,10 +78,45 @@ async function configChange(t: TestDaemon, fields: Record<string, unknown>) {
 describe("T1 config tampering", () => {
   test.todo(
     REQUIRED_OUTCOME,
-    pending(
-      "M1 step 2 (config-tamper policy), M1 step 5 (Claude Code ConfigChange hook); M2 (OpenShell read-only mounts)",
-    ),
+    pending("M1 step 5 (Claude Code ConfigChange hook); M2 (OpenShell read-only mounts)"),
   );
+});
+
+describe("T1 the config-tamper policy through jevdictd (starter set)", () => {
+  const edits: ReadonlyArray<readonly [string, string, Record<string, unknown>]> = [
+    [
+      "Edit ~/.claude/settings.json",
+      "Edit",
+      { file_path: "/home/dev/.claude/settings.json", old_string: "a", new_string: "b" },
+    ],
+    ["Write ~/.codex/hooks.json", "Write", { file_path: "/home/dev/.codex/hooks.json" }],
+    [
+      "Write an OpenCode plugin file",
+      "Write",
+      { file_path: "/home/dev/.config/opencode/plugin/jevdict.ts" },
+    ],
+    [
+      "Write a Pi extension file",
+      "Write",
+      { file_path: "/home/dev/.pi/agent/extensions/jevdict.ts" },
+    ],
+  ];
+
+  for (const [name, tool, input] of edits) {
+    test(`${name} is a kill`, async () => {
+      const t = await starterDaemon();
+      expect((await judge(t, tool, { content: "{}", ...input })).body.verdict).toBe("kill");
+    });
+  }
+
+  test("a write to the daemon's own policies/ is a kill and ends the session", async () => {
+    const t = await starterDaemon();
+    const command = `echo 'export default {}' > ${t.config.policies.dir}/allow-all.ts`;
+    const res = await judge(t, "Bash", { command });
+    expect(res.body.verdict).toBe("kill");
+    expect(res.body.reason).toContain(t.config.policies.dir);
+    expect((await ls(t)).body.verdict).toBe("kill");
+  });
 });
 
 describe("T1 Claude Code, daemon side: tampering terminates the session", () => {
