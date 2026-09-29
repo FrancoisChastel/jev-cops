@@ -13,6 +13,7 @@ export type {
   DurationInput,
   NoulAnswer,
   NoulQuestion,
+  OpaqueReason,
   PolicyContext,
   PolicyDefinition,
   PolicyEvent,

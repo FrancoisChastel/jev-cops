@@ -4,6 +4,8 @@ import type { CallKind, Event } from "../schema/event.ts";
  * Why part of a command cannot be judged from its text alone. `dynamic-command`: a word
  * in command-name position holds shell syntax or whitespace (`env 'rm -rf x'`,
  * `xargs 'a; b'`), so it is never read through its basename as a benign exec.
+ * `net-pipe`: an interpreter reads its code from the network (`curl … | sh`, a shell on
+ * a `/dev/tcp` redirect); it comes with the `interpreter` or `decoded-pipe` span.
  */
 export const OPAQUE_REASONS = [
   "command-substitution",
@@ -15,6 +17,7 @@ export const OPAQUE_REASONS = [
   "dynamic-expansion",
   "parse-error",
   "dynamic-command",
+  "net-pipe",
 ] as const;
 
 /** One of {@link OPAQUE_REASONS}. */

