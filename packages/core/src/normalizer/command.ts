@@ -122,7 +122,8 @@ function printedText(raw: RawCommand): string[] {
     return [expandEscapes(args[0].value).replace(/%s/g, fill)];
   }
   if (name?.value !== "echo") return [];
-  const flags = args.filter((w) => /^-[neE]+$/.test(w.value)).map((w) => w.value);
+  const firstText = args.findIndex((w) => !/^-[neE]+$/.test(w.value));
+  const flags = args.slice(0, firstText < 0 ? args.length : firstText).map((w) => w.value);
   const text = args
     .slice(flags.length)
     .map((w) => w.value)

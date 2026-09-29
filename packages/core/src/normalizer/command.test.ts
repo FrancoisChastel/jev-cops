@@ -238,6 +238,11 @@ describe("normalizeCommand: opaque constructs (T5, T9)", () => {
     expect(n.paths).toEqual([`${HOME}/work`]);
   });
 
+  test("only leading echo flags are flags", async () => {
+    const n = await run("echo rm -n ./x | sh");
+    expect(command(n, "rm").argv).toEqual(["rm", "-n", "./x"]);
+  });
+
   test("printf escapes are expanded before its output is parsed as shell", async () => {
     const n = await run("printf 'cd /tmp\\nrm -rf x\\n' | bash");
     expect(n.paths).toEqual(["/tmp", "/tmp/x"]);
