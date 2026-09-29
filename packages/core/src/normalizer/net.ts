@@ -185,7 +185,8 @@ export function readWget(args: ReadonlyArray<string>, base: number): WebReading 
   };
 }
 
-const SSH_VALUE_OPTS = new Set(
+/** ssh/scp/sftp options that take a value (`-o ProxyCommand=…` included). */
+export const SSH_VALUE_OPTS: ReadonlySet<string> = new Set(
   ["-p", "-i", "-l", "-o", "-F", "-J", "-b", "-c", "-D", "-E", "-e", "-I", "-L", "-m"].concat([
     "-O",
     "-Q",
@@ -198,7 +199,10 @@ const SSH_VALUE_OPTS = new Set(
   ]),
 );
 const NC_VALUE_OPTS = new Set(["-p", "-s", "-w", "-i", "-x", "-X", "-q", "-e", "-c", "-I", "-O"]);
-const RSYNC_VALUE_OPTS = new Set(["-e", "--rsh", "--exclude", "--include", "-f", "--filter"]);
+/** rsync options that take a value. */
+export const RSYNC_VALUE_OPTS: ReadonlySet<string> = new Set([
+  ...["-e", "--rsh", "--rsync-path", "--exclude", "--include", "-f", "--filter"],
+]);
 
 function firstPositional(args: ReadonlyArray<string>, valueOpts: ReadonlySet<string>): string[] {
   const first = parseArgs(args, valueOpts).positionals[0];

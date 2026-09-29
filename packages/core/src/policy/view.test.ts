@@ -74,6 +74,18 @@ describe("buildPolicyEvent", () => {
     expect(buildPolicyEvent(n, TASK).fs.access["/work/repo/out.log"]).toBe("delete");
   });
 
+  test("remote commands and spans are marked remote; local ones are not", async () => {
+    const e = buildPolicyEvent(await bashPre("ssh h.example 'rm -rf /srv/x'"), TASK);
+    expect(e.commands.map((c) => [c.verbs[0], c.remote])).toEqual([
+      ["ssh", false],
+      ["rm", true],
+    ]);
+    expect(e.opaque).toEqual([
+      { reason: "interpreter", span: "ssh h.example 'rm -rf /srv/x'", remote: true },
+    ]);
+    expect(e.kind).toBe("net");
+  });
+
   test("no net command → host and method are null; missing sandbox is none", async () => {
     const n = await bashPre("ls");
     const { env: _env, ...bare } = n.event;

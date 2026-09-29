@@ -50,6 +50,7 @@ function command(c: NormalizedCommand): PolicyCommand {
     hosts: [...c.targets.hosts],
     isInterpreter: c.isInterpreter,
     viaInterpreter: c.viaInterpreter,
+    remote: c.remote === true,
     method: c.method ?? null,
     raw: c.raw,
   };

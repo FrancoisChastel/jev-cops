@@ -1,15 +1,24 @@
 import { posix } from "node:path";
 import type { CallKind } from "../schema/event.ts";
+import {
+  classifyRsync,
+  classifySsh,
+  classifyTar,
+  isDynamicName,
+  splitStringCode,
+  sshConfigCode,
+} from "./carriers.ts";
 import { type Classification, type InterpreterInfo, maxKind, plain } from "./classification.ts";
 import { filePaths, rmVerbs, sedEffects, sedMode } from "./files.ts";
 import { GIT_SUBCOMMAND_KINDS, readGit } from "./git.ts";
 import { classifyInterpreter } from "./interpreters.ts";
 import { readCurl, readWget, urlHost, verbHosts } from "./net.ts";
-import { hasOption, lookup, type Positional, parseArgs } from "./options.ts";
+import { hasOption, lookup, optionValue, type Positional, parseArgs } from "./options.ts";
 import { looksLikePath } from "./paths.ts";
 import type { PathArg } from "./types.ts";
 
 export {
+  type CarriedCode,
   type Classification,
   COMMAND_KIND_ORDER,
   type InterpreterInfo,
@@ -53,7 +62,8 @@ const SUBCOMMAND_GLOBALS: Readonly<Record<string, ReadonlySet<string>>> = {
  * A command that runs another command. `opaque` wrappers hide what runs or as whom and
  * flag the call `interpreter`; `kind` combines with the wrapped command's; `leading`
  * positionals (timeout's duration) precede the command; `assignments` allows
- * `NAME=value` words before it.
+ * `NAME=value` words before it; `codeOpts` take a whole command line as their value
+ * (`env -S`), which is then run as code, with the remaining words appended.
  */
 export interface WrapperRule {
   valueOpts: ReadonlyArray<string>;
@@ -62,6 +72,7 @@ export interface WrapperRule {
   leading: number;
   kind: CallKind | null;
   assignments: boolean;
+  codeOpts?: ReadonlyArray<string>;
 }
 
 function wrapper(verbs: string[], opaque: boolean, valueOpts: string[] = []): WrapperRule {
@@ -70,7 +81,11 @@ function wrapper(verbs: string[], opaque: boolean, valueOpts: string[] = []): Wr
 
 /** Every wrapper the classifier unwraps; the wrapped command is classified in its place. */
 export const WRAPPERS: Readonly<Record<string, WrapperRule>> = {
-  env: { ...wrapper(["env"], true, ["-u", "--unset", "-C", "--chdir"]), assignments: true },
+  env: {
+    ...wrapper(["env"], true, ["-u", "--unset", "-C", "--chdir"]),
+    assignments: true,
+    codeOpts: ["-S", "--split-string"],
+  },
   nohup: { ...wrapper(["nohup"], true), kind: "spawn" },
   setsid: { ...wrapper(["setsid"], true), kind: "spawn" },
   sudo: {
@@ -105,9 +120,20 @@ function classifyWrapper(
   args: ReadonlyArray<string>,
   base: number,
 ): Classification {
-  const parsed = parseArgs(args, new Set(rule.valueOpts), true);
+  const codeOpts = rule.codeOpts ?? [];
+  const parsed = parseArgs(args, new Set([...rule.valueOpts, ...codeOpts]), true);
   const assigns = rule.assignments ? leadingAssignments(parsed.positionals) : [];
   const rest = parsed.positionals.slice(assigns.length + rule.leading);
+  const env = Object.fromEntries(assigns.map((p) => assignmentEntry(p.value)));
+  const split = optionValue(parsed, codeOpts);
+  if (split !== null) {
+    const code = splitStringCode(
+      split,
+      rest.map((p) => p.value),
+    );
+    const interpreter: InterpreterInfo = { shell: true, code, stdin: false, eval: false };
+    return plain("exec", [...rule.verbs], { interpreter, wrapped: rule.opaque, env });
+  }
   const first = rest[0];
   const inner =
     first === undefined
@@ -121,7 +147,7 @@ function classifyWrapper(
     kind: rule.kind === null ? inner.kind : maxKind(rule.kind, inner.kind),
     verbs: [...rule.verbs, ...inner.verbs],
     wrapped: rule.opaque || inner.wrapped,
-    env: { ...Object.fromEntries(assigns.map((p) => assignmentEntry(p.value))), ...inner.env },
+    env: { ...env, ...inner.env },
   };
 }
 
@@ -151,6 +177,8 @@ function classifyFind(args: ReadonlyArray<string>, base: number): Classification
       paths: [...own, ...innerPaths],
       hosts: inner?.hosts ?? [],
       interpreter: inner?.interpreter ?? null,
+      ...(inner?.carried === undefined ? {} : { carried: inner.carried }),
+      ...(inner?.dynamic === true ? { dynamic: true } : {}),
     },
   );
 }
@@ -208,9 +236,17 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
       return classifySed(args, base);
     case "rm":
       return plain("fs.delete", rmVerbs(args), { paths: filePaths("rm", args, base) });
-    case "rsync": {
-      const hosts = verbHosts("rsync", args);
-      return plain(hosts.length > 0 ? "net" : "fs.write", ["rsync"], { hosts });
+    case "rsync":
+      return classifyRsync(args);
+    case "tar":
+      return classifyTar(args);
+    case "ssh":
+      return classifySsh(args);
+    case "scp":
+    case "sftp": {
+      const carried = sshConfigCode(args);
+      const hosts = verbHosts(name, args);
+      return plain("net", [name], carried.length === 0 ? { hosts } : { hosts, carried });
     }
     case "find":
       return classifyFind(args, base);
@@ -253,6 +289,7 @@ function withGenericArgs(
 
 function classifyAt(argv: ReadonlyArray<string>, base: number): Classification {
   if (argv.length === 0) return plain("other", []);
+  if (isDynamicName(argv[0] ?? "")) return plain("exec", [], { dynamic: true });
   const name = posix.basename(argv[0] ?? "");
   const args = argv.slice(1);
   const rule = lookup(WRAPPERS, name);

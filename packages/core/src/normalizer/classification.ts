@@ -9,6 +9,18 @@ export interface InterpreterInfo {
   eval: boolean;
 }
 
+/**
+ * A command carried in an argument and run by the carrier: parsed as bash like `sh -c`
+ * code. `remote`: it runs on another host (ssh's remote command). `opaque`: the carrier
+ * is flagged `interpreter` for it (false for rsync's `-e`, whose transport command is
+ * judged on what it parses to).
+ */
+export interface CarriedCode {
+  code: string;
+  remote: boolean;
+  opaque: boolean;
+}
+
 /** Everything the classifier derives from one argv, before paths are resolved. */
 export interface Classification {
   kind: CallKind;
@@ -21,6 +33,10 @@ export interface Classification {
   method?: NetMethod;
   paths: PathArg[];
   hosts: string[];
+  /** Commands carried in arguments (env -S, tar programs, ssh remote commands, …). */
+  carried?: CarriedCode[];
+  /** The command name holds shell syntax or whitespace (`dynamic-command`). */
+  dynamic?: boolean;
 }
 
 /**

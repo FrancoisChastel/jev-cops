@@ -1,6 +1,10 @@
 import type { CallKind, Event } from "../schema/event.ts";
 
-/** Why part of a command cannot be judged from its text alone. */
+/**
+ * Why part of a command cannot be judged from its text alone. `dynamic-command`: a word
+ * in command-name position holds shell syntax or whitespace (`env 'rm -rf x'`,
+ * `xargs 'a; b'`), so it is never read through its basename as a benign exec.
+ */
 export const OPAQUE_REASONS = [
   "command-substitution",
   "process-substitution",
@@ -10,15 +14,21 @@ export const OPAQUE_REASONS = [
   "decoded-pipe",
   "dynamic-expansion",
   "parse-error",
+  "dynamic-command",
 ] as const;
 
 /** One of {@link OPAQUE_REASONS}. */
 export type OpaqueReason = (typeof OPAQUE_REASONS)[number];
 
-/** A construct whose effect is unknown until run time; `span` is its source text. */
+/**
+ * A construct whose effect is unknown until run time; `span` is its source text.
+ * `remote` marks code that runs on another host (`ssh host '<cmd>'`, rsync's
+ * `--rsync-path`): it is judged, but does not make the local event an `exec`.
+ */
 export interface OpaqueSpan {
   reason: OpaqueReason;
   span: string;
+  remote?: true;
 }
 
 /** HTTP methods a net command can be classified with; anything else is `OTHER`. */
@@ -73,6 +83,8 @@ export interface NormalizedCommand {
   isInterpreter: boolean;
   /** True when this command came from an interpreter string, `eval` or a decoded payload. */
   viaInterpreter: boolean;
+  /** Set on commands that run on another host (an ssh remote command); absent otherwise. */
+  remote?: true;
   /** HTTP method, set only for `curl` and `wget`. */
   method?: NetMethod;
 }
@@ -81,9 +93,10 @@ export interface NormalizedCommand {
 export interface NormalizedEvent {
   event: Event;
   /**
-   * Event-level kind, computed by {@link eventKind}: `exec` when anything is opaque
-   * or an interpreter, else the most severe command kind in the order
-   * fs.delete > net > fs.write > spawn > exec > fs.read > other.
+   * Event-level kind, computed by {@link eventKind}: `exec` when anything local is
+   * opaque or an interpreter, else the most severe local command kind in the order
+   * fs.delete > net > fs.write > spawn > exec > fs.read > other (remote commands and
+   * spans do not count: `ssh host '<cmd>'` stays `net`).
    */
   kind: CallKind;
   commands: NormalizedCommand[];

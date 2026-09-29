@@ -207,7 +207,8 @@ async function readTool(
 
 /**
  * sha256 over a canonical JSON of the normalized shape: tool, kind, per-command argv,
- * env, redirects, heredoc bodies, kind, verbs and targets, the path and host unions,
+ * env, redirects, heredoc bodies, kind, verbs, targets and the remote flag (only when
+ * set, so local-only hashes are unchanged), the path and host unions,
  * the sorted opaque reasons, and (for non-shell tools) the tool input. Ids, timestamps,
  * spans and the agent's description are excluded, and argv is post-quote-removal, so
  * whitespace and quoting differences hash equal.
@@ -225,6 +226,7 @@ export function stateHash(event: Event, script: NormalizedScript, shell: boolean
         kind: c.kind,
         verbs: c.verbs,
         targets: c.targets,
+        ...(c.remote === true ? { remote: true } : {}),
       })),
       paths: script.paths,
       hosts: script.hosts,

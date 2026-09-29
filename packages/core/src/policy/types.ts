@@ -59,6 +59,8 @@ export interface PolicyCommand {
   readonly hosts: readonly string[];
   readonly isInterpreter: boolean;
   readonly viaInterpreter: boolean;
+  /** Runs on another host (ssh's remote command); its paths resolve as if local. */
+  readonly remote: boolean;
   readonly method: NetMethod | null;
   readonly raw: string;
 }

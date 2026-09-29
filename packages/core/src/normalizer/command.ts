@@ -25,6 +25,8 @@ export interface CommandOptions {
 interface Scope extends CommandOptions {
   depth: number;
   via: boolean;
+  /** Analysing code that runs on another host (ssh's remote command). */
+  remote: boolean;
 }
 
 interface Analysis {
@@ -97,14 +99,25 @@ function interpreterReason(ctx: CommandContext): OpaqueReason | null {
   return fedByDecoder(ctx) ? "decoded-pipe" : "interpreter";
 }
 
+/** The `interpreter` spans a carrier adds for the code it carries (remote ones marked). */
+function carriedSpans(ctx: CommandContext): OpaqueSpan[] {
+  const span = ctx.raw.raw;
+  return (ctx.c.carried ?? [])
+    .filter((c) => c.opaque)
+    .map((c) =>
+      c.remote ? { reason: "interpreter", span, remote: true } : { reason: "interpreter", span },
+    );
+}
+
 function opaqueOf(ctx: CommandContext, writesFile: boolean): OpaqueSpan[] {
   const span = ctx.raw.raw;
   const reasons: OpaqueReason[] = [
     ...(ctx.c.wrapped ? (["interpreter"] as const) : []),
     ...[interpreterReason(ctx)].filter((r): r is OpaqueReason => r !== null),
     ...(heredocExec(ctx, writesFile) ? (["heredoc-exec"] as const) : []),
+    ...(ctx.c.dynamic === true ? (["dynamic-command"] as const) : []),
   ];
-  return reasons.map((reason) => ({ reason, span }));
+  return [...reasons.map((reason) => ({ reason, span })), ...carriedSpans(ctx)];
 }
 
 function expandEscapes(text: string): string {
@@ -189,6 +202,7 @@ function buildCommand(ctx: CommandContext, scope: Scope, redirects: PathRef[]): 
     verbs: raw.background ? [...c.verbs, "background"] : c.verbs,
     isInterpreter: c.interpreter !== null,
     viaInterpreter: scope.via,
+    ...(scope.remote ? { remote: true as const } : {}),
     ...(c.method === undefined ? {} : { method: c.method }),
   };
 }
@@ -203,7 +217,13 @@ async function analyseCommand(ctx: CommandContext, scope: Scope): Promise<Analys
   };
   if (scope.depth >= MAX_INTERPRETER_DEPTH) return own;
   const inner = { ...scope, depth: scope.depth + 1, via: true };
-  const nested = await Promise.all(nestedCode(ctx).map((code) => analyse(code, inner)));
+  const carried = (ctx.c.carried ?? []).map((c) =>
+    analyse(c.code, { ...inner, remote: scope.remote || c.remote }),
+  );
+  const nested = await Promise.all([
+    ...nestedCode(ctx).map((code) => analyse(code, inner)),
+    ...carried,
+  ]);
   return mergeAnalyses(own, ...nested);
 }
 
@@ -226,14 +246,20 @@ async function analyseScript(script: ParsedScript, scope: Scope): Promise<Analys
   return mergeAnalyses({ commands: [], opaque: script.opaque, decoded: [] }, ...parts);
 }
 
+/** Every span of a remote analysis is remote, whatever command produced it. */
+function markRemote(analysis: Analysis): Analysis {
+  return { ...analysis, opaque: analysis.opaque.map((o) => ({ ...o, remote: true })) };
+}
+
 async function analyse(source: string, scope: Scope): Promise<Analysis> {
-  return analyseScript(await parseScript(source, scope.home), scope);
+  const analysis = await analyseScript(await parseScript(source, scope.home), scope);
+  return scope.remote ? markRemote(analysis) : analysis;
 }
 
 function uniqueSpans(spans: ReadonlyArray<OpaqueSpan>): OpaqueSpan[] {
   const seen = new Set<string>();
   return spans.filter((s) => {
-    const key = `${s.reason}\u0000${s.span}`;
+    const key = `${s.reason}\u0000${s.span}\u0000${s.remote === true}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -241,18 +267,20 @@ function uniqueSpans(spans: ReadonlyArray<OpaqueSpan>): OpaqueSpan[] {
 }
 
 /**
- * Event-level kind: `exec` when anything is opaque or any command is an interpreter,
- * `other` when there are no commands, else the most severe command kind in the order
- * fs.delete > net > fs.write > spawn > exec > fs.read > other. A plain unknown binary
- * ranks below every known side effect so a leading `cd .` cannot hide a delete or a
- * network call.
+ * Event-level kind: `exec` when anything local is opaque or any local command is an
+ * interpreter, `other` when there are no local commands, else the most severe local
+ * command kind in the order fs.delete > net > fs.write > spawn > exec > fs.read > other.
+ * A plain unknown binary ranks below every known side effect so a leading `cd .` cannot
+ * hide a delete or a network call. Remote commands and spans (ssh's remote command) are
+ * judged through the commands, paths and spans, but locally `ssh host '<cmd>'` is `net`.
  */
 export function eventKind(
   commands: ReadonlyArray<NormalizedCommand>,
   opaque: ReadonlyArray<OpaqueSpan>,
 ): CallKind {
-  if (opaque.length > 0 || commands.some((c) => c.isInterpreter)) return "exec";
-  return commands.reduce<CallKind>((kind, c) => maxKind(kind, c.kind), "other");
+  const local = commands.filter((c) => c.remote !== true);
+  if (opaque.some((o) => o.remote !== true) || local.some((c) => c.isInterpreter)) return "exec";
+  return local.reduce<CallKind>((kind, c) => maxKind(kind, c.kind), "other");
 }
 
 /**
@@ -264,7 +292,7 @@ export async function normalizeCommand(
   command: string,
   opts: CommandOptions,
 ): Promise<NormalizedScript> {
-  const analysis = await analyse(command, { ...opts, depth: 0, via: false });
+  const analysis = await analyse(command, { ...opts, depth: 0, via: false, remote: false });
   const opaque = uniqueSpans(analysis.opaque);
   return {
     kind: eventKind(analysis.commands, opaque),
