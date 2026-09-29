@@ -18,11 +18,11 @@ export const PI_GAPS: readonly string[] = [
   "Project installs load only after the project is trusted in Pi; install globally for every project.",
   "A tool call blocked in `tool_call` produces no `tool_result`, so the daemon gets no post event for denied calls.",
   "`kill` blocks the call, sets Pi's batch-level `terminate` hint and calls ctx.abort() and ctx.shutdown(); shutdown is a no-op in print/json mode, so the abort is what ends a headless run.",
-  "The adapter sends no `env.git`: branch and repo are unknown to the daemon (treated as exposure, D-024); the default-branch guard relies on the push refspec.",
+  "The adapter sends no `env.git`; jevdictd derives repo, branch, default branch (origin/HEAD) and dirty from the call's cwd with hardened read-only git. Those values come from a repository the agent can write, so it can steer them (for example point origin/HEAD elsewhere so `main` stops counting as the default branch); values it cannot derive are treated as exposure (D-024).",
   "Read-only tools (read, grep, find, ls) fail open when jevdictd is unreachable and are logged only to the Pi notification or stderr; every other tool fails closed.",
   "Tools from other extensions are sent as kind `other` with their raw input; nested agents started by other extensions are not linked as subagent sessions.",
   "Commands the user types with `!` in the Pi TUI (`user_bash`) do not go through `tool_call` and are not judged.",
-  "Without OpenShell the agent can reach the daemon's sockets as you: the hold token keeps it from approving a hold this extension received, but it can post judge requests of its own and resolve those; the admin socket (budget reset) is human-only only when it is not mounted into the sandbox.",
+  "Without OpenShell the agent can reach the daemon's sockets as you: the hold token keeps it from approving a hold this extension received or reading its confirm view, but it can post judge requests of its own and resolve or view those; the admin socket (budget reset, full explain) is human-only only when it is not mounted into the sandbox.",
 ];
 
 /** Where and how to install the Pi extension. */

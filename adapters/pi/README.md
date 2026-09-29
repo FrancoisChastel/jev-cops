@@ -75,12 +75,17 @@ observe-only events). Post events never block: the extension waits at most 2 s f
 - **No post event for denied calls.** A call blocked in `tool_call` produces no `tool_result`.
 - **`kill` cannot shut down a headless run.** In print and json modes `shutdown` is a
   no-op, so `abort` is what ends the run.
-- **No `env.git` is sent.** The daemon treats the unknown branch and repo as exposure.
+- **No `env.git` is sent; the daemon derives it.** jevdictd reads repo, branch, default
+  branch (`origin/HEAD`) and dirty from the call's cwd with hardened read-only git. The
+  repository is the agent's to write, so it can steer those values (for example move
+  `origin/HEAD` so `main` stops counting as the default branch); what cannot be derived is
+  treated as exposure (D-024).
 - **Reads fail open.** Read-only tools continue when the daemon is down.
 - **Other extensions' tools are opaque.** They are sent as kind `other`, and their nested
   agents are not linked as subagent sessions.
 - **User-typed commands are not judged.** Commands the user types with `!` in the TUI
   (`user_bash`) skip `tool_call`.
 - **The sockets are reachable by the agent without OpenShell.** The hold token keeps the
-  agent from approving a hold this extension received, but it can post its own judge
-  requests; the admin socket is human-only only when it is not mounted into the sandbox.
+  agent from approving, or reading the confirm view of, a hold this extension received,
+  but it can post its own judge requests; the admin socket (budget reset, full explain) is
+  human-only only when it is not mounted into the sandbox.

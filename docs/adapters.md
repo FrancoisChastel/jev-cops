@@ -51,7 +51,8 @@ Canonical event built by the adapter:
 - `actor`: `{ kind: "agent", model: ctx.model.id }`.
 - `call`: `{ id: "call_" + toolCallId, tool: toolName, kind, input, cwd: ctx.cwd }`. The
   `input` is sent verbatim.
-- `env`: `{ sandbox: { kind: "none" } }`.
+- `env`: `{ sandbox: { kind: "none" } }`. No `env.git`: jevdictd derives it from `cwd`
+  (see the gap list below).
 
 Post events add `result`: `{ ok: !isError, stdout_sha256, stdout_head (first 4096 chars), bytes_out }`,
 computed over the text blocks of `content`. Tool call ids from OpenAI-style providers are
@@ -84,7 +85,7 @@ for content taint.
 | allow | nothing returned |
 | annotate | the tool runs; `context_note` is appended to the tool result as a `[jevdict] …` text block in `tool_result`. A note from any verdict is appended, including observe mode's "would have". |
 | rewrite | `event.input` is replaced in place: keys missing from `updated_input` are deleted, the rest assigned. Nothing is returned. |
-| hold | interactive: `GET /v1/explain/<id>`, then `ctx.ui.confirm("Jevdict hold: <reason>", "<normalized raw>\n\n<detail>")`. Yes posts `/v1/resolve` `allow`, `by: "pi-user"` with the verdict's `hold_token`, and the tool runs. No posts `deny` (with the token) and blocks. The token stays in the extension: the model only ever sees `reason`, and the daemon refuses a resolve without it (403). When the details cannot be loaded, the call is blocked without asking. Headless: blocked (the daemon already sends `deny`, D-008, and mints no token). |
+| hold | interactive: `GET /v1/explain/<id>` with `Authorization: Bearer <hold_token>`, which on the agent socket returns only the confirm view `{ event_id, verdict, reason, raw, detail }` of a pending hold, then `ctx.ui.confirm("Jevdict hold: <reason>", "<normalized raw>\n\n<detail>")`. Yes posts `/v1/resolve` `allow`, `by: "pi-user"` with the verdict's `hold_token`, and the tool runs. No posts `deny` (with the token) and blocks. The token stays in the extension: the model only ever sees `reason`, and the daemon refuses a view or a resolve without it (403 and an `anomaly` line). When the verdict carries no token or the view cannot be loaded, the call is blocked without asking. Headless: blocked (the daemon already sends `deny`, D-008, and mints no token). |
 | deny | `{ block: true, reason: "jevdict: <reason>" }` |
 | kill | `{ block: true, reason, terminate: true }` plus `ctx.abort()` and `ctx.shutdown()` |
 
@@ -149,9 +150,18 @@ prints:
 - **Denied calls produce no post event.**
 - **`kill` relies on `ctx.abort()` in headless runs.** `terminate` is a batch hint, and
   `shutdown` is a no-op in print and json modes.
-- **No `env.git`.** The adapter stays dependency-free and never shells out to git, so the
-  daemon treats branch and repo as unknown (D-024). The default-branch guard then relies
-  on the push refspec. A daemon-side derivation from `cwd` (like `repoHints`) is the fix.
+- **No `env.git` from the adapter; jevdictd derives it.** The adapter stays
+  dependency-free and never shells out to git. For an event without `env.git` (or
+  without `repo`/`branch`) the daemon derives, outside the sandbox and from `call.cwd`:
+  the repo root, the branch (none when detached), the default branch from `origin/HEAD`
+  and dirty, plus the origin host for scope. Git runs with argv arrays, a scrubbed
+  environment and fsmonitor, hooks, pager and every transport switched off, within
+  `daemon.git_probe_timeout_ms` (300 ms), cached per cwd for 5 s; dirty is computed from
+  index stat data so no filter driver can run. What the daemon filled in is on the audit
+  line as `derived.git`, and `jevdict explain` shows it. The values still come from a
+  repository the agent can write, so it can steer them (move `origin/HEAD` so `main`
+  stops counting as the default branch, `git init` a parent directory); what cannot be
+  derived stays unknown and counts as exposure (D-024).
 - **Read-only tools fail open when the daemon is unreachable.** They are logged only to
   the Pi notification or stderr; there is no local log file.
 - **Other extensions' tools are opaque.** They are sent as `other`, and their nested
@@ -159,17 +169,24 @@ prints:
 - **User-typed commands are not judged.** Commands the user types with `!` (`user_bash`)
   bypass `tool_call`.
 - **Without OpenShell, the sockets are reachable by the agent.** The agent runs as you, so
-  it can connect to `jevdictd.sock` itself. The hold token stops it from approving a hold
-  the extension received (it never sees the verdict response), but it can post judge
-  requests of its own and resolve those. `jevdictd-admin.sock` (budget reset) is
-  human-only only when it is not mounted into the sandbox.
+  it can connect to `jevdictd.sock` itself. The hold token stops it from approving, or
+  reading the confirm view of, a hold the extension received (it never sees the verdict
+  response), but it can post judge requests of its own and resolve or view those.
+  `jevdictd-admin.sock` (budget reset, full explain) is human-only only when it is not
+  mounted into the sandbox.
 
 ### Sockets
 
 The extension talks to the agent socket only (`~/.jevdict/jevdictd.sock`, or the path the
 installer baked in). `jevdictd` also listens on an admin socket
 (`~/.jevdict/jevdictd-admin.sock`, `daemon.admin_socket`) that serves `/v1/budget/reset`,
-`/v1/health` and `/v1/explain/<id>`; the agent socket answers `/v1/budget/reset` with 404.
+`/v1/health` and the full `/v1/explain/<id>` (the audit line with trace, features and
+evidence); the agent socket answers `/v1/budget/reset` with 404, and serves
+`/v1/explain/<id>` only as the confirm view of a pending hold to a caller presenting its
+token as a Bearer header (403 and an `anomaly` line without it, 404 once the hold is
+resolved or expired). Loopback HTTP, when enabled, is an agent channel with the same
+rules. On agent channels a verdict also carries no scores: `features: {}`, `jev: []`,
+`risk` to one decimal (the audit line keeps the exact values).
 Never mount the admin socket into a sandbox: `jevdict budget <session> --reset` is how a
 human resets a budget.
 
