@@ -4,3 +4,6 @@
  * nothing here knows about any harness.
  */
 export const CORE_VERSION = "0.0.0";
+
+export * from "./result.ts";
+export * from "./schema/index.ts";
