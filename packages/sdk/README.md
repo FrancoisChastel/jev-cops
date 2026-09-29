@@ -23,8 +23,9 @@ usable answers uses `fallback` (default: the floor band). Verdicts only rise. `r
 to the agent; `detail` only to the human. `definePolicy` throws at import on a malformed policy.
 
 **`e` (PolicyEvent).** `kind` and `call.kind` are the daemon's normalized kind; `commands[]`
-(argv, verbs, paths, hosts), `verbs`, `paths`, `hosts`, `net.host`/`method`, `fs.access`
-(path → read/write/delete/exec), `opaque`, `env.git`, `session.task` (immutable) and `mode`.
+(argv, verbs, paths, hosts, `viaInterpreter`, `remote` for an ssh remote command), `verbs`,
+`paths`, `hosts`, `net.host`/`method`, `fs.access` (path → read/write/delete/exec), `opaque`
+(`{ reason: OpaqueReason, span, remote? }`), `env.git`, `session.task` (immutable) and `mode`.
 
 **`ctx` (PolicyContext).** `taint.fraction`, `taint.of(token)`; `scope.pathInRepo(p)`,
 `scope.hostAllowed(h)`; `sequence.secretReadWithin("2m")`, `sequence.matched(pattern)`;
