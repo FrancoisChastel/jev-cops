@@ -48,17 +48,22 @@ Updated: 2026-09-29
   that pass alone and with the whole set. Review fixes: D-038 (noul confidence), D-039
   (exfil fallback), D-040 (`/private/tmp`). 95 tests. Decisions D-038–D-041.
 
-**Totals:** 1150 tests + 11 todo, `bun run check` green.
+- **M0 step 4 (providers) — `@jevdict/judge`**: `createJudge(config)` factory over
+  `off | mock | jev | openrouter | vercel-ai`; TypeSafe Jev via `@typesafe-ai/sdk`,
+  OpenRouter via plain `fetch` + `response_format.json_schema`, Vercel AI SDK v7 via
+  `generateText` + `Output.object`; shared prompt/schema; contract suite (11 checks × 3
+  providers) on fake transports; no network in tests. `.env.example`. 114 tests.
+  Decisions D-042–D-046.
+
+**Totals:** 1264 tests + 11 todo, `bun run check` green.
 
 ## In progress
 
-- M0 step 4 (providers): `@jevdict/judge` package with `jev`, `openrouter`, `vercel-ai`
-  (in a worktree, merged after review).
+- M0 steps 8–9: daemon and CLI.
 
 ## Next
 
-- M0 steps 8–10: daemon (`POST /v1/judge`, `/v1/observe`, SQLite stores, audit chain),
-  `jevdict test`/`explain`, Pi adapter.
+- M0 step 10: Pi adapter (blocking + rewriting end to end, captured run).
 
 ## Known gaps carried forward (from the normalizer report)
 
