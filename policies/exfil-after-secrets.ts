@@ -41,4 +41,7 @@ export default definePolicy({
   },
   reason: "Network call to a new host shortly after reading a secret.",
   range: ["annotate", "kill"],
+  // Without a judge answer the floor band alone would only annotate a POST to an unknown
+  // host right after a secret read; a human should see it instead (D-039).
+  fallback: "hold",
 });
