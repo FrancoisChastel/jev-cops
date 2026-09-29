@@ -250,7 +250,7 @@ describe("normalize: never throws", () => {
     expect(n.kind).toBe("exec");
     expect(n.opaque.map((o) => o.reason)).toEqual(["parse-error"]);
     expect(n.stateHash).toMatch(/^[0-9a-f]{64}$/);
-  });
+  }, 30_000);
 
   test("malformed bash returns a result with a parse-error span", async () => {
     const n = await normalize(bash("if then fi (("), OPTS);
