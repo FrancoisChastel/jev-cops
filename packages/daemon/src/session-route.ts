@@ -3,8 +3,10 @@ import {
   parseSessionEvent,
   REPORT_ONLY_CONFIG_SOURCES,
   type SessionEvent,
+  sessionIdSchema,
   sha256Hex,
 } from "@jevdict/core";
+import { z } from "zod";
 import type { Runtime } from "./daemon.ts";
 import type { Reply } from "./service.ts";
 
@@ -108,6 +110,34 @@ function effects(rt: Runtime, r: SessionEvent, cf: CaseFile, root: string): Payl
     case "config-change":
       return onConfigChange(rt, r, root);
   }
+}
+
+const unlatchSchema = z.strictObject({
+  session_id: sessionIdSchema,
+  by: z.string().trim().min(1).max(200).optional(),
+});
+
+/**
+ * `POST /v1/session/unlatch` (admin socket only; the agent surface answers 404): a human
+ * clears the kill latch of a session's root and all its subagents. Audited as a `session`
+ * line; 404 when nothing under that root is latched.
+ */
+export function handleUnlatch(rt: Runtime, body: unknown): Reply {
+  const parsed = unlatchSchema.safeParse(body);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+    return { status: 400, body: { error: "invalid request", issues } };
+  }
+  const { session_id, by = "admin" } = parsed.data;
+  const root = rt.sessions.rootOf(session_id);
+  const cleared = rt.latch.unlatch(root);
+  if (cleared === 0) return { status: 404, body: { error: "session not latched" } };
+  rt.audit.append({
+    kind: "session",
+    session_id,
+    payload: { action: "unlatch", by, root, cleared },
+  });
+  return { status: 200, body: { ok: true, session_id, root_id: root, cleared } };
 }
 
 /**

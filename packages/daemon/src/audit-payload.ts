@@ -11,6 +11,7 @@ import {
   type Verdict,
 } from "@jevdict/core";
 import type { EnforcementMode } from "./config.ts";
+import type { KillRecord } from "./kill-latch.ts";
 
 /** The audit flag T6 asks for: the judged state carried text aimed at the judge. */
 export const PROMPT_LIKE_FLAG = "prompt-like-string";
@@ -50,7 +51,10 @@ export interface JudgeRecord {
   /** The judge's full typed answers (for replay); null when it was not asked or failed. */
   readonly answers: Readonly<Record<string, Answer>> | null;
   readonly returned: ReturnedVerdict;
-  /** Daemon mappings applied after the engine: `headlessHoldDenied`, `observe`. */
+  /**
+   * Daemon mappings applied after the engine: `headlessHoldDenied`,
+   * `permissionModeHoldDenied`, `observe`.
+   */
   readonly mapping: readonly string[];
   readonly enforcement: EnforcementMode;
   readonly home: string;
@@ -94,6 +98,33 @@ export function judgePayload(r: JudgeRecord): Record<string, unknown> {
     home: r.home,
     repo_hints: r.repoHints,
     ...promptFlags([n.raw]),
+  };
+}
+
+/** Everything the `judge` line of a call of a latched session is built from. */
+export interface LatchedRecord {
+  readonly event: PreEvent;
+  readonly latched: KillRecord;
+  readonly returned: ReturnedVerdict;
+  readonly mapping: readonly string[];
+  readonly enforcement: EnforcementMode;
+  readonly home: string;
+}
+
+/**
+ * The payload of a `judge` line for a call of a session latched killed: the verbatim pre
+ * event, the latch that answered it (root, cause, when, which event latched it), what
+ * the harness got and the `sessionKilled` mapping. No `decision`: no policy ran.
+ */
+export function latchedPayload(r: LatchedRecord): Record<string, unknown> {
+  const { rootId, sessionId, cause, at, eventId } = r.latched;
+  return {
+    event: r.event,
+    latched: { root: rootId, session: sessionId, cause, at, event_id: eventId },
+    returned: r.returned,
+    mapping: r.mapping,
+    enforcement: r.enforcement,
+    home: r.home,
   };
 }
 

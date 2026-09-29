@@ -8,7 +8,7 @@ import {
   handleResolve,
 } from "./human.ts";
 import { handleJudge, handleObserve, type Reply } from "./service.ts";
-import { handleSession } from "./session-route.ts";
+import { handleSession, handleUnlatch } from "./session-route.ts";
 
 /**
  * Which listener a request arrived on. `agent`: the Unix socket a sandbox mounts (and
@@ -83,6 +83,7 @@ const POST_ROUTES: Readonly<Record<Surface, Readonly<Record<string, Route>>>> = 
   },
   admin: {
     "/v1/budget/reset": (rt, body) => handleBudgetReset(rt, body),
+    "/v1/session/unlatch": (rt, body) => handleUnlatch(rt, body),
   },
 };
 

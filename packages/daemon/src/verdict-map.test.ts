@@ -16,7 +16,11 @@ import {
   HARNESS_RISK_STEP,
   HEADLESS_HOLD_DENIED,
   harnessVerdict,
+  latchedVerdict,
   OBSERVE_ONLY,
+  PERMISSION_MODE_HOLD_DENIED,
+  SESSION_KILLED,
+  SESSION_KILLED_REASON,
 } from "./verdict-map.ts";
 
 const EVENT = (() => {
@@ -50,7 +54,7 @@ describe("harnessVerdict", () => {
   test("detail never reaches the harness", async () => {
     const d = await decide("hold");
     expect(d.detail).toContain("human-only detail");
-    const { response } = harnessVerdict(d, EVENT.id, "enforce", "interactive");
+    const { response } = harnessVerdict(d, EVENT.id, "enforce", null);
     expect(response).not.toHaveProperty("detail");
     expect(JSON.stringify(response)).not.toContain("human-only detail");
   });
@@ -63,7 +67,7 @@ describe("harnessVerdict", () => {
       jev: [{ question: "fixed/safe", type: "noul", p: 0.83, confidence: 0.7 }],
     };
     expect(Object.keys(asked.features)).toHaveLength(5);
-    const { response } = harnessVerdict(asked, EVENT.id, "enforce", "interactive");
+    const { response } = harnessVerdict(asked, EVENT.id, "enforce", null);
     expect(response).toMatchObject({ features: {}, jev: [], risk: 0.7 });
     expect(response.policies).toEqual([...d.policies]);
     expect(response.budget).toEqual(d.budget);
@@ -80,12 +84,12 @@ describe("harnessVerdict", () => {
     [1, 1],
   ])("risk %p is returned as %p", async (risk, shown) => {
     const d = { ...(await decide("allow")), risk };
-    expect(harnessVerdict(d, EVENT.id, "enforce", "interactive").response.risk).toBe(shown);
+    expect(harnessVerdict(d, EVENT.id, "enforce", null).response.risk).toBe(shown);
   });
 
   test("enforce + interactive returns the verdict as is", async () => {
     const d = await decide("rewrite");
-    const { response, mapping } = harnessVerdict(d, EVENT.id, "enforce", "interactive");
+    const { response, mapping } = harnessVerdict(d, EVENT.id, "enforce", null);
     expect(response.verdict).toBe("rewrite");
     expect(response.updated_input).toEqual({ command: "rm -rf ./node_modules" });
     expect(mapping).toEqual([]);
@@ -106,7 +110,7 @@ describe("harnessVerdict", () => {
 
   test("observe returns allow and says what would have happened for hold and above", async () => {
     const d = await decide("deny");
-    const { response, mapping } = harnessVerdict(d, EVENT.id, "observe", "interactive");
+    const { response, mapping } = harnessVerdict(d, EVENT.id, "observe", null);
     expect(response.verdict).toBe("allow");
     expect(response.context_note).toBe(`jevdict would have: deny — ${d.reason}`);
     expect(mapping).toEqual([OBSERVE_ONLY]);
@@ -114,7 +118,7 @@ describe("harnessVerdict", () => {
 
   test("observe drops a rewrite and adds no note below hold", async () => {
     const d = await decide("rewrite");
-    const { response } = harnessVerdict(d, EVENT.id, "observe", "interactive");
+    const { response } = harnessVerdict(d, EVENT.id, "observe", null);
     expect(response).toMatchObject({ verdict: "allow", updated_input: null, context_note: null });
   });
 
@@ -124,5 +128,32 @@ describe("harnessVerdict", () => {
     expect(response.verdict).toBe("allow");
     expect(response.context_note).toStartWith("jevdict would have: deny");
     expect(mapping).toEqual([HEADLESS_HOLD_DENIED, OBSERVE_ONLY]);
+  });
+
+  test("a permission mode that never prompts turns hold into deny (plan §5 row 10)", async () => {
+    const d = await decide("hold");
+    const { response, mapping } = harnessVerdict(d, EVENT.id, "enforce", "permission-mode");
+    expect(response).toMatchObject({ verdict: "deny", reason: d.reason, updated_input: null });
+    expect(mapping).toEqual([PERMISSION_MODE_HOLD_DENIED]);
+    const denied = harnessVerdict(await decide("annotate"), EVENT.id, "enforce", "permission-mode");
+    expect(denied.response.verdict).toBe("annotate");
+  });
+});
+
+describe("latchedVerdict", () => {
+  test("kill with the session-terminated reason, no policies, the budget unchanged", () => {
+    const budget = { spent: 42, limit: 100, lastActivityAt: 1, holds: { k: 2 } };
+    const { response, mapping } = latchedVerdict(EVENT.id, budget);
+    expect(parseVerdict(response).ok).toBe(true);
+    expect(response).toMatchObject({
+      event_id: EVENT.id,
+      verdict: "kill",
+      risk: 1,
+      reason: SESSION_KILLED_REASON,
+      policies: [],
+      budget: { spent: 42, limit: 100 },
+    });
+    expect(response.budget).toEqual({ spent: 42, limit: 100 });
+    expect(mapping).toEqual([SESSION_KILLED]);
   });
 });
