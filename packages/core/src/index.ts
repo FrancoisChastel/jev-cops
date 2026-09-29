@@ -5,5 +5,6 @@
  */
 export const CORE_VERSION = "0.0.0";
 
+export * from "./normalizer/index.ts";
 export * from "./result.ts";
 export * from "./schema/index.ts";
