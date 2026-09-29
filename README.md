@@ -9,9 +9,11 @@ The same `git push --force` is allowed on a feature branch the user asked about,
 on the default branch, and denied in a headless session. What changes is the context,
 not the command string.
 
-> **Status: M0 nearly complete.** Core, policy engine, SDK, starter policies, judge
-> providers, daemon and CLI are built and tested; the Pi adapter is in progress and no
-> harness is wired up yet. See [docs/STATUS.md](docs/STATUS.md).
+> **Status: M0 complete, gate-review fixes in progress.** Core, policy engine, SDK,
+> starter policies, judge providers, daemon, CLI and the **Pi adapter** are built and
+> tested; a real `pi` run blocks and rewrites tool calls end to end
+> ([capture](docs/captures/pi-m0.md)). Claude Code, Codex and OpenCode adapters come in
+> M1–M3. Not production-ready yet: see [docs/STATUS.md](docs/STATUS.md).
 
 ## How it works
 
@@ -64,6 +66,7 @@ Configuration lives in `~/.config/jevdict/jevdict.toml` (see `packages/daemon/sr
 for every key and default); a repo-local `.jevdict.toml` may only tighten it. Judge API keys
 are read from the environment only (`.env.example`).
 
+To try it with [Pi](https://pi.dev), see [adapters/pi/README.md](adapters/pi/README.md).
 `jevdict install <harness>` and `jevdict doctor` arrive with M1.
 
 ## Writing a policy

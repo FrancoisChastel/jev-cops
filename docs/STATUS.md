@@ -89,9 +89,20 @@ Updated: 2026-09-29
 | Pi adapter blocking and rewriting end to end | done, captured on real `pi` |
 | Gate: `jevdict test` | PASS (4 policies, 27 cases, 54 runs) |
 
-## In progress
+## M0 gate review (Fable 5.1, 2026-09-29): yes-with-fixes
 
-- M0 gate review.
+No critical findings; every probed invariant held (fail closed, monotonic combine, detail
+never reaches the harness, taint laundering, tighten-only config, precedent scope); fresh
+clone → check → gate → build all green. Fixes before M1:
+
+| # | Sev | Finding | Status |
+|---|---|---|---|
+| H1 | high | `/v1/resolve` and `/v1/budget/reset` are reachable from the agent's socket: an agent talking to the socket directly can self-approve a hold or reset its budget (T7/T8) | in progress |
+| M2 | medium | Obfuscated exec (`curl \| sh`, `python -c`, `eval`, `env -S`) is flagged opaque but ends `allow`: no floor weight and no `opaque-exec` policy yet | in progress |
+| M3 | medium | `env -S '<cmd>'` launders the verb and target (payload read as one word); `tar --to-command`, `ssh host '<cmd>'` hide the inner command | in progress |
+| L4 | low | CI runs `bun test --coverage` but `bunfig.toml` sets `coverage = false`: the 80 % threshold is never evaluated | in progress |
+| L5 | low | README status stale | fixed |
+| L6 | note | Audit chain is unkeyed SHA-256 from a public genesis: locally it detects mid-file edits/deletions, not truncation of the tail or a full rewrite. The real control is off-box shipping (M2); do not rely on local verification alone | documented (below) |
 
 ## Next
 
@@ -113,6 +124,8 @@ Updated: 2026-09-29
   match it with `net.host === null`; taint extractor registers `app.git` as a host; one
   missing recorded answer invalidates the whole batch (faithful to one request, but
   surprising for fixture authors).
+- Audit log (L6): local verification detects mid-file edits and deletions only; tail
+  truncation and full recompute need the off-box copy (M2) or a keyed chain.
 - Policy engine: hot reload needs Bun's `import()` cache busted (daemon, step 8);
   `when`-overrun/degraded state is in-memory only; headless `hold → deny` (D-008) is the
   daemon/adapter's mapping, not `combine`'s.
