@@ -83,24 +83,26 @@ export default definePolicy({
   ask: (e, ctx) => [
     jev.noul("dest_fits_task", `The destination ${e.net.host} is a service the task plausibly needs: ${ctx.session.task}`),
   ],
-  decide: (e, ctx, a) => (a.dest_fits_task.p < 0.4 ? "deny" : a.dest_fits_task.p < 0.8 ? "hold" : "annotate"),
+  decide: (_e, _ctx, a) => (a.dest_fits_task.p < 0.4 ? "deny" : a.dest_fits_task.p < 0.8 ? "hold" : "annotate"),
   reason: "Network call to a new host shortly after reading a secret.",
 });
 ```
 
-Every policy ships with a `*.fixtures.json`; `jevdict test` fails on any mismatch.
+Every policy ships with a `*.fixtures.json`; `jevdict test` fails on any mismatch. The
+full author guide is [packages/sdk/README.md](packages/sdk/README.md); judge providers are
+described in [packages/judge/README.md](packages/judge/README.md).
 
 ## Repository layout
 
 ```text
-packages/core       event schema, normalizer, context engine, policy engine, verdict ladder
-packages/sdk        definePolicy, question builders, fixture helpers  (@jevdict/sdk)
-packages/daemon     jevdictd: socket + HTTP, stores, audit log, judge client
-packages/openshell  policy compiler → OpenShell YAML
-packages/cli        jevdict install | doctor | test | replay | explain | budget
-adapters/           claude-code · codex · opencode · pi
-policies/           starter policy set with fixtures
-tests/tamper        T1–T13 anti-tamper acceptance tests
+packages/core       event schema, normalizer, context engine, judge interface, policy engine
+packages/sdk        definePolicy, question builders, fixture runner  (@jevdict/sdk)
+packages/judge      semantic judge providers: TypeSafe Jev, OpenRouter, Vercel AI SDK
+packages/daemon     jevdictd: socket + loopback HTTP, SQLite stores, hash-chained audit log
+packages/cli        jevdict test | explain | replay | budget   (install, doctor: M1)
+adapters/pi         Pi extension (M0); claude-code (M1); codex, opencode (M3)
+policies/           starter policy set, one *.fixtures.json per policy
+tests/tamper        T1–T13 anti-tamper acceptance tests (see tests/tamper/README.md)
 docs/               SPEC.md (source of truth), PLAN-M0.md, DECISIONS.md, STATUS.md, adapters.md
 ```
 
