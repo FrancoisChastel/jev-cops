@@ -172,6 +172,6 @@ describe("T5 end to end: the repo policies judge obfuscated exec (opaque-exec)",
   test("env -S cannot launder a delete: held by opaque-exec and off-repo-write", async () => {
     const d = await step(session(), "env -S 'rm -rf /home/dev/keep'");
     expect(d.verdict).toBe("hold");
-    expect([...d.policies].sort()).toEqual(["off-repo-write@1", "opaque-exec@1"]);
+    expect([...d.policies].sort()).toEqual(["off-repo-write@2", "opaque-exec@1"]);
   });
 });
