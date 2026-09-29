@@ -112,11 +112,17 @@ clone → check → gate → build all green. Fixes before M1:
   `.git/config` — `filter` drivers and `ext::` lazy fetch closed, proven by canaries
   (D-067). Headless hold stays deny on Claude Code (D-070). 1721 tests + 10 todo.
 
+- **M1 steps 1–2**: Claude Code tool table, harness CLIs, `git checkout --`/`restore` as
+  writes, `ctx.env`/`ctx.config` for policies, D-068 main/master always default,
+  `config-tamper` tiered (48 fixture cases). 6 policies · 93 cases · 186 runs PASS; 2025
+  tests. Decisions D-071–D-074.
+
 ## In progress
 
-- **M1** per [PLAN-M1.md](PLAN-M1.md) (from the current Claude Code docs, v2.1.285): steps
-  1–5 — core tool table + D-068, `config-tamper` (tiered), daemon session route + kill
-  latch + post-over-HTTP, the `jevdict hook` binary, adapter events.
+- **M1** per [PLAN-M1.md](PLAN-M1.md): step 3 (daemon session route, kill latch,
+  post-over-HTTP, no Claude Code hold tokens), then steps 4–5 (the `jevdict hook` binary and
+  adapter events). The daemon must append `policies.dir`, `~/.jevdict/` and the binaries to
+  `protectedPaths` (config-tamper only knows what the daemon tells it).
 
 ## Next
 
