@@ -139,12 +139,14 @@ export interface Judge {
 }
 
 /**
- * Confidence of a noul answer for providers that report none (D-002): `abs(2p − 1)`,
- * 0 at p = 0.5 and 1 at the extremes. `p` is clamped to [0, 1]; NaN has no confidence.
+ * Confidence of a noul answer for providers that report none (D-038): a calibrated `p`
+ * already carries the uncertainty, so the answer is used as is (confidence 1) and policy
+ * thresholds act on `p` directly. Only an unusable `p` (NaN or outside [0, 1]) gets
+ * confidence 0, which discards the answer and lets the floor stand.
  */
 export function deriveNoulConfidence(p: number): number {
-  if (Number.isNaN(p)) return 0;
-  return Math.abs(2 * Math.min(1, Math.max(0, p)) - 1);
+  if (Number.isNaN(p) || p < 0 || p > 1) return 0;
+  return 1;
 }
 
 /**

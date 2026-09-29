@@ -2,21 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { deriveNoulConfidence, scoreLevel } from "./types.ts";
 import { validateAnswers, validateQuestions } from "./validate.ts";
 
-describe("deriveNoulConfidence (D-002)", () => {
-  test("is 0 at p = 0.5 and 1 at the extremes", () => {
-    expect(deriveNoulConfidence(0.5)).toBe(0);
+describe("deriveNoulConfidence (D-038)", () => {
+  test("a calibrated p in [0, 1] is used as is: confidence 1", () => {
     expect(deriveNoulConfidence(0)).toBe(1);
+    expect(deriveNoulConfidence(0.2)).toBe(1);
+    expect(deriveNoulConfidence(0.5)).toBe(1);
     expect(deriveNoulConfidence(1)).toBe(1);
   });
 
-  test("is abs(2p - 1) in between", () => {
-    expect(deriveNoulConfidence(0.9)).toBeCloseTo(0.8, 10);
-    expect(deriveNoulConfidence(0.2)).toBeCloseTo(0.6, 10);
-  });
-
-  test("out-of-range p is clamped and NaN has no confidence", () => {
-    expect(deriveNoulConfidence(1.5)).toBe(1);
-    expect(deriveNoulConfidence(-2)).toBe(1);
+  test("an unusable p has no confidence, so the answer is discarded", () => {
+    expect(deriveNoulConfidence(1.5)).toBe(0);
+    expect(deriveNoulConfidence(-2)).toBe(0);
     expect(deriveNoulConfidence(Number.NaN)).toBe(0);
   });
 });
