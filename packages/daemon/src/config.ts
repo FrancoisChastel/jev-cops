@@ -19,6 +19,7 @@ import {
   type Table,
   tightenOnly,
 } from "./config-rules.ts";
+import { DEFAULT_GIT_PROBE_TIMEOUT_MS } from "./git-probe.ts";
 import { DEFAULT_HOLD_TOKEN_TTL_MS } from "./hold-tokens.ts";
 
 /** `observe`: log every verdict, return `allow` (spec M4 observe-only). `enforce`: return as is. */
@@ -54,6 +55,8 @@ export interface DaemonConfig {
     readonly judgeDeadlineMs: number;
     /** How long the hold token of a `hold` shown to a human stays valid (T7/T8). */
     readonly holdTokenTtlMs: number;
+    /** Budget for deriving `env.git` from an event's cwd, all git calls included (D-058). */
+    readonly gitProbeTimeoutMs: number;
   };
   readonly policies: { readonly dir: string };
   readonly judge: {
@@ -104,6 +107,7 @@ const fileSchema = z.strictObject({
       home: text.optional(),
       judge_deadline_ms: z.int().positive().optional(),
       hold_token_ttl_ms: z.int().positive().optional(),
+      git_probe_timeout_ms: z.int().positive().optional(),
     })
     .optional(),
   policies: z.strictObject({ dir: text.optional() }).optional(),
@@ -135,6 +139,7 @@ const DEFAULT_TABLE: Table = deepFreeze({
     http: false,
     judge_deadline_ms: 12_000,
     hold_token_ttl_ms: DEFAULT_HOLD_TOKEN_TTL_MS,
+    git_probe_timeout_ms: DEFAULT_GIT_PROBE_TIMEOUT_MS,
   },
   policies: { dir: "policies" },
   judge: { provider: "off", timeout_ms: 10_000, cache_ttl_ms: 600_000 },
@@ -250,6 +255,7 @@ function toConfig(t: Table, home: string): DaemonConfig {
       home: f.daemon?.home ?? home,
       judgeDeadlineMs: f.daemon?.judge_deadline_ms ?? 12_000,
       holdTokenTtlMs: f.daemon?.hold_token_ttl_ms ?? DEFAULT_HOLD_TOKEN_TTL_MS,
+      gitProbeTimeoutMs: f.daemon?.git_probe_timeout_ms ?? DEFAULT_GIT_PROBE_TIMEOUT_MS,
     },
     policies: { dir: f.policies?.dir ?? "" },
     judge: {

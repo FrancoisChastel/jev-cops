@@ -7,6 +7,7 @@ export * from "./audit.ts";
 export * from "./audit-payload.ts";
 export * from "./config.ts";
 export * from "./daemon.ts";
+export * from "./git-probe.ts";
 export * from "./log.ts";
 export * from "./policies.ts";
 export * from "./precedents.ts";

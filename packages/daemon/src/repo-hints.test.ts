@@ -46,6 +46,19 @@ describe("RepoHintsCache", () => {
     expect(cache.for(e)).toEqual({ lockfiles: ["bun.lock"], remoteHost: "github.com" });
   });
 
+  test("a host from the env.git derivation wins over the config parse", () => {
+    const cache = new RepoHintsCache(new Set(["bun.lock"]));
+    const e = buildEvent(
+      { tool: "Bash", kind: "exec", input: { command: "ls" } },
+      { git: { repo } },
+    );
+    expect(cache.for(e, "gitlab.example")).toEqual({
+      lockfiles: ["bun.lock"],
+      remoteHost: "gitlab.example",
+    });
+    expect(cache.for(e)).toEqual({ lockfiles: ["bun.lock"], remoteHost: "github.com" });
+  });
+
   test("no repo, no hints; an unreadable repo gives empty hints", () => {
     const cache = new RepoHintsCache(new Set(["bun.lock"]));
     const bare = buildEvent(

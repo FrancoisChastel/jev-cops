@@ -12,6 +12,7 @@ import {
 import { registerSdkModule } from "@jevdict/sdk/register";
 import { type AuditLine, readAudit } from "../audit.ts";
 import type { DaemonConfig, EnforcementMode, HttpBind } from "../config.ts";
+import type { GitRunner } from "../git-run.ts";
 import { SILENT_LOGGER } from "../log.ts";
 import { type RunningDaemon, startDaemon } from "../server.ts";
 
@@ -31,6 +32,10 @@ export interface TestDaemonOptions {
   deadlineMs?: number;
   judgeTimeoutMs?: number;
   holdTokenTtlMs?: number;
+  /** Budget for deriving `env.git`; default 5 s here (slow CI), 300 ms in the daemon. */
+  gitProbeTimeoutMs?: number;
+  /** Replaces the real git runner (timeouts, counting). */
+  gitRunner?: GitRunner;
   http?: HttpBind | null;
   context?: ContextConfigInput;
   policy?: PolicyConfigInput;
@@ -88,6 +93,7 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
       home: "/home/dev",
       judgeDeadlineMs: opts.deadlineMs ?? 12_000,
       holdTokenTtlMs: opts.holdTokenTtlMs ?? 600_000,
+      gitProbeTimeoutMs: opts.gitProbeTimeoutMs ?? 5_000,
     },
     policies: { dir: join(dir, "policies") },
     judge: {
@@ -125,6 +131,7 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     log: SILENT_LOGGER,
     ...(opts.judge === undefined ? {} : { judge: opts.judge }),
     ...(opts.now === undefined ? {} : { now: opts.now }),
+    ...(opts.gitRunner === undefined ? {} : { gitRunner: opts.gitRunner }),
   });
   return {
     daemon,

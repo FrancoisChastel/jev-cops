@@ -15,6 +15,8 @@ import { createJudge, type ProviderConfig } from "@jevdict/judge";
 import { AuditLog } from "./audit.ts";
 import type { DaemonConfig } from "./config.ts";
 import { ConfirmViews } from "./confirm-view.ts";
+import { GitProbe } from "./git-probe.ts";
+import { bunGitRunner, findGit, type GitRunner } from "./git-run.ts";
 import { JudgeRecorder } from "./judge-recorder.ts";
 import { type Logger, stderrLogger } from "./log.ts";
 import { PolicySet, type PolicySetOptions } from "./policies.ts";
@@ -35,6 +37,8 @@ export interface DaemonDeps {
   log?: Logger;
   /** Where provider API keys are read from (D-044). Default `process.env`. */
   env?: Readonly<Record<string, string | undefined>>;
+  /** Replaces the hardened git runner used to derive `env.git` (tests). */
+  gitRunner?: GitRunner;
 }
 
 /** Per-policy `degraded` flags as last seen in a decision trace. */
@@ -59,6 +63,8 @@ export interface Runtime {
   readonly policies: PolicySet;
   readonly recorder: JudgeRecorder;
   readonly repoHints: RepoHintsCache;
+  /** Derives `env.git` from the event's cwd when the adapter sends none (D-058). */
+  readonly gitProbe: GitProbe;
   readonly degraded: DegradedFlags;
   readonly judgeName: string;
   readonly warnings: readonly string[];
@@ -164,6 +170,39 @@ function policyCallbacks(audit: AuditLog, log: Logger, now: () => number): Polic
   };
 }
 
+/** The `env.git` deriver: the hardened runner on the git found on PATH, or none. */
+function buildGitProbe(config: DaemonConfig, deps: DaemonDeps, now: () => number, log: Logger) {
+  const git = deps.gitRunner === undefined ? findGit() : null;
+  const run = deps.gitRunner ?? (git === null ? null : bunGitRunner(git));
+  const timeoutMs = config.daemon.gitProbeTimeoutMs;
+  const warnings =
+    run === null ? ["git not found on PATH: env.git is not derived from cwd (D-024 applies)"] : [];
+  return { probe: new GitProbe({ run, timeoutMs, now, log }), warnings };
+}
+
+interface Closeable {
+  stopGc: () => void;
+  policies: PolicySet;
+  audit: AuditLog;
+  sessions: SessionStore;
+  precedents: PrecedentStore;
+}
+
+/** Idempotent shutdown: timers and watchers, the shutdown line, then the stores. */
+function closer(parts: Closeable): () => void {
+  let closed = false;
+  return () => {
+    if (closed) return;
+    closed = true;
+    parts.stopGc();
+    parts.policies.close();
+    parts.audit.append({ kind: "boot", payload: { event: "shutdown" } });
+    parts.audit.close();
+    parts.sessions.close();
+    parts.precedents.close();
+  };
+}
+
 interface EngineParts {
   policies: PolicySet;
   judge: Judge;
@@ -239,7 +278,12 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
   const recorder = new JudgeRecorder();
   const built = buildJudge(config, deps);
   const judge = recorder.wrap(built.judge);
-  const warnings = [...built.warnings, ...startupWarnings(config, built.judge.name)];
+  const git = buildGitProbe(config, deps, now, log);
+  const warnings = [
+    ...built.warnings,
+    ...startupWarnings(config, built.judge.name),
+    ...git.warnings,
+  ];
   const stopGc = startGc(sessions, precedents, audit);
   policies.watch();
   audit.append({
@@ -247,7 +291,6 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
     payload: bootPayload(config, built.judge.name, policies, warnings),
   });
   const lockfiles = new Set(Object.keys(cores.contextConfig.scope.registries));
-  let closed = false;
   return {
     config,
     audit,
@@ -257,6 +300,7 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
     policies,
     recorder,
     repoHints: new RepoHintsCache(lockfiles, now),
+    gitProbe: git.probe,
     degraded: new DegradedFlags(),
     judgeName: built.judge.name,
     warnings,
@@ -264,15 +308,6 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
     now,
     startedAt: now(),
     engine: engineFactory({ policies, judge, cores, now, precedents }),
-    close() {
-      if (closed) return;
-      closed = true;
-      stopGc();
-      policies.close();
-      audit.append({ kind: "boot", payload: { event: "shutdown" } });
-      audit.close();
-      sessions.close();
-      precedents.close();
-    },
+    close: closer({ stopGc, policies, audit, sessions, precedents }),
   };
 }

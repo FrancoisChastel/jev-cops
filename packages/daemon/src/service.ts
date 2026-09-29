@@ -5,8 +5,9 @@ import {
   type PostEvent,
   type PreEvent,
   parseEvent,
+  type VerdictResponse,
 } from "@jevdict/core";
-import { judgePayload, observePayload } from "./audit-payload.ts";
+import { judgePayload, observePayload, type ReturnedVerdict } from "./audit-payload.ts";
 import type { Runtime } from "./daemon.ts";
 import { HOLD_TOKEN_HASH_PREFIX, type MintedHoldToken, mintHoldToken } from "./hold-tokens.ts";
 import { proposeScope } from "./precedents.ts";
@@ -73,19 +74,36 @@ function recordHold(
   return minted;
 }
 
+/** What the audit records as returned to the harness: never the raw token, a hash prefix. */
+function returnedOf(response: VerdictResponse, token: MintedHoldToken | null): ReturnedVerdict {
+  return {
+    verdict: response.verdict,
+    reason: response.reason,
+    context_note: response.context_note,
+    updated_input: response.updated_input,
+    risk: response.risk,
+    features: response.features,
+    jev: response.jev,
+    ...(token === null ? {} : { hold_token_sha256: token.hash.slice(0, HOLD_TOKEN_HASH_PREFIX) }),
+  };
+}
+
 /**
- * `POST /v1/judge`: validates a pre event, judges it on the session's case file, maps
- * the decision for the harness (detail stripped, D-008 headless hold → deny, observe
- * mode → allow), records a pending hold with its `hold_token` for `/v1/resolve` when the
- * harness will ask a human, and appends the `judge` audit line with the full decision
- * (and only a prefix of the token's hash) before answering.
+ * `POST /v1/judge`: validates a pre event, completes a missing `env.git` from its cwd
+ * (D-058), judges it on the session's case file, maps the decision for the harness
+ * (detail and scores stripped, D-008 headless hold → deny, observe mode → allow), records
+ * a pending hold with its `hold_token` for `/v1/resolve` when the harness will ask a
+ * human, and appends the `judge` audit line with the adapter's event as sent, what the
+ * daemon derived, and the full decision (only a prefix of the token's hash) before
+ * answering.
  */
 export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
   const parsed = parsePhase(body, "pre");
   if (!parsed.ok) return parsed.reply;
-  const event: PreEvent = parsed.event;
+  const probed = await rt.gitProbe.apply(parsed.event);
+  const event: PreEvent = probed.event;
   const cf = rt.sessions.open(event);
-  const repoHints = rt.repoHints.for(event);
+  const repoHints = rt.repoHints.for(event, probed.remoteHost);
   const home = rt.config.daemon.home;
   const engine = rt.engine();
   const { value: judgement, answers } = await rt.recorder.run(() =>
@@ -97,21 +115,12 @@ export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
   const { response, mapping } = harnessVerdict(decision, event.id, mode, event.session.mode);
   const token =
     response.verdict === "hold" ? recordHold(rt, event, cf, judgement, response.reason) : null;
-  const returned = {
-    verdict: response.verdict,
-    reason: response.reason,
-    context_note: response.context_note,
-    updated_input: response.updated_input,
-    risk: response.risk,
-    features: response.features,
-    jev: response.jev,
-    ...(token === null ? {} : { hold_token_sha256: token.hash.slice(0, HOLD_TOKEN_HASH_PREFIX) }),
-  };
   const record = {
-    event,
+    event: parsed.event,
+    derivedGit: probed.derived,
     judgement,
     answers,
-    returned,
+    returned: returnedOf(response, token),
     mapping,
     enforcement: mode,
     home,
@@ -129,18 +138,22 @@ export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
   };
 }
 
-/** `POST /v1/observe`: records a post event on the case file and in the audit log; 204. */
+/**
+ * `POST /v1/observe`: completes a missing `env.git` like `/v1/judge`, records the post
+ * event on the case file and in the audit log (as sent, plus `derived.git`); 204.
+ */
 export async function handleObserve(rt: Runtime, body: unknown): Promise<Reply> {
   const parsed = parsePhase(body, "post");
   if (!parsed.ok) return parsed.reply;
-  const event: PostEvent = parsed.event;
+  const probed = await rt.gitProbe.apply(parsed.event);
+  const event: PostEvent = probed.event;
   const cf = rt.sessions.open(event);
   await rt.engine().observe(event, cf, { home: rt.config.daemon.home });
   rt.audit.append({
     kind: "observe",
     event_id: event.id,
     session_id: event.session.id,
-    payload: observePayload(event),
+    payload: observePayload(parsed.event, probed.derived),
   });
   return { status: 204, body: null };
 }

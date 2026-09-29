@@ -43,6 +43,7 @@ describe("defaults", () => {
       home,
       judgeDeadlineMs: 12_000,
       holdTokenTtlMs: 600_000,
+      gitProbeTimeoutMs: 300,
     });
     expect(config.audit).toEqual({ path: join(home, ".jevdict", "audit.jsonl"), forward: null });
     expect(config.store.path).toBe(join(home, ".jevdict", "jevdict.sqlite"));
@@ -171,6 +172,14 @@ describe("repo override can only tighten", () => {
     const { config, rejected } = load();
     expect(config.daemon.holdTokenTtlMs).toBe(120_000);
     expect(rejected).toEqual([expect.stringContaining("daemon.hold_token_ttl_ms")]);
+  });
+
+  test("the git probe budget cannot be changed from the repo; the user file may set it", () => {
+    write(userFile(), "[daemon]\ngit_probe_timeout_ms = 500\n");
+    write(join(cwd, ".jevdict.toml"), "[daemon]\ngit_probe_timeout_ms = 1\n");
+    const { config, rejected } = load();
+    expect(config.daemon.gitProbeTimeoutMs).toBe(500);
+    expect(rejected).toEqual([expect.stringContaining("daemon.git_probe_timeout_ms")]);
   });
 
   test("a repo value equal to the base is not a change", () => {

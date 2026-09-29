@@ -31,6 +31,9 @@ Usage: jevdictd [--config path] [--socket path] [--admin-socket path] [--http ho
   --enforce              return verdicts as judged
   -h, --help             this text
 
+Environment: JEVDICT_DEBUG=1 also logs debug lines to stderr (e.g. why env.git was not
+derived from an event's cwd).
+
 Exit codes: 0 clean shutdown (SIGTERM/SIGINT) · 1 boot failure · 2 usage error`;
 
 /** Command-line overrides on top of the loaded config. */
@@ -131,7 +134,8 @@ async function boot(argv: readonly string[]): Promise<RunningDaemon | number> {
       args.value.configPath === undefined ? {} : { configPath: args.value.configPath },
     );
     for (const r of loaded.rejected) process.stderr.write(`WARNING: ${r}\n`);
-    const daemon = await startDaemon(applyArgs(loaded.config, args.value), { log: stderrLogger() });
+    const log = stderrLogger(Date.now, { debug: process.env.JEVDICT_DEBUG === "1" });
+    const daemon = await startDaemon(applyArgs(loaded.config, args.value), { log });
     process.stderr.write(`${bootLine(daemon)}\n`);
     for (const w of daemon.runtime.warnings) process.stderr.write(`WARNING: ${w}\n`);
     return daemon;

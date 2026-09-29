@@ -2,6 +2,7 @@ import {
   type Answer,
   findPromptLikeStrings,
   findSecretPatterns,
+  type GitInfo,
   type JevAnswer,
   type Judgement,
   type PostEvent,
@@ -41,7 +42,10 @@ export interface ReturnedVerdict {
 
 /** Everything a `judge` audit line is built from. */
 export interface JudgeRecord {
+  /** The pre event as the adapter sent it. */
   readonly event: PreEvent;
+  /** The `env.git` fields the daemon derived from cwd and judged with (D-058). */
+  readonly derivedGit?: GitInfo | null;
   readonly judgement: Judgement;
   /** The judge's full typed answers (for replay); null when it was not asked or failed. */
   readonly answers: Readonly<Record<string, Answer>> | null;
@@ -53,18 +57,25 @@ export interface JudgeRecord {
   readonly repoHints: RepoHints | null;
 }
 
+/** `{ derived: { git } }` when the daemon filled in `env.git`, else nothing. */
+function derivedPart(git: GitInfo | null | undefined): { derived?: { git: GitInfo } } {
+  return git === null || git === undefined ? {} : { derived: { git } };
+}
+
 /**
- * The payload of a `judge` line: the verbatim pre event, the full engine decision
- * (including the human `detail`, trace and flags, minus the internal `nextBudget`), the
- * features' evidence, the normalized reading, the judge's answers, what the harness got,
- * and the T6 flag when the raw command carries a prompt-like string. `explain` and
- * `replay` read only this.
+ * The payload of a `judge` line: the verbatim pre event, the `env.git` fields the daemon
+ * derived (`derived.git`, so provenance stays visible and `replay` judges the same
+ * event), the full engine decision (including the human `detail`, trace and flags, minus
+ * the internal `nextBudget`), the features' evidence, the normalized reading, the judge's
+ * answers, what the harness got, and the T6 flag when the raw command carries a
+ * prompt-like string. `explain` and `replay` read only this.
  */
 export function judgePayload(r: JudgeRecord): Record<string, unknown> {
   const { decision, normalized: n, features } = r.judgement;
   const { nextBudget: _internal, ...kept } = decision;
   return {
     event: r.event,
+    ...derivedPart(r.derivedGit),
     raw: n.raw,
     stateHash: n.stateHash,
     normalized: {
@@ -90,14 +101,19 @@ export function judgePayload(r: JudgeRecord): Record<string, unknown> {
  * The payload of an `observe` line. The post event is kept with its `result` reduced to
  * `ok`, `exit_code`, `stdout_sha256` and `bytes_out`: `stdout_head` never reaches the log
  * (spec: "secrets are not copied"). Only the *names* of secret patterns found in the head
- * are recorded, plus the T6 flag when the head or the command reads like a prompt.
+ * are recorded, plus the T6 flag when the head or the command reads like a prompt, and
+ * `derived.git` when the daemon filled in `env.git`.
  */
-export function observePayload(event: PostEvent): Record<string, unknown> {
+export function observePayload(
+  event: PostEvent,
+  derivedGit: GitInfo | null = null,
+): Record<string, unknown> {
   const head = event.result.stdout_head ?? "";
   const { stdout_head: _dropped, ...result } = event.result;
   const command = typeof event.call.input.command === "string" ? event.call.input.command : "";
   return {
     event: { ...event, result },
+    ...derivedPart(derivedGit),
     head_chars: head.length,
     secret_patterns: findSecretPatterns(head),
     ...promptFlags([head, command]),

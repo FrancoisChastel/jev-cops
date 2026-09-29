@@ -40,6 +40,16 @@ describe("stderrLogger", () => {
   });
 });
 
+describe("debug lines", () => {
+  test("are dropped unless debug is on", () => {
+    const lines = captureStderr();
+    stderrLogger().log("debug", "env.git not derived", { why: "timeout" });
+    expect(lines).toEqual([]);
+    stderrLogger(Date.now, { debug: true }).log("debug", "env.git not derived");
+    expect(JSON.parse(lines[0] ?? "")).toMatchObject({ level: "debug" });
+  });
+});
+
 describe("SILENT_LOGGER", () => {
   test("drops everything", () => {
     const lines = captureStderr();
