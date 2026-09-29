@@ -3,15 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PolicyLoadError, PolicySet, type PolicySnapshot } from "./policies.ts";
-
-/** A plain-object policy module: no imports, so it loads from any temp directory. */
-export function policyModule(name: string, version = 1, verdict = "allow"): string {
-  return `export default {
-  name: ${JSON.stringify(name)}, version: ${version}, owner: "tests",
-  when: () => true, decide: () => ${JSON.stringify(verdict)}, reason: "test policy",
-};
-`;
-}
+import { policyModule } from "./testing/policies.ts";
 
 let dir: string;
 let set: PolicySet | null;
