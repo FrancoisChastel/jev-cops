@@ -51,6 +51,10 @@ export interface TestDaemon {
   call(method: Method, path: string, body?: unknown, headers?: Headers): Promise<HttpReply>;
   /** A request on the admin socket (human-only routes). */
   callAdmin(method: Method, path: string, body?: unknown, headers?: Headers): Promise<HttpReply>;
+  /** A request on loopback HTTP; throws unless the daemon was started with `http`. */
+  callHttp(method: Method, path: string, body?: unknown, headers?: Headers): Promise<HttpReply>;
+  /** Like {@link call}, with the response headers (lower-case names). */
+  callWithHeaders(method: Method, path: string, body?: unknown): Promise<HttpReplyWithHeaders>;
   audit(): AuditLine[];
   writePolicy(file: string, source: string): void;
   stop(): Promise<void>;
@@ -58,24 +62,46 @@ export interface TestDaemon {
 
 type Method = "GET" | "POST";
 type HttpReply = { status: number; body: unknown };
+type HttpReplyWithHeaders = HttpReply & { headers: Readonly<Record<string, string>> };
 type Headers = Readonly<Record<string, string>>;
+/** Where a request goes: a Unix socket, or a loopback HTTP base URL. */
+type Target = { readonly unix: string } | { readonly base: string };
 
-/** One JSON request over the Unix socket at `socket`; a string body is sent verbatim. */
-async function request(
-  socket: string,
+/** One JSON request to `target`; a string body is sent verbatim. */
+async function requestFull(
+  target: Target,
   method: Method,
   path: string,
   body?: unknown,
   headers: Headers = {},
-) {
-  const res = await fetch(`http://localhost${path}`, {
+): Promise<HttpReplyWithHeaders> {
+  const url = "base" in target ? `${target.base}${path}` : `http://localhost${path}`;
+  const res = await fetch(url, {
     method,
-    unix: socket,
+    ...("unix" in target ? { unix: target.unix } : {}),
     ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
     headers: { "content-type": "application/json", ...headers },
   });
   const text = await res.text();
-  return { status: res.status, body: text === "" ? null : (JSON.parse(text) as unknown) };
+  const body_ = text === "" ? null : (JSON.parse(text) as unknown);
+  return { status: res.status, body: body_, headers: Object.fromEntries(res.headers.entries()) };
+}
+
+async function request(
+  target: Target,
+  method: Method,
+  path: string,
+  body?: unknown,
+  headers: Headers = {},
+): Promise<HttpReply> {
+  const { status, body: replied } = await requestFull(target, method, path, body, headers);
+  return { status, body: replied };
+}
+
+function httpTarget(daemon: RunningDaemon): Target {
+  const base = daemon.listening.httpUrl;
+  if (base === null) throw new Error("this test daemon has no HTTP listener (pass `http`)");
+  return { base };
 }
 
 /** A fresh event id, so tests never collide on `explain` or `resolve`. */
@@ -138,9 +164,13 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     dir,
     config,
     call: (method, path, body, headers) =>
-      request(config.daemon.socket, method, path, body, headers),
+      request({ unix: config.daemon.socket }, method, path, body, headers),
     callAdmin: (method, path, body, headers) =>
-      request(config.daemon.adminSocket, method, path, body, headers),
+      request({ unix: config.daemon.adminSocket }, method, path, body, headers),
+    callHttp: (method, path, body, headers) =>
+      request(httpTarget(daemon), method, path, body, headers),
+    callWithHeaders: (method, path, body) =>
+      requestFull({ unix: config.daemon.socket }, method, path, body),
     audit: () => readAudit(config.audit.path).lines,
     writePolicy(file, source) {
       writeFileSync(join(dir, "policies", file), source);

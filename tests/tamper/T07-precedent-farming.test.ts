@@ -10,9 +10,11 @@
  * the session with a 24 h cap, and holds farmed with varied arguments share one coarse key
  * so each repeat costs double end to end. An agent that talks to the socket directly
  * cannot grant a precedent without the hold's single-use token, and cannot reset its
- * budget (that route is on the admin socket only). OpenShell JIT grants are M2; so is
- * keeping the agent off the socket altogether (an agent that posts its own judge request
- * receives that hold's token).
+ * budget (that route is on the admin socket only). On Claude Code no hold yields a
+ * resolvable token at all (Claude Code's own prompt answers it; D-069 proposal), so no
+ * precedent comes from a Claude Code hold. OpenShell JIT grants are M2; so is keeping the
+ * agent off the socket altogether (an agent that posts its own judge request, naming a
+ * harness that reports answers, receives that hold's token).
  */
 import { describe, expect, test } from "bun:test";
 import { readFileSync, statSync } from "node:fs";
@@ -34,6 +36,7 @@ import {
   withFreshId,
 } from "../../packages/daemon/src/testing/daemon.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
+import { withHarness } from "../../packages/daemon/src/testing/session.ts";
 import { bashPre, buildEvent, CTX_SESSION } from "../fixtures/context/index.ts";
 import { pending } from "./pending.ts";
 
@@ -94,9 +97,8 @@ describe("T7 precedent farming through the daemon", () => {
   test("precedent scope is proposed by the daemon, never the agent", async () => {
     const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES } });
     try {
-      const e = withFreshId(
-        buildEvent({ tool: "Bash", kind: "exec", input: { command: "rm -rf /srv/data/tmp" } }),
-      );
+      const input = { command: "rm -rf /srv/data/tmp" };
+      const e = withHarness(withFreshId(buildEvent({ tool: "Bash", kind: "exec", input })), "pi");
       const judged = await td.call("POST", "/v1/judge", e);
       const hold_token = (judged.body as { hold_token: string }).hold_token;
       const widened = {
@@ -157,8 +159,10 @@ function agentResolve(td: TestDaemon, eventId: string, token?: string) {
   );
 }
 
+/** A hold the Pi adapter received (Pi reports the human's answer, so it can resolve). */
 async function heldByAdapter(td: TestDaemon, command = "rm -rf /srv/farm/x") {
-  const e = withFreshId(buildEvent({ tool: "Bash", kind: "exec", input: { command } }));
+  const built = buildEvent({ tool: "Bash", kind: "exec", input: { command } });
+  const e = withHarness(withFreshId(built), "pi");
   const res = await td.call("POST", "/v1/judge", e);
   const body = res.body as { verdict: string; hold_token: string };
   expect(body.verdict).toBe("hold");
@@ -243,6 +247,24 @@ describe("T7: an agent that talks to the socket directly cannot grant a preceden
         spent: 0,
       });
       expect(statSync(td.config.daemon.adminSocket).mode & 0o777).toBe(0o600);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("Claude Code: a hold carries no resolvable token, so nothing can grant a precedent", async () => {
+    const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES } });
+    try {
+      const input = { command: "rm -rf /srv/farm/cc" };
+      const e = withFreshId(buildEvent({ tool: "Bash", kind: "exec", input }));
+      expect(e.harness).toBe("claude-code");
+      const res = await td.callWithHeaders("POST", "/v1/judge", e);
+      expect(res.body).toMatchObject({ verdict: "hold" });
+      expect(res.body).not.toHaveProperty("hold_token");
+      const viewOnly = res.headers["x-jevdict-view-token"];
+      expect((await agentResolve(td, e.id, viewOnly)).status).toBe(403);
+      expect((await agentResolve(td, e.id)).status).toBe(403);
+      expect(grants(td)).toBe(0);
     } finally {
       await td.stop();
     }

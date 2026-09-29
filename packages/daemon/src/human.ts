@@ -100,7 +100,7 @@ export function handleBudgetReset(rt: Runtime, body: unknown): Reply {
 
 /**
  * `GET /v1/health`: version, policies with degraded flags, judge, enforcement, both
- * sockets, uptime.
+ * sockets, how many root sessions are latched killed, uptime.
  */
 export function handleHealth(rt: Runtime): Reply {
   const policies = rt.policies.current().policies.map((p) => ({
@@ -117,6 +117,7 @@ export function handleHealth(rt: Runtime): Reply {
       judge: rt.judgeName,
       enforcement: rt.config.enforcement.mode,
       sockets: { agent: rt.config.daemon.socket, admin: rt.config.daemon.adminSocket },
+      latched_sessions: rt.latch.count(),
       uptime: Math.max(0, Math.round((rt.now() - rt.startedAt) / 1000)),
     },
   };

@@ -1,13 +1,16 @@
 /**
  * `GET /v1/explain/:event_id` per channel (T8, "the agent sees reasons, the human sees
  * details"): on the agent socket and loopback HTTP it needs the pending hold's token and
- * returns only the confirm view; the admin socket keeps the full explain.
+ * returns only the confirm view; the admin socket keeps the full explain. The holds here
+ * are Pi's (a resolvable `hold_token`); Claude Code's view-only token is in
+ * `claude-code/holds.test.ts`.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import type { VerdictResponse } from "@jevdict/core";
 import { buildEvent, type EventShape } from "../../../tests/fixtures/context/index.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "./testing/daemon.ts";
 import { policyModule } from "./testing/policies.ts";
+import { withHarness } from "./testing/session.ts";
 
 const TASK = "Fix the flaky test in auth/";
 const TAINTED = "/srv/cache/build-42";
@@ -35,9 +38,8 @@ function daemon(): TestDaemon {
 
 async function judge(command: string, shape: EventShape = {}) {
   const input = { command, description: AGENT_PROSE };
-  const event = withFreshId(
-    buildEvent({ tool: "Bash", kind: "exec", input }, { task: TASK, ...shape }),
-  );
+  const built = buildEvent({ tool: "Bash", kind: "exec", input }, { task: TASK, ...shape });
+  const event = withHarness(withFreshId(built), "pi");
   const res = await daemon().call("POST", "/v1/judge", event);
   return { event, body: res.body as VerdictResponse };
 }

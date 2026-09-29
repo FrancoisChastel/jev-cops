@@ -18,10 +18,12 @@ import { ConfirmViews } from "./confirm-view.ts";
 import { GitProbe } from "./git-probe.ts";
 import { bunGitRunner, findGit, type GitRunner } from "./git-run.ts";
 import { JudgeRecorder } from "./judge-recorder.ts";
+import { KillLatch } from "./kill-latch.ts";
 import { type Logger, stderrLogger } from "./log.ts";
 import { PolicySet, type PolicySetOptions } from "./policies.ts";
 import { PrecedentStore } from "./precedents.ts";
 import { RepoHintsCache } from "./repo-hints.ts";
+import { SessionFactsStore } from "./session-facts.ts";
 import { SessionStore } from "./sessions.ts";
 
 /** Reported by `/v1/health` and the boot line. */
@@ -57,6 +59,10 @@ export interface Runtime {
   readonly config: DaemonConfig;
   readonly audit: AuditLog;
   readonly sessions: SessionStore;
+  /** What `/v1/session` reports taught the daemon per root session (mode, model, …). */
+  readonly facts: SessionFactsStore;
+  /** Sessions terminated by a `kill` or a broken hook block; cleared on the admin socket only. */
+  readonly latch: KillLatch;
   readonly precedents: PrecedentStore;
   /** Confirm views of pending holds (memory only), served with the hold's token. */
   readonly confirmViews: ConfirmViews;
@@ -184,8 +190,7 @@ interface Closeable {
   stopGc: () => void;
   policies: PolicySet;
   audit: AuditLog;
-  sessions: SessionStore;
-  precedents: PrecedentStore;
+  stores: ReadonlyArray<{ close(): void }>;
 }
 
 /** Idempotent shutdown: timers and watchers, the shutdown line, then the stores. */
@@ -198,8 +203,7 @@ function closer(parts: Closeable): () => void {
     parts.policies.close();
     parts.audit.append({ kind: "boot", payload: { event: "shutdown" } });
     parts.audit.close();
-    parts.sessions.close();
-    parts.precedents.close();
+    for (const store of parts.stores) store.close();
   };
 }
 
@@ -259,6 +263,23 @@ function bootPayload(config: DaemonConfig, judgeName: string, set: PolicySet, wa
   };
 }
 
+/** The SQLite stores, all on `[store] path`: case files, session facts, latch, precedents. */
+function openStores(
+  config: DaemonConfig,
+  cores: ReturnType<typeof coreConfigs>,
+  now: () => number,
+) {
+  const path = config.store.path;
+  const sessions = new SessionStore(path, { now, contextConfig: cores.context });
+  const rootOf = (id: string) => sessions.rootOf(id);
+  return {
+    sessions,
+    facts: new SessionFactsStore(path, now),
+    latch: new KillLatch(path, now),
+    precedents: new PrecedentStore(path, { now, rootOf }),
+  };
+}
+
 /**
  * Opens the stores, audit log and policy set and wires the engine from config: judge
  * from `@jevdict/judge` (keys from env only), precedents and case files from SQLite,
@@ -272,9 +293,8 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
   const audit = AuditLog.open(config.audit.path, { now, forward });
   policies.setCallbacks(policyCallbacks(audit, log, now));
   const cores = coreConfigs(config);
-  const sessions = new SessionStore(config.store.path, { now, contextConfig: cores.context });
-  const rootOf = (id: string) => sessions.rootOf(id);
-  const precedents = new PrecedentStore(config.store.path, { now, rootOf });
+  const stores = openStores(config, cores, now);
+  const { sessions, precedents } = stores;
   const recorder = new JudgeRecorder();
   const built = buildJudge(config, deps);
   const judge = recorder.wrap(built.judge);
@@ -294,8 +314,7 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
   return {
     config,
     audit,
-    sessions,
-    precedents,
+    ...stores,
     confirmViews: new ConfirmViews(),
     policies,
     recorder,
@@ -308,6 +327,6 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
     now,
     startedAt: now(),
     engine: engineFactory({ policies, judge, cores, now, precedents }),
-    close: closer({ stopGc, policies, audit, sessions, precedents }),
+    close: closer({ stopGc, policies, audit, stores: Object.values(stores) }),
   };
 }

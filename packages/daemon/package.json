@@ -10,7 +10,8 @@
     "jevdictd": "./src/main.ts"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./claude-code/post": "./src/claude-code/post.ts"
   },
   "files": [
     "src"

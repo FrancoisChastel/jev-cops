@@ -1,22 +1,28 @@
 import {
   type CaseFile,
   type Event,
-  type Judgement,
   type PostEvent,
   type PreEvent,
   parseEvent,
   type VerdictResponse,
 } from "@jevdict/core";
-import { judgePayload, observePayload, type ReturnedVerdict } from "./audit-payload.ts";
+import {
+  judgePayload,
+  latchedPayload,
+  observePayload,
+  type ReturnedVerdict,
+} from "./audit-payload.ts";
 import type { Runtime } from "./daemon.ts";
-import { HOLD_TOKEN_HASH_PREFIX, type MintedHoldToken, mintHoldToken } from "./hold-tokens.ts";
-import { proposeScope } from "./precedents.ts";
-import { harnessVerdict } from "./verdict-map.ts";
+import { deliver, type IssuedToken, recordHold, tokenTrace } from "./holds.ts";
+import type { KillRecord } from "./kill-latch.ts";
+import { type NoHumanReason, noHumanOf } from "./session-facts.ts";
+import { harnessVerdict, latchedVerdict } from "./verdict-map.ts";
 
-/** A route's answer: HTTP status and JSON body (null → empty body). */
+/** A route's answer: HTTP status, JSON body (null → empty body), extra response headers. */
 export interface Reply {
   readonly status: number;
   readonly body: unknown;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /** 400 with the schema error, so the adapter can log why and fail closed. */
@@ -39,43 +45,8 @@ function parsePhase<P extends Event["phase"]>(
   return { ok: true, event: parsed.value as Extract<Event, { phase: P }> };
 }
 
-/** `name@version` → `name`: core waives a precedent's policies by name. */
-function policyName(key: string): string {
-  const at = key.lastIndexOf("@");
-  return at > 0 ? key.slice(0, at) : key;
-}
-
-/**
- * Records a hold the harness will show a human, with the daemon's proposed precedent
- * scope, a fresh single-use token (only its hash is stored; the token expires after
- * `daemon.hold_token_ttl_ms`) and the confirm view the token unlocks. Returns the token
- * for the adapter.
- */
-function recordHold(
-  rt: Runtime,
-  event: PreEvent,
-  cf: CaseFile,
-  j: Judgement,
-  reason: string,
-): MintedHoldToken {
-  const minted = mintHoldToken();
-  const expiresAt = rt.now() + rt.config.daemon.holdTokenTtlMs;
-  rt.precedents.recordHold(
-    {
-      eventId: event.id,
-      sessionId: event.session.id,
-      scope: proposeScope(j.normalized, cf.task),
-      policies: j.decision.policies.map(policyName),
-    },
-    { hash: minted.hash, expiresAt },
-  );
-  const view = { event_id: event.id, verdict: "hold", reason, raw: j.normalized.raw } as const;
-  rt.confirmViews.put({ ...view, detail: j.decision.detail }, expiresAt);
-  return minted;
-}
-
-/** What the audit records as returned to the harness: never the raw token, a hash prefix. */
-function returnedOf(response: VerdictResponse, token: MintedHoldToken | null): ReturnedVerdict {
+/** What the audit records as returned to the harness: never a raw token, a hash prefix. */
+function returnedOf(response: VerdictResponse, token: IssuedToken | null): ReturnedVerdict {
   return {
     verdict: response.verdict,
     reason: response.reason,
@@ -84,68 +55,129 @@ function returnedOf(response: VerdictResponse, token: MintedHoldToken | null): R
     risk: response.risk,
     features: response.features,
     jev: response.jev,
-    ...(token === null ? {} : { hold_token_sha256: token.hash.slice(0, HOLD_TOKEN_HASH_PREFIX) }),
+    ...tokenTrace(token),
   };
 }
 
 /**
- * `POST /v1/judge`: validates a pre event, completes a missing `env.git` from its cwd
- * (D-058), judges it on the session's case file, maps the decision for the harness
- * (detail and scores stripped, D-008 headless hold → deny, observe mode → allow), records
- * a pending hold with its `hold_token` for `/v1/resolve` when the harness will ask a
- * human, and appends the `judge` audit line with the adapter's event as sent, what the
- * daemon derived, and the full decision (only a prefix of the token's hash) before
- * answering.
+ * A call of a session latched killed (D-072 proposal): `kill` without running a policy
+ * or touching the case file, and a `judge` line naming the latch.
  */
-export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
-  const parsed = parsePhase(body, "pre");
-  if (!parsed.ok) return parsed.reply;
-  const probed = await rt.gitProbe.apply(parsed.event);
+function judgeLatched(rt: Runtime, event: PreEvent, cf: CaseFile, latched: KillRecord): Reply {
+  const { response, mapping } = latchedVerdict(event.id, cf.budget);
+  const record = {
+    event,
+    latched,
+    returned: returnedOf(response, null),
+    mapping,
+    enforcement: rt.config.enforcement.mode,
+    home: rt.config.daemon.home,
+  };
+  rt.audit.append({
+    kind: "judge",
+    event_id: event.id,
+    session_id: event.session.id,
+    payload: latchedPayload(record),
+  });
+  return { status: 200, body: response };
+}
+
+/** A `kill` returned to the harness terminates the session: latch it and its root. */
+function latchOnKill(rt: Runtime, event: PreEvent, root: string): void {
+  rt.latch.latch(event.session.id, root, "kill", event.id);
+  rt.audit.append({
+    kind: "session",
+    event_id: event.id,
+    session_id: event.session.id,
+    payload: { action: "latch", cause: "kill", root },
+  });
+}
+
+/** Why no human can answer a hold for `event`: its own mode, else the session's facts. */
+function noHumanFor(rt: Runtime, event: PreEvent, root: string): NoHumanReason | null {
+  return noHumanOf(event.session.mode, null) ?? rt.facts.get(root)?.noHuman ?? null;
+}
+
+/**
+ * The harness `/v1/session` pinned for the event's session, or null. An event naming
+ * another harness gets an `anomaly` line: an adapter never does that, an agent posting
+ * its own request might (to farm a precedent from a Claude Code session, D-069 proposal).
+ */
+function sessionHarness(rt: Runtime, event: PreEvent, root: string): string | null {
+  const pinned = rt.facts.get(root)?.harness ?? null;
+  if (pinned !== null && pinned !== event.harness) {
+    rt.audit.append({
+      kind: "anomaly",
+      event_id: event.id,
+      session_id: event.session.id,
+      payload: {
+        reason: "harness mismatch",
+        event_harness: event.harness,
+        session_harness: pinned,
+      },
+    });
+  }
+  return pinned;
+}
+
+/** The engine's judgement of a live session's call, mapped, recorded and answered. */
+async function judgeLive(rt: Runtime, sent: PreEvent, cf: CaseFile, root: string) {
+  const pinned = sessionHarness(rt, sent, root);
+  const probed = await rt.gitProbe.apply(sent);
   const event: PreEvent = probed.event;
-  const cf = rt.sessions.open(event);
   const repoHints = rt.repoHints.for(event, probed.remoteHost);
   const home = rt.config.daemon.home;
   const engine = rt.engine();
   const { value: judgement, answers } = await rt.recorder.run(() =>
     engine.judge(event, cf, { home, ...(repoHints === null ? {} : { repoHints }) }),
   );
-  const { decision } = judgement;
-  rt.degraded.update(decision.trace);
+  rt.degraded.update(judgement.decision.trace);
   const mode = rt.config.enforcement.mode;
-  const { response, mapping } = harnessVerdict(decision, event.id, mode, event.session.mode);
-  const token =
-    response.verdict === "hold" ? recordHold(rt, event, cf, judgement, response.reason) : null;
-  const record = {
-    event: parsed.event,
-    derivedGit: probed.derived,
-    judgement,
-    answers,
-    returned: returnedOf(response, token),
-    mapping,
-    enforcement: mode,
-    home,
-    repoHints,
-  };
+  const noHuman = noHumanFor(rt, event, root);
+  const { response, mapping } = harnessVerdict(judgement.decision, event.id, mode, noHuman);
+  const hold = { reason: response.reason, sessionHarness: pinned };
+  const token = response.verdict === "hold" ? recordHold(rt, event, cf, judgement, hold) : null;
+  const returned = returnedOf(response, token);
+  const record = { event: sent, derivedGit: probed.derived, judgement, answers, returned };
   rt.audit.append({
     kind: "judge",
     event_id: event.id,
     session_id: event.session.id,
-    payload: judgePayload(record),
+    payload: judgePayload({ ...record, mapping, enforcement: mode, home, repoHints }),
   });
-  return {
-    status: 200,
-    body: token === null ? response : { ...response, hold_token: token.token },
-  };
+  if (response.verdict === "kill") latchOnKill(rt, event, root);
+  return { status: 200, ...deliver(response, token) } satisfies Reply;
 }
 
 /**
- * `POST /v1/observe`: completes a missing `env.git` like `/v1/judge`, records the post
- * event on the case file and in the audit log (as sent, plus `derived.git`); 204.
+ * `POST /v1/judge`: validates a pre event. A call of a session latched killed is answered
+ * `kill` (`sessionKilled`) without running a policy. Otherwise completes a missing
+ * `env.git` from its cwd (D-058), judges it on the session's case file, maps the decision
+ * for the harness (detail and scores stripped, hold → deny when no human can answer,
+ * observe mode → allow), records a pending hold with its `hold_token` for `/v1/resolve`
+ * when the harness will ask a human, appends the `judge` audit line with the adapter's
+ * event as sent, what the daemon derived, and the full decision (only a prefix of the
+ * token's hash), and latches the session when the harness gets `kill`.
  */
-export async function handleObserve(rt: Runtime, body: unknown): Promise<Reply> {
-  const parsed = parsePhase(body, "post");
+export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
+  const parsed = parsePhase(body, "pre");
   if (!parsed.ok) return parsed.reply;
-  const probed = await rt.gitProbe.apply(parsed.event);
+  const event = parsed.event;
+  const cf = rt.sessions.open(event);
+  const root = rt.sessions.rootOf(event.session.id);
+  const enforcing = rt.config.enforcement.mode === "enforce";
+  const latched = enforcing ? rt.latch.find(event.session.id, root) : null;
+  if (latched !== null) return judgeLatched(rt, event, cf, latched);
+  return judgeLive(rt, event, cf, root);
+}
+
+/**
+ * Records a validated post event: completes a missing `env.git` like `/v1/judge`, feeds
+ * the case file (taint, secret reads, failures) and appends the `observe` line (the event
+ * as sent, plus `derived.git`). Shared by `/v1/observe` and `/v1/hooks/claude-code`.
+ */
+export async function observeEvent(rt: Runtime, sent: PostEvent): Promise<void> {
+  const probed = await rt.gitProbe.apply(sent);
   const event: PostEvent = probed.event;
   const cf = rt.sessions.open(event);
   await rt.engine().observe(event, cf, { home: rt.config.daemon.home });
@@ -153,7 +185,14 @@ export async function handleObserve(rt: Runtime, body: unknown): Promise<Reply> 
     kind: "observe",
     event_id: event.id,
     session_id: event.session.id,
-    payload: observePayload(parsed.event, probed.derived),
+    payload: observePayload(sent, probed.derived),
   });
+}
+
+/** `POST /v1/observe`: validates a post event and {@link observeEvent}s it; 204. */
+export async function handleObserve(rt: Runtime, body: unknown): Promise<Reply> {
+  const parsed = parsePhase(body, "post");
+  if (!parsed.ok) return parsed.reply;
+  await observeEvent(rt, parsed.event);
   return { status: 204, body: null };
 }

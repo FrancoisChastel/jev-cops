@@ -1,5 +1,6 @@
 import type { Runtime } from "./daemon.ts";
-import type { RedeemFailure } from "./precedents.ts";
+import { hashHoldToken, sameHash } from "./hold-tokens.ts";
+import type { Redeemed, RedeemFailure } from "./precedents.ts";
 import type { Reply } from "./service.ts";
 
 /**
@@ -19,6 +20,12 @@ export interface ConfirmView {
   readonly detail: string;
 }
 
+/** A view's own token checked: it matched, it did not, or the view has none. */
+export type OwnTokenCheck =
+  | { readonly kind: "none" }
+  | { readonly kind: "ok"; readonly view: ConfirmView }
+  | { readonly kind: "refused"; readonly why: "no-token" | "mismatch" };
+
 /** How many pending views are kept; the oldest is dropped past this. */
 export const MAX_CONFIRM_VIEWS = 1_024;
 /** Longest bearer token accepted (a hold token is 43 characters). */
@@ -30,14 +37,21 @@ const MAX_TOKEN_CHARS = 256;
  * restart forgets them; the adapter then cannot load the view and blocks without asking.
  */
 export class ConfirmViews {
-  private readonly views = new Map<string, { view: ConfirmView; expiresAt: number }>();
+  private readonly views = new Map<
+    string,
+    { view: ConfirmView; expiresAt: number; tokenHash: string | null }
+  >();
 
   constructor(private readonly max = MAX_CONFIRM_VIEWS) {}
 
-  /** Remembers the view of a hold until its token expires. */
-  put(view: ConfirmView, expiresAt: number): void {
+  /**
+   * Remembers the view of a hold until its token expires. `tokenHash` is set for a view
+   * with its own view-only token (a hold no one can resolve); otherwise the pending hold's
+   * token in the precedent store guards it.
+   */
+  put(view: ConfirmView, expiresAt: number, tokenHash: string | null = null): void {
     this.views.delete(view.event_id);
-    this.views.set(view.event_id, { view, expiresAt });
+    this.views.set(view.event_id, { view, expiresAt, tokenHash });
     for (const key of this.views.keys()) {
       if (this.views.size <= this.max) break;
       this.views.delete(key);
@@ -51,6 +65,19 @@ export class ConfirmViews {
     if (hit.expiresAt > now) return hit.view;
     this.views.delete(eventId);
     return null;
+  }
+
+  /**
+   * Checks `token` against a live view's own token (constant time). `none`: the view has
+   * no own token, or is unknown or expired; the pending hold's token decides instead.
+   */
+  checkOwn(eventId: string, token: string | undefined, now: number): OwnTokenCheck {
+    const view = this.get(eventId, now);
+    const hash = this.views.get(eventId)?.tokenHash ?? null;
+    if (view === null || hash === null) return { kind: "none" };
+    if (token === undefined || token === "") return { kind: "refused", why: "no-token" };
+    if (!sameHash(hash, hashHoldToken(token))) return { kind: "refused", why: "mismatch" };
+    return { kind: "ok", view };
   }
 
   /** Forgets the view of a resolved hold. */
@@ -75,10 +102,15 @@ const REFUSED: ReadonlySet<RedeemFailure> = new Set(["no-token", "mismatch"]);
  * as `Authorization: Bearer <token>` (a header, so it never lands in an access log).
  * Missing or wrong token → 403 plus an `anomaly` line (T8: the agent cannot read the
  * human's detail by curling the socket); a hold that is not pending (never held,
- * resolved, expired) → 404. Viewing does not spend the token; resolving does.
+ * resolved, expired) → 404. Viewing does not spend the token; resolving does. A view with
+ * its own view-only token (a Claude Code hold) is checked against that token instead.
  */
 export function handleConfirmView(rt: Runtime, eventId: string, authorization: string | null) {
-  const checked = rt.precedents.check(eventId, bearerToken(authorization));
+  const token = bearerToken(authorization);
+  const own = rt.confirmViews.checkOwn(eventId, token, rt.now());
+  if (own.kind === "ok") return { status: 200, body: own.view } satisfies Reply;
+  const checked: Redeemed =
+    own.kind === "refused" ? { ok: false, why: own.why } : rt.precedents.check(eventId, token);
   if (!checked.ok && REFUSED.has(checked.why)) {
     rt.audit.append({
       kind: "anomaly",
