@@ -66,16 +66,39 @@ Updated: 2026-09-29
   T2/T3 (daemon side), T6 audit flag, T7 scope/TTL, T12 chain live. 137 tests.
   Decisions D-047–D-053.
 
-**Totals:** 1412 tests + 9 todo, `bun run check` green, `bun run gate` PASS.
+- **M0 step 10 — Pi adapter** (`adapters/pi`): extension with 147 lines of logic, Node
+  built-ins only, zero policy; installer with the known-gaps list; 20 end-to-end tests
+  against a real `jevdictd` through a fake Pi runtime (block, headless deny, interactive
+  confirm, rewrite, fail closed, judge timeout, task-once, kill). **Real `pi` run
+  captured** (`docs/captures/pi-m0.md`): headless `git push --force origin main` blocked,
+  relative `rm -rf ./build` rewritten to the pinned absolute path and executed. Pi
+  verified at v0.87.1; 14 differences from the spec in `docs/adapters.md#pi`.
+  T2/T3/T8/T9 adapter side live. Decisions D-054–D-058.
+
+**Totals:** 1459 tests + 9 todo, `bun run check` green, `bun run gate` PASS.
+
+## M0 definition of done
+
+| Item (spec §Milestones) | Status |
+|---|---|
+| Canonical schema | done |
+| Normalizer with tree-sitter-bash | done |
+| Context engine with all five features | done |
+| SDK with `definePolicy` | done |
+| Three starter policies with fixtures | done (four) |
+| Pi adapter blocking and rewriting end to end | done, captured on real `pi` |
+| Gate: `jevdict test` | PASS (4 policies, 27 cases, 54 runs) |
 
 ## In progress
 
-- M0 step 10: Pi adapter (`adapters/pi`): blocking + rewriting end to end with a captured
-  run; `docs/adapters.md` Pi section from the v0.87.1 docs.
+- M0 gate review.
 
 ## Next
 
-- M0 gate review, then M1 (Claude Code hooks, `install`, `doctor`, config-tamper policy).
+- Daemon derives `env.git` (repo root, branch, default branch, dirty) from `call.cwd` when
+  the adapter sends none — Pi sends none today, so repo/branch are unknown (D-058).
+- M1: Claude Code HTTP + command hooks, hold→ask / hold→defer, `jevdict install
+  claude-code`, `jevdict doctor` with a canary, `config-tamper` policy live.
 
 ## Known gaps carried forward (from the normalizer report)
 

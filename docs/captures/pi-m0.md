@@ -11,10 +11,8 @@ redacted: `$W` is a fresh temp directory, `~` the home directory. Long ids are c
 | Daemon | `bun packages/daemon/src/main.ts --config $W/jevdict.toml --enforce`, judge off |
 | Mode | print + JSON event stream (`-p --mode json`): headless, `ctx.hasUI === false` |
 
-Two earlier attempts made no tool call and are not shown: the user's default model
-(LiteLLM) answered HTTP 500 upstream, and the Anthropic OAuth refresh token had expired.
-A first attempt also hung until stdin was closed: run `pi -p` with `< /dev/null` when
-stdin is a pipe.
+Earlier attempts that failed before any tool call (model provider errors) are not shown.
+One also hung until stdin was closed: run `pi -p` with `< /dev/null` when stdin is a pipe.
 
 ## 1. Block: `git push --force origin main`, headless → deny
 
