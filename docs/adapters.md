@@ -255,8 +255,10 @@ Canonical event built by the hook:
   the one shared with `POST /v1/hooks/claude-code`.
 - `mode`: `headless` when the parent `claude` runs with `-p`/`--print` (or a short-flag
   cluster with `p`) and no `--permission-prompt-tool` (or with `--permission-prompts none`);
-  in shell form the shell's parent is read. `/proc` on Linux, `ps` elsewhere, per call
-  (a few ms). An unreadable parent counts as headless.
+  in shell form up to three shells (`sh`, `bash`, `zsh`, `cmd`, `pwsh`, …) are unwrapped.
+  `/proc` on Linux, `ps` elsewhere, per call (a few ms). A parent that cannot be read, or
+  is not recognizably Claude Code (`claude`, `claude.exe`, or an interpreter running a
+  `claude-code` package), counts as headless.
 
 ### Verdict mapping
 
@@ -305,8 +307,10 @@ resolving (after `${CLAUDE_PROJECT_DIR}`, `PATH` and symlinks) to the running ex
 the same leading arguments (the script under `bun`, `hook` under the CLI), `--harness
 claude-code`, the same socket, no `if`, not `async`/`asyncRewake`, and a `timeout` absent
 or at least 14 s (`PreToolUse`) or 6 s (the rest), so the hook's own deadline comes first.
-Post events may instead use an HTTP handler to the daemon's loopback
-`/v1/hooks/claude-code`. And nothing switches it off: `disableAllHooks` in any file
+An HTTP post handler (`--transport http`, step 6) does not count: the hook cannot tell the
+daemon's loopback port from a decoy's, so such a change could blind the taint feed while
+looking intact (found in review); step 6 has to hand the daemon's URL to the hook first.
+And nothing switches it off: `disableAllHooks` in any file
 disables a non-managed install, `allowManagedHooksOnly` in managed settings does too, and
 managed `disableAllHooks` disables everything. A changed file that is not valid JSON is not
 intact. The check is over the files as they are on disk, so a change to project settings
@@ -347,7 +351,7 @@ From PLAN-M1 §2 (docs of 2026-09-29, Claude Code v2.1.285; "spec" is `docs/SPEC
 | 25 | Protected paths in Claude Code itself | T1 relies on jevdict | permission-modes#protected-paths: writes to `.git`, `.claude`, … "never auto-approved, except in `bypassPermissions` mode"; changelog 2.1.126: "`--dangerously-skip-permissions` now bypasses prompts for writes to `.claude/`". permission-modes#critical-paths: `rm` of critical paths "no allow rule or `PreToolUse` hook `"allow"` approves". | Claude Code prompts for config writes in normal modes; `config-tamper` is what stops them in `bypassPermissions` (where a hook deny still blocks). |
 | 26 | Auto mode is the default | — | permission-modes: "With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions"; `-p` starts in `default` "when nothing is configured". | Holds land in auto mode's prompt (row 23). `PostToolUse.classifierContext` (feed the classifier jevdict's risk) is noted for M3+. |
 | 27 | `updatedInput` without a decision | "map `rewrite` to `allow` plus `updatedInput`" | hooks#pretooluse-decision-control only says "Combine with `"allow"` to auto-approve, or `"ask"` to show the modified input to the user"; changelog 2.1.0 "Fixed PreToolUse hooks to allow `updatedInput` when returning `ask`" | Verified live (2.1.280): `updatedInput` alone replaces the input (the rewritten command ran) and permission checks apply to the new input. `rewrite` = `updatedInput` only; the plan's `ask` fallback is not needed. |
-| 28 | An `ask` without a human | Plan §2 row 10: "A wrong guess only turns `hold` into `ask`, which Claude Code itself denies without a host" | `permissionDecisionReason`: "For `"ask"`, shown to the user but not Claude" | Observed on 2.1.280: in `-p` with no permission host the ask is denied **and its reason becomes the tool result Claude reads**. An ask would leak the daemon's `detail` to the model, so the hook asks only when a human can answer, and an unreadable parent counts as headless (gap printed for launchers that hide `-p`). |
+| 28 | An `ask` without a human | Plan §2 row 10: "A wrong guess only turns `hold` into `ask`, which Claude Code itself denies without a host" | `permissionDecisionReason`: "For `"ask"`, shown to the user but not Claude" | Observed on 2.1.280: in `-p` with no permission host the ask is denied **and its reason becomes the tool result Claude reads**. An ask would leak the daemon's `detail` to the model, so the hook asks only when a human can answer, and a parent that is unreadable or not recognizably `claude` counts as headless (gap printed for launchers that hide `-p`). |
 | 29 | Exit 2 + JSON deny + `continue: false` | "Deny plus session terminated" | hooks#exit-code-2, #json-output | Verified live: blocked, Claude sees the JSON `permissionDecisionReason`, no further model call (`terminal_reason: "hook_stopped"`). |
 | 30 | Prompt block | — | UserPromptSubmit: `decision: "block"` "prevents the prompt from being processed and erases it from context"; `reason` "Shown to the user … Not added to context"; exit 2 "routes the same way" | Verified live: exit 2 + JSON block → no model call; the user sees `UserPromptSubmit operation blocked by hook: <reason>`. |
 | 31 | Exec form parent | — | hooks#exec-form-and-shell-form: "spawned directly with `args`" | Verified live: the hook's parent is `claude` itself (`ps` shows `claude -p …`), so the argv heuristic of row 10 reads one process. |
@@ -402,9 +406,10 @@ These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`; 
 - **Another hook's `updatedInput` races jevdict's rewrite** (the last to finish wins).
 - **The ask dialog also shows the tool input as Claude sent it**, including its
   `description`, next to jevdict's reason, command and detail.
-- **Headless comes from the parent argv.** A launcher that hides `-p` is taken for
-  interactive: a hold becomes an ask, which a host-less run denies and shows to Claude
-  (row 28). An unreadable parent counts as headless.
+- **Headless comes from the parent argv.** A parent that cannot be read or is not
+  recognizably `claude` counts as headless (holds denied); a launcher running `claude`
+  without `-p` and with no human is taken for interactive, and a hold then becomes an ask
+  that a host-less run denies and shows to Claude (row 28).
 - **Reads and bookkeeping tools fail open** when the daemon is unreachable (warning and a
   line in `~/.jevdict/claude-code-hook.log`); every other tool, MCP included, is blocked.
 - **No `env.git` from the hook.** The daemon derives it from a repository the agent can
