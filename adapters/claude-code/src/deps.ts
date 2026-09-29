@@ -45,6 +45,15 @@ export function deadlinesFrom(env: Readonly<Record<string, string | undefined>>)
   };
 }
 
+/**
+ * `d` after `ms` were already spent in this run (reading stdin): the run-wide deadlines
+ * shrink, at least 1 ms each, so the whole process stays under Claude Code's timeout.
+ */
+export function spend(d: Deadlines, ms: number): Deadlines {
+  const left = (limit: number) => Math.max(1, Math.floor(limit - Math.max(0, ms)));
+  return { judgeMs: left(d.judgeMs), eventMs: left(d.eventMs), requestMs: d.requestMs };
+}
+
 /** Everything {@link runHook} reads beyond its stdin. */
 export interface HookDeps {
   readonly client: DaemonClient;

@@ -9,7 +9,7 @@ import { writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { parseHookArgs } from "./args.ts";
 import { createClient } from "./client.ts";
-import { deadlinesFrom, type HookDeps } from "./deps.ts";
+import { deadlinesFrom, type HookDeps, spend } from "./deps.ts";
 import { runHook, withDeadline } from "./hook.ts";
 import { checkIntact, type IntactCheck } from "./intact.ts";
 import { appendHookLog, type HookLogLine, hookLogPath } from "./log.ts";
@@ -164,15 +164,15 @@ async function outcome(argv: readonly string[], self: HookSelf, port: HookPort) 
   const args = parseHookArgs(argv, port.home);
   if (!args.ok) return failClosed(`jevdict hook: ${args.error}; blocking (fail closed)`);
   const deps = depsFor(args.socket, self, port);
-  const stdin = await withDeadline<string | null>(
-    port.readStdin(),
-    deps.deadlines.judgeMs,
-    () => null,
-  );
+  const started = performance.now();
+  const read = port.readStdin();
+  const stdin = await withDeadline<string | null>(read, deps.deadlines.requestMs, () => null);
   if (stdin === null) {
     return failClosed("unreadable hook payload (stdin not closed); blocking (fail closed)");
   }
-  return runHook(stdin, deps);
+  // Reading stdin counts toward the run's deadline (13 s PreToolUse, 5 s otherwise).
+  const deadlines = spend(deps.deadlines, performance.now() - started);
+  return runHook(stdin, { ...deps, deadlines });
 }
 
 /**
