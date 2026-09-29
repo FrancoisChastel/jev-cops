@@ -242,6 +242,14 @@ describe("binding", () => {
     ).rejects.toThrow(/non-loopback/);
   });
 
+  test("a socket path too long for sun_path is refused, not silently truncated", async () => {
+    td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    const long = `${td.dir}/${"x".repeat(120)}.sock`;
+    await expect(listen(td.daemon.runtime, { socket: long, http: null })).rejects.toThrow(
+      /socket path is \d+ bytes/,
+    );
+  });
+
   test("a second daemon on a live socket refuses to start", async () => {
     td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     const rt = await createRuntime(

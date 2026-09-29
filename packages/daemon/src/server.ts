@@ -16,6 +16,8 @@ import { handleJudge, handleObserve, type Reply } from "./service.ts";
 export const MAX_BODY_BYTES = 1_048_576;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const DRAIN_MS = 2_000;
+/** `sun_path` holds 104 bytes on macOS (108 on Linux) including the NUL; stay under both. */
+export const MAX_SOCKET_PATH_BYTES = 103;
 
 /** Throws unless `host` is a loopback address (T13: never reachable off the host). */
 export function assertLoopback(host: string): void {
@@ -142,8 +144,18 @@ async function socketInUse(path: string): Promise<boolean> {
   }
 }
 
-/** Creates the socket's directory (0700) and removes a stale socket; throws if live. */
+/**
+ * Creates the socket's directory (0700) and removes a stale socket; throws if one is
+ * live, or if the path is too long for `sun_path` (the bind would silently truncate it
+ * and the adapter could never connect).
+ */
 async function prepareSocket(path: string): Promise<void> {
+  const bytes = Buffer.byteLength(path);
+  if (bytes > MAX_SOCKET_PATH_BYTES) {
+    throw new Error(
+      `socket path is ${bytes} bytes; the limit is ${MAX_SOCKET_PATH_BYTES}: ${path}`,
+    );
+  }
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   if (!existsSync(path)) return;
   if (await socketInUse(path)) throw new Error(`jevdictd is already running on ${path}`);
