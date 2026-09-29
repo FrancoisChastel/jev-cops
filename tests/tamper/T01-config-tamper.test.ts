@@ -7,11 +7,17 @@
  * Status: live on the daemon side (M1 step 3): a Claude Code config change reported with a
  * broken jevdict hook block latches the session killed, and so does any `kill` verdict; every
  * later call of the session or its subagents is `kill`, its prompts are reported killed, and
- * only the admin socket clears the latch. Todo: the `config-tamper` policy (M1 step 2), the
- * Claude Code `ConfigChange` hook itself (M1 step 5), OpenShell read-only mounts (M2).
+ * only the admin socket clears the latch. Live on Claude Code (M1 steps 2, 4–5, fake Claude
+ * Code + the real hook + the repo policies): a Write to `.claude/settings.json` is `kill`
+ * (`config-tamper`), the hook exits 2 with `continue: false`, and every later call and prompt
+ * of the session is blocked; the `ConfigChange` hook blocks a settings change that drops the
+ * jevdict hook and the session is latched. Todo: OpenShell read-only mounts (M2).
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { VerdictResponse } from "@jevdict/core";
+import { jevdictSettings } from "../../adapters/claude-code/testing/setup.ts";
 import {
   startTestDaemon,
   type TestDaemon,
@@ -20,6 +26,7 @@ import {
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { sessionReport } from "../../packages/daemon/src/testing/session.ts";
 import { buildEvent, CTX_SESSION, type EventShape } from "../fixtures/context/index.ts";
+import { claudeCode, claudeWorkspace } from "./claude-code.ts";
 import { pending } from "./pending.ts";
 
 const REQUIRED_OUTCOME =
@@ -63,13 +70,48 @@ async function configChange(t: TestDaemon, fields: Record<string, unknown>) {
   return res.body as { ok: boolean; task: string | null; killed: boolean };
 }
 
+const REPO_POLICIES = join(import.meta.dir, "..", "..", "policies");
+
 describe("T1 config tampering", () => {
-  test.todo(
-    REQUIRED_OUTCOME,
-    pending(
-      "M1 step 2 (config-tamper policy), M1 step 5 (Claude Code ConfigChange hook); M2 (OpenShell read-only mounts)",
-    ),
-  );
+  test("Claude Code: a Write to settings.json is `kill`: blocked, turn ended, the session stays ended", async () => {
+    const t = (td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES }));
+    const ws = claudeWorkspace();
+    try {
+      const c = claudeCode(t.config.daemon.socket, ws);
+      await c.prompt("Fix the flaky test in auth/");
+      const write = { file_path: join(ws.cwd, ".claude", "settings.json"), content: "{}" };
+      const kill = await c.tool("Write", write);
+      expect(kill.decision).toMatchObject({ outcome: "deny", stop: true });
+      expect(c.turnEnded).toBe(true);
+      expect((await c.tool("Bash", { command: "ls" })).result).toBe(
+        "jevdict: session terminated by jevdict",
+      );
+      expect((await c.prompt("carry on")).blocked).toBe(true);
+    } finally {
+      ws.dispose();
+    }
+  });
+
+  test("Claude Code: the ConfigChange hook fires, blocks a change that drops the jevdict hook, and latches the session", async () => {
+    const t = (td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES }));
+    const ws = claudeWorkspace();
+    try {
+      const settings = join(ws.cwd, ".claude", "settings.json");
+      mkdirSync(join(ws.cwd, ".claude"));
+      writeFileSync(settings, JSON.stringify(jevdictSettings(t.config.daemon.socket)));
+      const c = claudeCode(t.config.daemon.socket, ws);
+      expect((await c.configChange("project_settings", settings)).blocked).toBe(false);
+      writeFileSync(settings, JSON.stringify({ disableAllHooks: true }));
+      expect((await c.configChange("project_settings", settings)).blocked).toBe(true);
+      expect((await c.tool("Bash", { command: "ls" })).result).toBe(
+        "jevdict: session terminated by jevdict",
+      );
+    } finally {
+      ws.dispose();
+    }
+  });
+
+  test.todo(`OpenShell: ${REQUIRED_OUTCOME}`, pending("M2 (OpenShell read-only mounts)"));
 });
 
 describe("T1 Claude Code, daemon side: tampering terminates the session", () => {

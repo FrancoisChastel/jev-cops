@@ -7,10 +7,14 @@
  * Status: live (daemon side): an internal failure answers non-200 with an `anomaly` audit
  * line, never a verdict, so the adapter's "non-200 = unreachable" rule applies; a socket
  * nobody listens on refuses connections. Live (Pi adapter): with the daemon stopped, exec,
- * write and unknown tools are blocked; read-only tools continue and warn locally. The
- * Claude Code adapter's fail-closed hook is M1.
+ * write and unknown tools are blocked; read-only tools continue and warn locally. Live
+ * (Claude Code hook, M1): the command hook, run as a subprocess by the fake Claude Code,
+ * exits 2 for exec, write and MCP calls; reads proceed with a warning and a line in
+ * `~/.jevdict/claude-code-hook.log`.
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { register } from "../../adapters/pi/jevdict.ts";
 import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import {
@@ -20,7 +24,7 @@ import {
 } from "../../packages/daemon/src/testing/daemon.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { buildEvent } from "../fixtures/context/index.ts";
-import { pending } from "./pending.ts";
+import { claudeCode, claudeWorkspace } from "./claude-code.ts";
 
 const REQUIRED_OUTCOME =
   "Adapter fails closed for any event a `deny`-class policy could match; observe-only events log locally and continue";
@@ -77,5 +81,29 @@ describe("T2 daemon killed or unreachable", () => {
     expect(ctx.log.notes.map((n) => n.message).join("\n")).toContain("observe-only, fail open");
   });
 
-  test.todo(`Claude Code: ${REQUIRED_OUTCOME}`, pending("M1 (Claude Code hooks)"));
+  test(`Claude Code: ${REQUIRED_OUTCOME}`, async () => {
+    td = await startTestDaemon({ policies: { "deny.ts": policyModule("deny", 1, "deny") } });
+    const socket = td.config.daemon.socket;
+    await td.daemon.stop();
+    const ws = claudeWorkspace();
+    try {
+      const c = claudeCode(socket, ws);
+      for (const [tool, input] of [
+        ["Bash", { command: "rm -rf /srv/x" }],
+        ["Write", { file_path: join(ws.cwd, "a.ts"), content: "x" }],
+        ["mcp__deploy__run", { target: "/srv/x" }],
+      ] as const) {
+        const call = await c.tool(tool, input);
+        expect(call.decision.outcome).toBe("deny");
+        expect(call.result).toContain("fail closed");
+      }
+      const read = await c.tool("Read", { file_path: join(ws.cwd, "README.md") }, "# readme");
+      expect(read.ran).not.toBeNull();
+      const log = readFileSync(join(ws.home, ".jevdict", "claude-code-hook.log"), "utf8");
+      expect(log).toContain("Read: judge unreachable");
+      expect(log).toContain("read-only Read allowed (fail open)");
+    } finally {
+      ws.dispose();
+    }
+  });
 });

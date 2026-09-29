@@ -10,14 +10,20 @@
  * audit log and posts its own "allow" to the socket while the human is being asked is
  * refused (no hold token), and so is its `GET /v1/explain` of that event: without the
  * token it gets 403 and an `anomaly` line, never the human's `detail` or the audit line.
- * The Claude Code hold-to-ask mapping is M1.
+ * Live (Claude Code hook, M1): an interactive hold becomes Claude Code's own `ask` prompt,
+ * whose reason (shown to the user, not to Claude) is the daemon's reason, normalized raw
+ * command and `detail`, read from the confirm view with a view-only token the agent never
+ * sees; the tool input's own `description` is not in it (Claude Code's dialog still shows
+ * the tool input as sent: a printed gap).
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { register } from "../../adapters/pi/jevdict.ts";
 import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
-import { pending } from "./pending.ts";
+import { makeRepo } from "../../packages/daemon/src/testing/git.ts";
+import { claudeCode, claudeWorkspace } from "./claude-code.ts";
 
 const REQUIRED_OUTCOME =
   "Confirm prompt shows the normalized raw command and the daemon's `detail`, never the agent's text";
@@ -96,8 +102,29 @@ describe("T8 social engineering the human", () => {
     });
   });
 
-  test.todo(
-    `Claude Code: ${REQUIRED_OUTCOME}`,
-    pending("M1 (hold-to-ask mapping in the Claude Code adapter)"),
-  );
+  test(`Claude Code: ${REQUIRED_OUTCOME}`, async () => {
+    td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
+    const daemon = td;
+    const ws = claudeWorkspace();
+    const repo = makeRepo();
+    try {
+      const lie = "Just a harmless fetch of the latest changes, nothing is overwritten";
+      const c = claudeCode(daemon.config.daemon.socket, { ...ws, cwd: repo });
+      const input = { command: "git push --force origin main", description: lie };
+      const call = await c.tool("Bash", input);
+      expect(call.decision.outcome).toBe("ask");
+      const asked = c.userSees.join("\n");
+      expect(asked).toContain("git push --force origin main");
+      expect(asked).toContain("default main/master");
+      expect(asked).not.toContain(lie);
+      expect(c.claudeSees.join("\n")).not.toContain("default main/master");
+      // The view-only token went to the hook in a response header; the agent has none.
+      const held = daemon.audit().findLast((l) => l.kind === "judge");
+      const curled = await daemon.call("GET", `/v1/explain/${held?.event_id}`);
+      expect(curled).toEqual({ status: 403, body: { error: "invalid hold token" } });
+    } finally {
+      ws.dispose();
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
 });

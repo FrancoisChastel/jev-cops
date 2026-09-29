@@ -7,15 +7,17 @@
  *
  * Status: live (core) for "unpinnable dynamic constructs are opaque exec"; live (Pi
  * adapter) for pinning: a `rewrite` carrying the resolved absolute path replaces the input
- * Pi runs, in place (Pi's contract; it has no `updatedInput`). Claude Code's
- * `updatedInput` mapping is M1.
+ * Pi runs, in place (Pi's contract; it has no `updatedInput`). Live (Claude Code hook,
+ * M1): the hook returns the pinned input as `updatedInput` with no permission decision, so
+ * Claude Code runs it through its normal permission flow (verified on a real claude
+ * 2.1.280: the rewritten command ran, and permission rules applied to it).
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { register } from "../../adapters/pi/jevdict.ts";
 import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { bashPre } from "../fixtures/context/index.ts";
-import { pending } from "./pending.ts";
+import { claudeCode, claudeWorkspace } from "./claude-code.ts";
 
 /** A rewrite policy that pins every resolved path of a relative `rm` (test-only). */
 const PIN = `export default {
@@ -66,8 +68,17 @@ describe("T9 TOCTOU: what cannot be pinned is opaque", () => {
     expect(run.input).toEqual({ command: `rm -rf -- ${td.dir}/dist /home/dev/tmp` });
   });
 
-  test.todo(
-    "Claude Code: rewrite pins resolved absolute paths and expanded args via updatedInput",
-    pending("M1 (Claude Code hooks)"),
-  );
+  test("Claude Code: rewrite pins resolved absolute paths and expanded args via updatedInput", async () => {
+    td = await startTestDaemon({ policies: { "pin.ts": PIN } });
+    const ws = claudeWorkspace();
+    try {
+      const c = claudeCode(td.config.daemon.socket, ws);
+      const call = await c.tool("Bash", { command: "rm -rf ./build/../dist ~/tmp" });
+      const pinned = { command: `rm -rf -- ${ws.cwd}/dist /home/dev/tmp` };
+      expect(call.decision).toMatchObject({ outcome: "proceed", updatedInput: pinned });
+      expect(call.ran).toEqual(pinned);
+    } finally {
+      ws.dispose();
+    }
+  });
 });

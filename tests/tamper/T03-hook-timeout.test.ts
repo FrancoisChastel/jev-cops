@@ -6,7 +6,10 @@
  *
  * Status: live (daemon side): a judge that sleeps 15 s gets `504 { error: "judge timeout" }`
  * at the per-request deadline, never a verdict. Live (Pi adapter): the 504 blocks the call
- * with reason "judge timeout". The Claude Code hook's mapping is M1.
+ * with reason "judge timeout". Live (Claude Code hook, M1): the hook owns its deadline
+ * (13 s, below the 30 s settings timeout, because Claude Code lets a timed-out hook's call
+ * proceed); past it the hook exits 2 with "judge timeout" (shortened here with
+ * `JEVDICT_HOOK_DEADLINE_MS`).
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { createMockJudge } from "@jevdict/core";
@@ -19,7 +22,7 @@ import {
 } from "../../packages/daemon/src/testing/daemon.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { buildEvent } from "../fixtures/context/index.ts";
-import { pending } from "./pending.ts";
+import { claudeCode, claudeWorkspace } from "./claude-code.ts";
 
 const REQUIRED_OUTCOME =
   'Adapter returns `deny` with reason "judge timeout", never allow-by-timeout';
@@ -78,5 +81,29 @@ describe("T3 hook timeout", () => {
     expect(run.blocked?.reason).toContain("judge timeout");
   });
 
-  test.todo(`Claude Code: ${REQUIRED_OUTCOME}`, pending("M1 (Claude Code hooks)"));
+  test(`Claude Code: ${REQUIRED_OUTCOME}`, async () => {
+    td = await startTestDaemon({
+      policies: { "asks.ts": ASKS },
+      judge: createMockJudge(
+        { "asks/ok": { kind: "noul", p: 1, confidence: 1 } },
+        { delayMs: 15_000 },
+      ),
+      deadlineMs: 20_000,
+      judgeTimeoutMs: 20_000,
+      policy: { ask: { min: 0 } },
+    });
+    const ws = claudeWorkspace();
+    try {
+      const deadline = { JEVDICT_HOOK_DEADLINE_MS: "300" };
+      const c = claudeCode(td.config.daemon.socket, ws, {}, deadline);
+      const started = performance.now();
+      const call = await c.tool("Bash", { command: "ls" });
+      expect(performance.now() - started).toBeLessThan(3_000);
+      expect(call.decision.outcome).toBe("deny");
+      expect(call.result).toBe("jevdict: judge timeout; blocking (fail closed)");
+      expect(call.ran).toBeNull();
+    } finally {
+      ws.dispose();
+    }
+  });
 });
