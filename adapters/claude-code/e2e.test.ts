@@ -127,7 +127,8 @@ describe("Claude Code hook end to end: repo policies, enforce", () => {
     const c = await started();
     await c.tool("Grep", { pattern: "TODO", path: work }, "", { agentId: "agent-7" });
     const sub = td.audit().find((l) => l.session_id === `sess_${c.sessionId}.agent-7`);
-    const event = (sub?.payload as { event: { session: unknown; actor: unknown } }).event;
+    if (sub === undefined) throw new Error("no audit line for the subagent session");
+    const event = (sub.payload as { event: { session: unknown; actor: unknown } }).event;
     expect(event.session).toMatchObject({ parent_id: `sess_${c.sessionId}` });
     expect(event.actor).toEqual({ kind: "subagent" });
   });
