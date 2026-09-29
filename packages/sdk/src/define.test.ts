@@ -111,3 +111,13 @@ describe("definePolicy", () => {
     expect(p.name).toBe("typed");
   });
 });
+
+describe("the SDK entry point", () => {
+  test("exports what policy authors need and never the bun:test adapter", async () => {
+    const sdk = await import("./index.ts");
+    expect(Object.keys(sdk).sort()).toEqual(
+      expect.arrayContaining(["definePolicy", "jev", "runFixtures", "parseFixtures", "VERDICTS"]),
+    );
+    expect(Object.keys(sdk)).not.toContain("describeFixtures");
+  });
+});
