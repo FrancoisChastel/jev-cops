@@ -9,7 +9,7 @@ The same `git push --force` is allowed on a feature branch the user asked about,
 on the default branch, and denied in a headless session. What changes is the context,
 not the command string.
 
-> **Status: M0 complete, gate-review fixes in progress.** Core, policy engine, SDK,
+> **Status: M0 complete and gate-reviewed.** Core, policy engine, SDK,
 > starter policies, judge providers, daemon, CLI and the **Pi adapter** are built and
 > tested; a real `pi` run blocks and rewrites tool calls end to end
 > ([capture](docs/captures/pi-m0.md)). Claude Code, Codex and OpenCode adapters come in
@@ -48,7 +48,7 @@ Requires [Bun](https://bun.sh) ≥ 1.3. Node is not a supported runtime.
 ```bash
 git clone https://github.com/FrancoisChastel/jevdict && cd jevdict
 bun install
-bun run check          # lint + typecheck + 1400 tests
+bun run check          # lint + typecheck + 1600 tests
 bun run gate           # jevdict test: every starter policy against its fixtures
 bun run build          # dist/jevdictd and dist/jevdict, WASM grammar embedded
 ```

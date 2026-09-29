@@ -75,7 +75,9 @@ Updated: 2026-09-29
   verified at v0.87.1; 14 differences from the spec in `docs/adapters.md#pi`.
   T2/T3/T8/T9 adapter side live. Decisions D-054–D-058.
 
-**Totals:** 1459 tests + 9 todo, `bun run check` green, `bun run gate` PASS.
+**Totals (after gate-review fixes):** 1637 tests + 10 todo, `bun run check` green,
+coverage 98.4 % functions / 99.0 % lines (gate: 80 % per file), `bun run gate` PASS
+(5 policies, 42 cases, 84 runs).
 
 ## M0 definition of done
 
@@ -85,7 +87,7 @@ Updated: 2026-09-29
 | Normalizer with tree-sitter-bash | done |
 | Context engine with all five features | done |
 | SDK with `definePolicy` | done |
-| Three starter policies with fixtures | done (four) |
+| Three starter policies with fixtures | done (five, incl. `opaque-exec`) |
 | Pi adapter blocking and rewriting end to end | done, captured on real `pi` |
 | Gate: `jevdict test` | PASS (4 policies, 27 cases, 54 runs) |
 
@@ -97,15 +99,28 @@ clone → check → gate → build all green. Fixes before M1:
 
 | # | Sev | Finding | Status |
 |---|---|---|---|
-| H1 | high | `/v1/resolve` and `/v1/budget/reset` are reachable from the agent's socket: an agent talking to the socket directly can self-approve a hold or reset its budget (T7/T8) | in progress |
-| M2 | medium | Obfuscated exec (`curl \| sh`, `python -c`, `eval`, `env -S`) is flagged opaque but ends `allow`: no floor weight and no `opaque-exec` policy yet | in progress |
-| M3 | medium | `env -S '<cmd>'` launders the verb and target (payload read as one word); `tar --to-command`, `ssh host '<cmd>'` hide the inner command | in progress |
-| L4 | low | CI runs `bun test --coverage` but `bunfig.toml` sets `coverage = false`: the 80 % threshold is never evaluated | in progress |
+| H1 | high | `/v1/resolve` and `/v1/budget/reset` are reachable from the agent's socket: an agent talking to the socket directly can self-approve a hold or reset its budget (T7/T8) | fixed: hold tokens (D-059), admin socket (D-060); verified with the reviewer's curl attack against the compiled daemon |
+| M2 | medium | Obfuscated exec (`curl \| sh`, `python -c`, `eval`, `env -S`) is flagged opaque but ends `allow`: no floor weight and no `opaque-exec` policy yet | fixed: `opaque-exec` policy + `net-pipe` (D-062, D-063); `curl \| sh` → hold, `python -c` → annotate; T5 live end to end |
+| M3 | medium | `env -S '<cmd>'` launders the verb and target (payload read as one word); `tar --to-command`, `ssh host '<cmd>'` hide the inner command | fixed: carriers parsed as shell, `dynamic-command` safety net (D-061, D-062) |
+| L4 | low | CI runs `bun test --coverage` but `bunfig.toml` sets `coverage = false`: the 80 % threshold is never evaluated | fixed: per-file 80 % gate enforced; 98.4 % functions / 99.0 % lines (D-064) |
 | L5 | low | README status stale | fixed |
 | L6 | note | Audit chain is unkeyed SHA-256 from a public genesis: locally it detects mid-file edits/deletions, not truncation of the tail or a full rewrite. The real control is off-box shipping (M2); do not rely on local verification alone | documented (below) |
 
 ## Next
 
+- **`/v1/explain` on the agent socket returns the full audit line** (`detail`, trace,
+  taint evidence), so an agent that curls the socket reads what only the human should
+  see, and the verdict response's `features`/`jev` are an oracle for tuning judge
+  injection (T6). Proposed: on the agent socket serve only a minimal T8 view (`raw`,
+  `detail`, `reason`) of a *pending* hold and only with its `hold_token`; full explain on
+  the admin socket only; decide whether harness responses keep `features`/`jev` (the spec
+  includes them — owner decision).
+- Self-minted holds: an agent that posts its own `/v1/judge` gets that hold's token and a
+  precedent matching its later real call; only OpenShell (keeping tool processes off the
+  socket) closes it — T07 todo for M2.
+- Carriers not yet parsed: `watch`, `script -c`, `tmux`/`screen` command strings, `flock`,
+  `chroot`, `nsenter`, `sudo -s`, `vim -c '!…'`, `parallel`; T5 "exec of a freshly written
+  file is judged on its content" uses the write's taint, not its content.
 - Daemon derives `env.git` (repo root, branch, default branch, dirty) from `call.cwd` when
   the adapter sends none — Pi sends none today, so repo/branch are unknown (D-058).
 - M1: Claude Code HTTP + command hooks, hold→ask / hold→defer, `jevdict install
