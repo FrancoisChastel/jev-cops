@@ -39,6 +39,8 @@ export interface Judged {
 export interface ConfirmView {
   readonly raw: string;
   readonly detail: string | null;
+  /** The held event, for `jevdict explain` (the full decision); null when the view omits it. */
+  readonly eventId?: string | null;
 }
 
 /** Who could answer a prompt: the session mode and the call's permission mode. */
@@ -68,13 +70,19 @@ export function humanCanAnswer(a: Audience): boolean {
   return KNOWN_MODES.has(a.permissionMode) && !NO_HUMAN_MODES.has(a.permissionMode);
 }
 
-/** The text of an `ask` prompt: shown to the user, not to Claude (hooks#pretooluse-decision-control). */
+/**
+ * The text of an `ask` prompt, shown to the user and not to Claude
+ * (hooks#pretooluse-decision-control): the reason, the daemon's normalized command, its
+ * detail, and where to read the full decision. Never the tool input's own prose (T8).
+ */
 export function askText(reason: string, view: ConfirmView): string {
   const command = `Command, as jevdict normalized it:\n${view.raw}`;
+  const explain = view.eventId ? [`Full decision: jevdict explain ${view.eventId}`] : [];
   const parts = [
     `jevdict hold: ${reason}`,
     command,
     ...(view.detail === null ? [] : [view.detail]),
+    ...explain,
   ];
   return parts.join("\n\n");
 }

@@ -60,11 +60,12 @@ describe("parseView: the T8 confirm view", () => {
     ).toEqual({
       raw: "ls",
       detail: "d",
+      eventId: ID,
     });
   });
 
   test("a view without detail keeps the raw command", () => {
-    expect(parseView({ raw: "ls" })).toEqual({ raw: "ls", detail: null });
+    expect(parseView({ raw: "ls" })).toEqual({ raw: "ls", detail: null, eventId: null });
   });
 
   test.each([[null], [{}], [{ raw: 3 }], ["ls"]])("%p → null", (body) => {

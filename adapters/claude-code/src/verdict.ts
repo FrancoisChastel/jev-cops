@@ -29,8 +29,10 @@ export function parseJudged(body: unknown, eventId: string): Judged | null {
   return { verdict: verdict as Verdict, reason: body.reason, note, input };
 }
 
-/** The daemon's normalized raw command and detail from a confirm view, or null. */
+/** The daemon's normalized raw command, detail and event id from a confirm view, or null. */
 export function parseView(body: unknown): ConfirmView | null {
   if (!isRecord(body) || typeof body.raw !== "string") return null;
-  return { raw: body.raw, detail: typeof body.detail === "string" ? body.detail : null };
+  const detail = typeof body.detail === "string" ? body.detail : null;
+  const eventId = typeof body.event_id === "string" ? body.event_id : null;
+  return { raw: body.raw, detail, eventId };
 }

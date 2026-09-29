@@ -213,6 +213,9 @@ describe("askText", () => {
     expect(askText("Irreversible.", { raw: "ls", detail: null })).toBe(
       "jevdict hold: Irreversible.\n\nCommand, as jevdict normalized it:\nls",
     );
+    expect(askText("Irreversible.", { raw: "ls", detail: "d", eventId: "evt_X" })).toBe(
+      "jevdict hold: Irreversible.\n\nCommand, as jevdict normalized it:\nls\n\nd\n\nFull decision: jevdict explain evt_X",
+    );
   });
 });
 
