@@ -1,0 +1,24 @@
+{
+  "name": "@jevdict/cli",
+  "version": "0.0.0",
+  "description": "jevdict: the Jevdict command line (test, explain, replay, budget)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "jevdict": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@jevdict/core": "workspace:*",
+    "@jevdict/daemon": "workspace:*",
+    "@jevdict/sdk": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

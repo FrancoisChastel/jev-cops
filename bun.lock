@@ -10,6 +10,19 @@
         "typescript": "^5.9.0",
       },
     },
+    "packages/cli": {
+      "name": "@jevdict/cli",
+      "version": "0.0.0",
+      "bin": {
+        "jevdict": "./src/main.ts",
+      },
+      "dependencies": {
+        "@jevdict/core": "workspace:*",
+        "@jevdict/daemon": "workspace:*",
+        "@jevdict/sdk": "workspace:*",
+        "zod": "^4.6.5",
+      },
+    },
     "packages/core": {
       "name": "@jevdict/core",
       "version": "0.0.0",
@@ -17,6 +30,18 @@
         "tree-sitter-bash": "0.25.1",
         "ulid": "^3.0.2",
         "web-tree-sitter": "0.27.0",
+        "zod": "^4.6.5",
+      },
+    },
+    "packages/daemon": {
+      "name": "@jevdict/daemon",
+      "version": "0.0.0",
+      "bin": {
+        "jevdictd": "./src/main.ts",
+      },
+      "dependencies": {
+        "@jevdict/core": "workspace:*",
+        "@jevdict/judge": "workspace:*",
         "zod": "^4.6.5",
       },
     },
@@ -64,7 +89,11 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.14", "", { "os": "win32", "cpu": "x64" }, "sha512-oJWmBhoHsnhUKIke+0gXDX0mltJrWHA1UyHsrTlXwX0TL64ilVZAo+TYZm97baecV0esBdpzy3k96q+09JaZUQ=="],
 
+    "@jevdict/cli": ["@jevdict/cli@workspace:packages/cli"],
+
     "@jevdict/core": ["@jevdict/core@workspace:packages/core"],
+
+    "@jevdict/daemon": ["@jevdict/daemon@workspace:packages/daemon"],
 
     "@jevdict/judge": ["@jevdict/judge@workspace:packages/judge"],
 

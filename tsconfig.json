@@ -22,7 +22,9 @@
       "@jevdict/core/*": ["./packages/core/src/*"],
       "@jevdict/sdk": ["./packages/sdk/src/index.ts"],
       "@jevdict/sdk/*": ["./packages/sdk/src/*"],
-      "@jevdict/judge": ["./packages/judge/src/index.ts"]
+      "@jevdict/judge": ["./packages/judge/src/index.ts"],
+      "@jevdict/daemon": ["./packages/daemon/src/index.ts"],
+      "@jevdict/cli": ["./packages/cli/src/index.ts"]
     }
   },
   "include": ["packages/**/*.ts", "adapters/**/*.ts", "policies/**/*.ts", "tests/**/*.ts"],

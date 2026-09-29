@@ -1,0 +1,295 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import {
+  type ContextConfigInput,
+  deepFreeze,
+  err,
+  mergeConfig,
+  ok,
+  type PolicyConfigInput,
+  type Result,
+} from "@jevdict/core";
+import { z } from "zod";
+import {
+  coreShapeProblems,
+  getIn,
+  isTable,
+  setIn,
+  type Table,
+  tightenOnly,
+} from "./config-rules.ts";
+
+/** `observe`: log every verdict, return `allow` (spec M4 observe-only). `enforce`: return as is. */
+export type EnforcementMode = "observe" | "enforce";
+/** Semantic judge providers the daemon can build from config (D-004). */
+export const JUDGE_PROVIDERS = ["off", "mock", "jev", "openrouter", "vercel-ai"] as const;
+export type JudgeProviderName = (typeof JUDGE_PROVIDERS)[number];
+
+/** A loopback HTTP bind; port 0 picks a free port. */
+export interface HttpBind {
+  readonly host: string;
+  readonly port: number;
+}
+
+/** Where every audit line is also copied (M2 ships syslog; only `file` is implemented). */
+export interface AuditForward {
+  readonly kind: "syslog" | "file";
+  readonly target: string;
+}
+
+/** The resolved `jevdict.toml`: absolute paths, camelCase, defaults filled in. */
+export interface DaemonConfig {
+  readonly daemon: {
+    readonly socket: string;
+    /** Null: no HTTP listener (the default). */
+    readonly http: HttpBind | null;
+    /** `~`/`$HOME` for event normalization (D-003). */
+    readonly home: string;
+    /** Past this a `/v1/judge` request answers 504 (T3); above the judge timeout. */
+    readonly judgeDeadlineMs: number;
+  };
+  readonly policies: { readonly dir: string };
+  readonly judge: {
+    readonly provider: JudgeProviderName;
+    readonly model: string | null;
+    readonly timeoutMs: number;
+    readonly cacheTtlMs: number;
+  };
+  readonly context: ContextConfigInput;
+  readonly policy: PolicyConfigInput;
+  readonly audit: { readonly path: string; readonly forward: AuditForward | null };
+  readonly store: { readonly path: string };
+  readonly enforcement: { readonly mode: EnforcementMode };
+}
+
+/** Thrown for unreadable, unparseable or invalid config; the message names the file. */
+export class ConfigError extends Error {
+  override readonly name = "ConfigError";
+}
+
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
+const MAX_PORT = 65_535;
+
+/**
+ * Parses `host:port` (IPv6 as `[::1]:port`) and accepts loopback hosts only, so the
+ * HTTP listener can never be reached from another machine or the sandbox network (T13).
+ */
+export function parseHttpBind(text: string): Result<HttpBind, string> {
+  const match = /^(?:\[([^\]]+)\]|([^:]+)):(\d+)$/.exec(text.trim());
+  if (match === null) return err(`http must be "host:port", got "${text}"`);
+  const host = match[1] ?? match[2] ?? "";
+  const port = Number(match[3]);
+  if (!LOOPBACK.has(host)) return err(`http must bind a loopback address, got "${host}"`);
+  if (!Number.isInteger(port) || port > MAX_PORT) return err(`invalid port in "${text}"`);
+  return ok({ host, port });
+}
+
+const text = z.string().min(1);
+const table = z.custom<Table>(isTable, { error: "expected a table" });
+
+/** One `jevdict.toml` file. Strict: an unknown key is an error, never ignored. */
+const fileSchema = z.strictObject({
+  daemon: z
+    .strictObject({
+      socket: text.optional(),
+      http: z.union([text, z.literal(false)]).optional(),
+      home: text.optional(),
+      judge_deadline_ms: z.int().positive().optional(),
+    })
+    .optional(),
+  policies: z.strictObject({ dir: text.optional() }).optional(),
+  judge: z
+    .strictObject({
+      provider: z.enum(JUDGE_PROVIDERS).optional(),
+      model: text.optional(),
+      timeout_ms: z.int().positive().optional(),
+      cache_ttl_ms: z.int().nonnegative().optional(),
+    })
+    .optional(),
+  context: table.optional(),
+  policy: table.optional(),
+  audit: z
+    .strictObject({
+      path: text.optional(),
+      forward: z.strictObject({ kind: z.enum(["syslog", "file"]), target: text }).optional(),
+    })
+    .optional(),
+  store: z.strictObject({ path: text.optional() }).optional(),
+  enforcement: z.strictObject({ mode: z.enum(["observe", "enforce"]).optional() }).optional(),
+});
+
+/** The spec defaults as a file-shaped table (paths still `~`-relative). */
+const DEFAULT_TABLE: Table = deepFreeze({
+  daemon: { socket: "~/.jevdict/jevdictd.sock", http: false, judge_deadline_ms: 12_000 },
+  policies: { dir: "policies" },
+  judge: { provider: "off", timeout_ms: 10_000, cache_ttl_ms: 600_000 },
+  context: {},
+  policy: {},
+  audit: { path: "~/.jevdict/audit.jsonl" },
+  store: { path: "~/.jevdict/jevdict.sqlite" },
+  enforcement: { mode: "observe" },
+});
+
+const SECRET_KEY = /api[_-]?key|token|secret|password/i;
+
+function expandPath(path: string, base: string, home: string): string {
+  if (path === "~") return home;
+  if (path.startsWith("~/")) return join(home, path.slice(2));
+  return isAbsolute(path) ? path : resolve(base, path);
+}
+
+const PATH_KEYS: ReadonlyArray<readonly [string, string]> = [
+  ["daemon", "socket"],
+  ["daemon", "home"],
+  ["policies", "dir"],
+  ["audit", "path"],
+  ["store", "path"],
+];
+
+/** Resolves every path-valued key of one file against that file's directory. */
+function resolvePaths(t: Table, base: string, home: string): Table {
+  let withPaths = t;
+  for (const [section, key] of PATH_KEYS) {
+    const value = getIn(t, [section, key]);
+    if (typeof value === "string") {
+      withPaths = setIn(withPaths, [section, key], expandPath(value, base, home));
+    }
+  }
+  const audit = withPaths.audit;
+  if (!isTable(audit) || !isTable(audit.forward)) return withPaths;
+  const fwd = audit.forward as { kind: string; target: string };
+  const target = fwd.kind === "file" ? expandPath(fwd.target, base, home) : fwd.target;
+  return { ...withPaths, audit: { ...audit, forward: { ...fwd, target } } };
+}
+
+function validate(raw: unknown, source: string): Table {
+  const judge = isTable(raw) ? raw.judge : undefined;
+  if (isTable(judge) && Object.keys(judge).some((k) => SECRET_KEY.test(k))) {
+    throw new ConfigError(
+      `${source}: API keys come from the environment only, never from the config file (D-044)`,
+    );
+  }
+  const parsed = fileSchema.safeParse(raw);
+  const problems = parsed.success
+    ? []
+    : parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
+  const data = parsed.success ? (parsed.data as Table) : {};
+  for (const section of ["context", "policy"] as const) {
+    const sec = data[section];
+    if (isTable(sec)) problems.push(...coreShapeProblems(section, sec));
+  }
+  if (problems.length > 0)
+    throw new ConfigError(`${source}: invalid config: ${problems.join("; ")}`);
+  const daemon = data.daemon;
+  if (isTable(daemon) && typeof daemon.http === "string") {
+    const bind = parseHttpBind(daemon.http);
+    if (!bind.ok) throw new ConfigError(`${source}: daemon.${bind.error}`);
+  }
+  return data;
+}
+
+/** Reads, parses (Bun's TOML) and validates one file; paths resolved against its dir. */
+export function readConfigFile(path: string, home: string): Table {
+  let source: string;
+  try {
+    source = readFileSync(path, "utf8");
+  } catch (cause) {
+    throw new ConfigError(`${path}: cannot read: ${(cause as Error).message}`);
+  }
+  let raw: unknown;
+  try {
+    raw = Bun.TOML.parse(source);
+  } catch (cause) {
+    throw new ConfigError(`${path}: invalid TOML: ${(cause as Error).message}`);
+  }
+  return resolvePaths(validate(raw, path), dirname(path), home);
+}
+
+/** Where to look; every field defaults to the real process. */
+export interface LoadConfigOptions {
+  /** `--config <path>`: must exist. */
+  configPath?: string;
+  env?: Readonly<Record<string, string | undefined>>;
+  cwd?: string;
+  /** Expands `~` in paths; default `os.homedir()`. */
+  home?: string;
+}
+
+/** The resolved config, the files it came from (lowest first) and rejected repo keys. */
+export interface LoadedConfig {
+  config: DaemonConfig;
+  sources: string[];
+  rejected: string[];
+}
+
+function toConfig(t: Table, home: string): DaemonConfig {
+  const f = t as z.output<typeof fileSchema>;
+  const http = f.daemon?.http;
+  const bind = typeof http === "string" ? parseHttpBind(http) : null;
+  return deepFreeze({
+    daemon: {
+      socket: f.daemon?.socket ?? "",
+      http: bind?.ok === true ? bind.value : null,
+      home: f.daemon?.home ?? home,
+      judgeDeadlineMs: f.daemon?.judge_deadline_ms ?? 12_000,
+    },
+    policies: { dir: f.policies?.dir ?? "" },
+    judge: {
+      provider: f.judge?.provider ?? "off",
+      model: f.judge?.model ?? null,
+      timeoutMs: f.judge?.timeout_ms ?? 10_000,
+      cacheTtlMs: f.judge?.cache_ttl_ms ?? 600_000,
+    },
+    context: (f.context ?? {}) as ContextConfigInput,
+    policy: (f.policy ?? {}) as PolicyConfigInput,
+    audit: { path: f.audit?.path ?? "", forward: f.audit?.forward ?? null },
+    store: { path: f.store?.path ?? "" },
+    enforcement: { mode: f.enforcement?.mode ?? "observe" },
+  });
+}
+
+function existing(path: string | undefined): string | null {
+  return path !== undefined && path !== "" && existsSync(path) ? path : null;
+}
+
+/**
+ * Loads `jevdict.toml` layered lowest to highest: defaults, the user file
+ * (`~/.config/jevdict/jevdict.toml`), the repo override (`./.jevdict.toml`, which may
+ * only tighten: its other keys are dropped and reported), `$JEVDICT_CONFIG`, then
+ * `--config`. Objects merge, scalars replace. API keys are refused (env only, D-044).
+ * Throws {@link ConfigError} on unreadable, invalid TOML or unknown keys.
+ */
+export function loadConfig(opts: LoadConfigOptions = {}): LoadedConfig {
+  const home = opts.home ?? homedir();
+  const cwd = opts.cwd ?? process.cwd();
+  const env = opts.env ?? process.env;
+  if (opts.configPath !== undefined && !existsSync(opts.configPath)) {
+    throw new ConfigError(`${opts.configPath}: config file not found`);
+  }
+  const user = existing(join(home, ".config", "jevdict", "jevdict.toml"));
+  const repo = existing(join(cwd, ".jevdict.toml"));
+  const envFile = existing(env.JEVDICT_CONFIG);
+  let merged = resolvePaths(DEFAULT_TABLE, cwd, home);
+  const sources: string[] = [];
+  const rejected: string[] = [];
+  const apply = (path: string | null, tighten: boolean) => {
+    if (path === null) return;
+    const file = readConfigFile(path, home);
+    const layer = tighten ? tightenOnly(file, merged, path) : { kept: file, rejected: [] };
+    merged = mergeConfig<Table>(merged, layer.kept);
+    rejected.push(...layer.rejected);
+    sources.push(path);
+  };
+  apply(user, false);
+  apply(repo, true);
+  apply(envFile, false);
+  apply(opts.configPath ?? null, false);
+  return { config: toConfig(merged, home), sources, rejected };
+}
+
+/** The defaults as resolved for the current user and working directory. Frozen. */
+export const DEFAULT_DAEMON_CONFIG: DaemonConfig = toConfig(
+  resolvePaths(DEFAULT_TABLE, process.cwd(), homedir()),
+  homedir(),
+);
