@@ -180,6 +180,26 @@ describe("classifyArgv: git", () => {
     ]);
   });
 
+  test("git checkout -- names the paths it overwrites; a branch is not a path", () => {
+    const argv = ["git", "checkout", "--", ".claude/settings.json", "src"];
+    expect(paths(classifyArgv(argv))).toEqual([
+      [".claude/settings.json", "write"],
+      ["src", "write"],
+    ]);
+    expect(paths(classifyArgv(["git", "checkout", "HEAD~1", "--", "a.ts"]))).toEqual([
+      ["a.ts", "write"],
+    ]);
+    expect(paths(classifyArgv(["git", "checkout", "main"]))).toEqual([]);
+  });
+
+  test("git restore writes its pathspecs; a worktree restore is irreversible", () => {
+    const worktree = classifyArgv(["git", "restore", "--source", "HEAD~1", "a.ts"]);
+    expect(worktree).toMatchObject({ kind: "fs.write", verbs: ["git", "restore", "irreversible"] });
+    expect(paths(worktree)).toEqual([["a.ts", "write"]]);
+    expect(classifyArgv(["git", "restore", "--staged", "a.ts"]).verbs).toEqual(["git", "restore"]);
+    expect(classifyArgv(["git", "restore", "-S", "-W", "a.ts"]).verbs).toContain("irreversible");
+  });
+
   test("git clone extracts the host of an https or scp-style remote", () => {
     expect(classifyArgv(["git", "clone", "https://github.com/a/b.git"]).hosts).toEqual([
       "github.com",

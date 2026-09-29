@@ -13,6 +13,7 @@ export const GIT_SUBCOMMAND_KINDS: Readonly<Record<string, CallKind>> = {
   add: "fs.write",
   commit: "fs.write",
   checkout: "fs.write",
+  restore: "fs.write",
   switch: "fs.write",
   stash: "fs.write",
   apply: "fs.write",
@@ -29,12 +30,14 @@ const SUB_VALUE_OPTS: Readonly<Record<string, ReadonlySet<string>>> = {
   commit: new Set(["-m", "--message", "-F", "--file", "-C", "-c", "--author", "--date"]),
   clean: new Set(["-e", "--exclude"]),
   checkout: new Set(["-b", "-B", "--orphan"]),
+  restore: new Set(["-s", "--source"]),
   push: new Set(["-o", "--push-option", "--repo"]),
   clone: new Set(["-b", "--branch", "--depth", "-o", "--origin", "--reference"]),
 };
 const PATH_SUBCOMMANDS: Readonly<Record<string, PathAccess>> = {
   add: "write",
   rm: "delete",
+  restore: "write",
 };
 const NET_SUBCOMMANDS = new Set(["push", "fetch", "pull", "clone"]);
 const SHELL_CONFIG_KEYS = new Set(
@@ -70,6 +73,12 @@ function discardsChanges(parsed: ParsedArgs, args: ReadonlyArray<string>): boole
   return afterDashDash || parsed.positionals.some((p) => p.value === ".");
 }
 
+/** `git restore` touches the worktree unless it only unstages (`--staged` without `--worktree`). */
+function restoresWorktree(parsed: ParsedArgs): boolean {
+  const staged = hasOption(parsed, ["--staged", "-S"]);
+  return !staged || hasOption(parsed, ["--worktree", "-W"]);
+}
+
 function forcedBranchDelete(parsed: ParsedArgs): boolean {
   if (hasOption(parsed, ["-D"])) return true;
   return hasOption(parsed, ["-d", "--delete"]) && hasOption(parsed, ["-f", "--force"]);
@@ -83,6 +92,8 @@ function irreversibleVerbs(sub: string, parsed: ParsedArgs, args: ReadonlyArray<
       return hasOption(parsed, ["--hard"]) ? ["hard", "irreversible"] : [];
     case "checkout":
       return discardsChanges(parsed, args) ? ["irreversible"] : [];
+    case "restore":
+      return restoresWorktree(parsed) ? ["irreversible"] : [];
     case "clean":
       return hasOption(parsed, ["-f", "--force"]) ? FORCE : [];
     case "branch":
@@ -92,6 +103,25 @@ function irreversibleVerbs(sub: string, parsed: ParsedArgs, args: ReadonlyArray<
     default:
       return [];
   }
+}
+
+/**
+ * Paths a subcommand names: every positional of `add`/`rm`/`restore`, and the pathspecs
+ * after `--` of `checkout` (the files it overwrites; a branch name is not a path).
+ */
+function subcommandPaths(
+  sub: string,
+  parsed: ParsedArgs,
+  args: ReadonlyArray<string>,
+  base: number,
+): PathArg[] {
+  const dash = args.indexOf("--");
+  const access =
+    lookup(PATH_SUBCOMMANDS, sub) ?? (sub === "checkout" && dash >= 0 ? "write" : null);
+  if (access === null) return [];
+  const named =
+    sub === "checkout" ? parsed.positionals.filter((p) => p.index > dash) : parsed.positionals;
+  return named.map((p) => ({ value: p.value, index: base + p.index, access }));
 }
 
 /** What a git invocation does: kind, verbs (with force/hard/irreversible), paths, hosts. */
@@ -107,8 +137,9 @@ export interface GitReading {
 /**
  * Classifies `git <args>`; `base` is the argv index of `args[0]`. Global options
  * (`-C dir`, `-c k=v`, …) are skipped to find the subcommand. Irreversible forms
- * (force push, `reset --hard`, `checkout -- .`, `clean -f`, `branch -D`, `rebase`)
- * add verbs; they never change the kind. Shell code in `-c` config is returned as `code`.
+ * (force push, `reset --hard`, `checkout -- .`, a worktree `restore`, `clean -f`,
+ * `branch -D`, `rebase`) add verbs; they never change the kind. Shell code in `-c`
+ * config is returned as `code`.
  */
 export function readGit(args: ReadonlyArray<string>, base: number): GitReading {
   const global = parseArgs(args, GLOBAL_VALUE_OPTS, true);
@@ -123,11 +154,7 @@ export function readGit(args: ReadonlyArray<string>, base: number): GitReading {
   const subArgs = args.slice(first.index + 1);
   const subBase = base + first.index + 1;
   const parsed = parseArgs(subArgs, lookup(SUB_VALUE_OPTS, sub) ?? new Set());
-  const access = lookup(PATH_SUBCOMMANDS, sub);
-  const paths =
-    access === undefined
-      ? []
-      : parsed.positionals.map((p) => ({ value: p.value, index: subBase + p.index, access }));
+  const paths = subcommandPaths(sub, parsed, subArgs, subBase);
   const hosts = NET_SUBCOMMANDS.has(sub)
     ? parsed.positionals.map((p) => scpHost(p.value)).filter((h): h is string => h !== null)
     : [];

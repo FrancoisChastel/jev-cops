@@ -991,5 +991,29 @@
       "kind": "spawn",
       "verbs": ["pi", "install", "harness-config"]
     }
+  },
+  {
+    "command": "git checkout -- .claude/settings.json",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["git", "checkout", "irreversible"],
+      "paths": ["/work/repo/.claude/settings.json"]
+    }
+  },
+  {
+    "command": "git restore --source HEAD~1 src/app.ts",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["git", "restore", "irreversible"],
+      "paths": ["/work/repo/src/app.ts"]
+    }
+  },
+  {
+    "command": "git checkout feat/x",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["git", "checkout"],
+      "paths": []
+    }
   }
 ]
