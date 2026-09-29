@@ -68,6 +68,43 @@ describe("createJudge: jev", () => {
   });
 });
 
+describe("createJudge: openrouter", () => {
+  const reply = () =>
+    json({
+      choices: [
+        { message: { content: JSON.stringify({ [NOUL.name]: { p: 0.1, confidence: 0.9 } }) } },
+      ],
+    });
+
+  test("without a key it answers disabled and never calls out", async () => {
+    const fake = fakeFetch(async () => reply());
+    const judge = createJudge(
+      { provider: "openrouter", model: "m", fetch: fake.fetch },
+      { env: {} },
+    );
+    const result = await judge.ask(STATE, [NOUL]);
+    expect(result).toMatchObject({
+      ok: false,
+      error: "disabled",
+      detail: "openrouter API key not configured (set OPENROUTER_API_KEY)",
+    });
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  test("reads OPENROUTER_API_KEY and is wrapped with the cache", async () => {
+    const fake = fakeFetch(async () => reply());
+    const judge = createJudge(
+      { provider: "openrouter", model: "m", fetch: fake.fetch },
+      { env: { OPENROUTER_API_KEY: "or-key" } },
+    );
+    await judge.ask(STATE, [NOUL]);
+    const second = await judge.ask(STATE, [NOUL]);
+    expect(fake.sent[0]?.headers.get("authorization")).toBe("Bearer or-key");
+    expect(second).toMatchObject({ ok: true, cached: true, provider: "openrouter" });
+    expect(fake.sent).toHaveLength(1);
+  });
+});
+
 describe("createJudge: off and mock", () => {
   test("off returns the core disabled judge", async () => {
     // Arrange

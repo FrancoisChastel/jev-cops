@@ -25,10 +25,27 @@ export interface JevConfig {
 }
 
 /**
+ * OpenRouter: any model with structured outputs. Confidence is self-reported, so less
+ * calibrated than Jev. The key falls back to `OPENROUTER_API_KEY`.
+ */
+export interface OpenRouterConfig {
+  readonly provider: "openrouter";
+  /** A model that supports structured outputs, e.g. `openai/gpt-5-mini`. */
+  readonly model: string;
+  readonly apiKey?: string;
+  readonly baseURL?: string;
+  readonly fetch?: FetchLike;
+  /** `HTTP-Referer` attribution header; default the project URL. */
+  readonly referer?: string;
+  /** `X-Title` attribution header; default `jevdict`. */
+  readonly title?: string;
+}
+
+/**
  * Which semantic judge the daemon uses (`judge.provider` in config, D-004). Every
  * variant answers the same typed questions behind the core `Judge` interface.
  */
-export type ProviderConfig = OffConfig | MockConfig | JevConfig;
+export type ProviderConfig = OffConfig | MockConfig | JevConfig | OpenRouterConfig;
 
 /** What the factory reads from its surroundings; both default to the real ones. */
 export interface JudgeDeps {

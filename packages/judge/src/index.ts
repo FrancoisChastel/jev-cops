@@ -12,39 +12,59 @@ import {
   type Judge,
 } from "@jevdict/core";
 import { createJevJudge, JEV_API_KEY_ENV } from "./providers/jev.ts";
+import { createOpenRouterJudge, OPENROUTER_API_KEY_ENV } from "./providers/openrouter.ts";
 import { type Env, missingKeyJudge, resolveApiKey } from "./shared.ts";
-import type { JevConfig, JudgeDeps, ProviderConfig } from "./types.ts";
+import type { JudgeDeps, ProviderConfig } from "./types.ts";
 
 export { JEV_API_KEY_ENV, JEV_DEFAULT_BASE_URL, JEV_DEFAULT_MODEL } from "./providers/jev.ts";
+export {
+  OPENROUTER_API_KEY_ENV,
+  OPENROUTER_DEFAULT_BASE_URL,
+  OPENROUTER_DEFAULT_REFERER,
+  OPENROUTER_DEFAULT_TITLE,
+} from "./providers/openrouter.ts";
 export type { Env, FetchLike } from "./shared.ts";
 export type * from "./types.ts";
+
+type RealConfig = Exclude<ProviderConfig, { provider: "off" | "mock" }>;
+
+/** A provider ready to be guarded, or the `disabled` judge standing in for a missing key. */
+type Built = { ready: true; judge: Judge } | { ready: false; judge: Judge };
 
 function processEnv(): Env {
   return typeof process === "undefined" ? {} : process.env;
 }
 
-function jevJudge(config: JevConfig, env: Env): Judge | null {
-  const apiKey = resolveApiKey(config.apiKey, env, JEV_API_KEY_ENV);
-  if (apiKey === null) return null;
-  return createJevJudge({
-    apiKey,
-    ...(config.baseURL !== undefined ? { baseURL: config.baseURL } : {}),
-    ...(config.model !== undefined ? { model: config.model } : {}),
-    ...(config.fetch !== undefined ? { fetch: config.fetch } : {}),
-  });
+function withKey(
+  name: string,
+  explicit: string | undefined,
+  env: Env,
+  envVar: string,
+  make: (apiKey: string) => Judge,
+): Built {
+  const apiKey = resolveApiKey(explicit, env, envVar);
+  if (apiKey === null) return { ready: false, judge: missingKeyJudge(name, envVar) };
+  return { ready: true, judge: make(apiKey) };
 }
 
-/** The real provider for `config`, or null when its API key is missing. */
-function realProvider(
-  config: JevConfig,
-  env: Env,
-): { base: Judge | null; name: string; envVar: string } {
-  return { base: jevJudge(config, env), name: "jev", envVar: JEV_API_KEY_ENV };
+function buildProvider(config: RealConfig, env: Env): Built {
+  switch (config.provider) {
+    case "jev":
+      return withKey("jev", config.apiKey, env, JEV_API_KEY_ENV, (apiKey) =>
+        createJevJudge({ ...config, apiKey }),
+      );
+    case "openrouter":
+      return withKey("openrouter", config.apiKey, env, OPENROUTER_API_KEY_ENV, (apiKey) =>
+        createOpenRouterJudge({ ...config, apiKey }),
+      );
+  }
 }
 
 /**
- * The judge for `config`. Never throws at startup: a real provider without an API key
- * answers every request `disabled`, so the daemon still runs observe-only.
+ * The judge for `config`. Real providers are always wrapped with core `composeJudge`
+ * (limit → cache → validation → timeout, 10 s by default). Never throws at startup: a
+ * real provider without an API key answers every request `disabled`, so the daemon
+ * still runs observe-only. Keys come from config, else the daemon's env; never logged.
  */
 export function createJudge(config: ProviderConfig, deps: JudgeDeps = {}): Judge {
   switch (config.provider) {
@@ -53,9 +73,13 @@ export function createJudge(config: ProviderConfig, deps: JudgeDeps = {}): Judge
     case "mock":
       return createMockJudge(config.answers);
     default: {
-      const { base, name, envVar } = realProvider(config, deps.env ?? processEnv());
-      if (base === null) return missingKeyJudge(name, envVar);
-      return composeJudge(base, deps.judgeConfig ?? DEFAULT_JUDGE_CONFIG, deps.now ?? Date.now);
+      const built = buildProvider(config, deps.env ?? processEnv());
+      if (!built.ready) return built.judge;
+      return composeJudge(
+        built.judge,
+        deps.judgeConfig ?? DEFAULT_JUDGE_CONFIG,
+        deps.now ?? Date.now,
+      );
     }
   }
 }
