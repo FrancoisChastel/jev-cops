@@ -32,7 +32,9 @@ pi -e adapters/pi/jevdict.ts
 ```
 
 The socket is resolved in this order: a path baked in by the installer, `$JEVDICT_SOCKET`,
-then `~/.jevdict/jevdictd.sock` (the daemon's default). The installer does the copy and the
+then `~/.jevdict/jevdictd.sock` (the daemon's default). That is the agent socket. The
+daemon's admin socket (`~/.jevdict/jevdictd-admin.sock`, budget resets) is for a human's
+shell only: never point the extension at it or mount it into a sandbox. The installer does the copy and the
 baking from code (the `jevdict install pi` command lands in M1):
 
 ```ts
@@ -79,3 +81,6 @@ observe-only events). Post events never block: the extension waits at most 2 s f
   agents are not linked as subagent sessions.
 - **User-typed commands are not judged.** Commands the user types with `!` in the TUI
   (`user_bash`) skip `tool_call`.
+- **The sockets are reachable by the agent without OpenShell.** The hold token keeps the
+  agent from approving a hold this extension received, but it can post its own judge
+  requests; the admin socket is human-only only when it is not mounted into the sandbox.

@@ -42,7 +42,10 @@ export interface AuditForward {
 /** The resolved `jevdict.toml`: absolute paths, camelCase, defaults filled in. */
 export interface DaemonConfig {
   readonly daemon: {
+    /** The agent-facing socket, the one a sandbox mounts. */
     readonly socket: string;
+    /** The human-only socket (budget reset); never mount it into a sandbox (H1). */
+    readonly adminSocket: string;
     /** Null: no HTTP listener (the default). */
     readonly http: HttpBind | null;
     /** `~`/`$HOME` for event normalization (D-003). */
@@ -96,6 +99,7 @@ const fileSchema = z.strictObject({
   daemon: z
     .strictObject({
       socket: text.optional(),
+      admin_socket: text.optional(),
       http: z.union([text, z.literal(false)]).optional(),
       home: text.optional(),
       judge_deadline_ms: z.int().positive().optional(),
@@ -127,6 +131,7 @@ const fileSchema = z.strictObject({
 const DEFAULT_TABLE: Table = deepFreeze({
   daemon: {
     socket: "~/.jevdict/jevdictd.sock",
+    admin_socket: "~/.jevdict/jevdictd-admin.sock",
     http: false,
     judge_deadline_ms: 12_000,
     hold_token_ttl_ms: DEFAULT_HOLD_TOKEN_TTL_MS,
@@ -150,6 +155,7 @@ function expandPath(path: string, base: string, home: string): string {
 
 const PATH_KEYS: ReadonlyArray<readonly [string, string]> = [
   ["daemon", "socket"],
+  ["daemon", "admin_socket"],
   ["daemon", "home"],
   ["policies", "dir"],
   ["audit", "path"],
@@ -239,6 +245,7 @@ function toConfig(t: Table, home: string): DaemonConfig {
   return deepFreeze({
     daemon: {
       socket: f.daemon?.socket ?? "",
+      adminSocket: f.daemon?.admin_socket ?? "",
       http: bind?.ok === true ? bind.value : null,
       home: f.daemon?.home ?? home,
       judgeDeadlineMs: f.daemon?.judge_deadline_ms ?? 12_000,

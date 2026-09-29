@@ -1,15 +1,28 @@
-import { DEFAULT_DAEMON_CONFIG, loadConfig } from "@jevdict/daemon";
+import { type DaemonConfig, DEFAULT_DAEMON_CONFIG, loadConfig } from "@jevdict/daemon";
+
+/** The daemon paths the CLI talks to or reads. */
+export interface ConfiguredPaths {
+  readonly audit: string;
+  /** The agent-facing socket. */
+  readonly socket: string;
+  /** The human-only socket (`budget --reset`). */
+  readonly adminSocket: string;
+}
+
+function pathsOf(config: DaemonConfig): ConfiguredPaths {
+  const { socket, adminSocket } = config.daemon;
+  return { audit: config.audit.path, socket, adminSocket };
+}
 
 /**
  * The audit log and socket paths from `jevdict.toml` (same precedence as `jevdictd`),
  * falling back to the defaults when no config can be loaded; the CLI never needs the
  * daemon to be running to read the audit log.
  */
-export function configuredPaths(): { audit: string; socket: string } {
+export function configuredPaths(): ConfiguredPaths {
   try {
-    const { config } = loadConfig();
-    return { audit: config.audit.path, socket: config.daemon.socket };
+    return pathsOf(loadConfig().config);
   } catch {
-    return { audit: DEFAULT_DAEMON_CONFIG.audit.path, socket: DEFAULT_DAEMON_CONFIG.daemon.socket };
+    return pathsOf(DEFAULT_DAEMON_CONFIG);
   }
 }

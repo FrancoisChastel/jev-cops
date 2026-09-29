@@ -22,6 +22,7 @@ export const PI_GAPS: readonly string[] = [
   "Read-only tools (read, grep, find, ls) fail open when jevdictd is unreachable and are logged only to the Pi notification or stderr; every other tool fails closed.",
   "Tools from other extensions are sent as kind `other` with their raw input; nested agents started by other extensions are not linked as subagent sessions.",
   "Commands the user types with `!` in the Pi TUI (`user_bash`) do not go through `tool_call` and are not judged.",
+  "Without OpenShell the agent can reach the daemon's sockets as you: the hold token keeps it from approving a hold this extension received, but it can post judge requests of its own and resolve those; the admin socket (budget reset) is human-only only when it is not mounted into the sandbox.",
 ];
 
 /** Where and how to install the Pi extension. */

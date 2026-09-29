@@ -36,14 +36,28 @@ export interface TestDaemon {
   readonly daemon: RunningDaemon;
   readonly dir: string;
   readonly config: DaemonConfig;
-  call(
-    method: "GET" | "POST",
-    path: string,
-    body?: unknown,
-  ): Promise<{ status: number; body: unknown }>;
+  /** A request on the agent socket (what an adapter, or an agent, can reach). */
+  call(method: Method, path: string, body?: unknown): Promise<HttpReply>;
+  /** A request on the admin socket (human-only routes). */
+  callAdmin(method: Method, path: string, body?: unknown): Promise<HttpReply>;
   audit(): AuditLine[];
   writePolicy(file: string, source: string): void;
   stop(): Promise<void>;
+}
+
+type Method = "GET" | "POST";
+type HttpReply = { status: number; body: unknown };
+
+/** One JSON request over the Unix socket at `socket`; a string body is sent verbatim. */
+async function request(socket: string, method: Method, path: string, body?: unknown) {
+  const res = await fetch(`http://localhost${path}`, {
+    method,
+    unix: socket,
+    ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
+    headers: { "content-type": "application/json" },
+  });
+  const text = await res.text();
+  return { status: res.status, body: text === "" ? null : (JSON.parse(text) as unknown) };
 }
 
 /** A fresh event id, so tests never collide on `explain` or `resolve`. */
@@ -56,6 +70,7 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
   return {
     daemon: {
       socket: join(dir, "d.sock"),
+      adminSocket: join(dir, "a.sock"),
       http: opts.http ?? null,
       home: "/home/dev",
       judgeDeadlineMs: opts.deadlineMs ?? 12_000,
@@ -93,18 +108,8 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     daemon,
     dir,
     config,
-    async call(method, path, body) {
-      const res = await fetch(`http://localhost${path}`, {
-        method,
-        unix: config.daemon.socket,
-        ...(body === undefined
-          ? {}
-          : { body: typeof body === "string" ? body : JSON.stringify(body) }),
-        headers: { "content-type": "application/json" },
-      });
-      const text = await res.text();
-      return { status: res.status, body: text === "" ? null : (JSON.parse(text) as unknown) };
-    },
+    call: (method, path, body) => request(config.daemon.socket, method, path, body),
+    callAdmin: (method, path, body) => request(config.daemon.adminSocket, method, path, body),
     audit: () => readAudit(config.audit.path).lines,
     writePolicy(file, source) {
       writeFileSync(join(dir, "policies", file), source);

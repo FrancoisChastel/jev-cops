@@ -22,8 +22,9 @@ Commands:
   replay <audit.jsonl> [--policies dir] [--json]
                                            re-judge recorded events with the current policies
                                            and print verdict deltas (event_id old → new)
-  budget <session-id> [--reset] [--socket path]
-                                           show or reset a session's risk budget (running daemon)
+  budget <session-id> [--socket path] [--reset --admin-socket path]
+                                           show a session's risk budget (agent socket), or
+                                           reset it (admin socket: human only, H1)
   help                                     this text
   install, doctor                          not yet available (M1)
 

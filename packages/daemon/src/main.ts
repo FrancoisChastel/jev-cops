@@ -16,15 +16,20 @@ import { type RunningDaemon, startDaemon } from "./server.ts";
 
 export const DAEMON_USAGE = `jevdictd ${DAEMON_VERSION} — the Jevdict judging daemon
 
-Usage: jevdictd [--config path] [--socket path] [--http host:port] [--observe|--enforce]
+Usage: jevdictd [--config path] [--socket path] [--admin-socket path] [--http host:port]
+                [--observe|--enforce]
 
-  --config <path>   jevdict.toml to load on top of ~/.config/jevdict/jevdict.toml,
-                    ./.jevdict.toml (tighten-only) and $JEVDICT_CONFIG
-  --socket <path>   Unix socket to listen on (default ~/.jevdict/jevdictd.sock)
-  --http <h:p>      also listen on loopback HTTP (127.0.0.1, ::1 or localhost only)
-  --observe         log every verdict, return allow (the default)
-  --enforce         return verdicts as judged
-  -h, --help        this text
+  --config <path>        jevdict.toml to load on top of ~/.config/jevdict/jevdict.toml,
+                         ./.jevdict.toml (tighten-only) and $JEVDICT_CONFIG
+  --socket <path>        agent-facing Unix socket, the one a sandbox mounts
+                         (default ~/.jevdict/jevdictd.sock)
+  --admin-socket <path>  human-only Unix socket for budget resets; never mount it into
+                         a sandbox (default ~/.jevdict/jevdictd-admin.sock)
+  --http <h:p>           also serve the agent routes on loopback HTTP (127.0.0.1, ::1 or
+                         localhost only)
+  --observe              log every verdict, return allow (the default)
+  --enforce              return verdicts as judged
+  -h, --help             this text
 
 Exit codes: 0 clean shutdown (SIGTERM/SIGINT) · 1 boot failure · 2 usage error`;
 
@@ -33,6 +38,7 @@ export interface DaemonArgs {
   readonly help: boolean;
   readonly configPath?: string;
   readonly socket?: string;
+  readonly adminSocket?: string;
   readonly http?: HttpBind;
   readonly mode?: EnforcementMode;
 }
@@ -57,6 +63,7 @@ export function parseDaemonArgs(argv: readonly string[]): Result<DaemonArgs, str
       options: {
         config: { type: "string" },
         socket: { type: "string" },
+        "admin-socket": { type: "string" },
         http: { type: "string" },
         observe: { type: "boolean" },
         enforce: { type: "boolean" },
@@ -76,6 +83,7 @@ export function parseDaemonArgs(argv: readonly string[]): Result<DaemonArgs, str
     help: values.help === true,
     ...(typeof values.config === "string" ? { configPath: values.config } : {}),
     ...(typeof values.socket === "string" ? { socket: values.socket } : {}),
+    ...(typeof values["admin-socket"] === "string" ? { adminSocket: values["admin-socket"] } : {}),
     ...(http === null ? {} : { http: http.value }),
     ...(mode.value === null ? {} : { mode: mode.value }),
   });
@@ -88,6 +96,7 @@ export function applyArgs(config: DaemonConfig, args: DaemonArgs): DaemonConfig 
     daemon: {
       ...config.daemon,
       ...(args.socket === undefined ? {} : { socket: resolve(args.socket) }),
+      ...(args.adminSocket === undefined ? {} : { adminSocket: resolve(args.adminSocket) }),
       ...(args.http === undefined ? {} : { http: args.http }),
     },
     enforcement: args.mode === undefined ? config.enforcement : { mode: args.mode },
@@ -100,6 +109,7 @@ function bootLine(d: RunningDaemon): string {
   const http = d.listening.httpUrl === null ? "" : ` and ${d.listening.httpUrl}`;
   return [
     `jevdictd listening on ${d.listening.socket}${http}`,
+    `admin ${d.listening.adminSocket}`,
     `${count} ${count === 1 ? "policy" : "policies"}`,
     `judge ${judge}`,
     `enforcement ${d.runtime.config.enforcement.mode}`,

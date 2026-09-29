@@ -7,7 +7,7 @@ import type { Reply } from "./service.ts";
 /**
  * The human side of the daemon: resolving holds, explaining decisions, the risk budget
  * and health. Requests here carry ids and a decision only; nothing in them can shape a
- * precedent's scope (T7/T8).
+ * precedent's scope (T7/T8). Which socket serves which route is in `routes.ts`.
  */
 
 const resolveSchema = z.strictObject({
@@ -77,7 +77,11 @@ export function handleBudget(rt: Runtime, sessionId: string): Reply {
   return { status: 200, body: { session_id: sessionId, spent: budget.spent, limit: budget.limit } };
 }
 
-/** `POST /v1/budget/reset`: a human resets a session's budget; audited. */
+/**
+ * `POST /v1/budget/reset`: a human resets a session's budget; audited. Served on the
+ * admin socket only (H1): the agent-facing socket answers 404, so an agent cannot undo
+ * "hold until a human resets the budget" by talking to the socket itself.
+ */
 export function handleBudgetReset(rt: Runtime, body: unknown): Reply {
   const parsed = budgetResetSchema.safeParse(body);
   if (!parsed.success) return badRequest(parsed.error);
@@ -92,7 +96,10 @@ export function handleBudgetReset(rt: Runtime, body: unknown): Reply {
   return { status: 200, body: { session_id: sessionId, spent: budget.spent, limit: budget.limit } };
 }
 
-/** `GET /v1/health`: version, policies with degraded flags, judge, enforcement, uptime. */
+/**
+ * `GET /v1/health`: version, policies with degraded flags, judge, enforcement, both
+ * sockets, uptime.
+ */
 export function handleHealth(rt: Runtime): Reply {
   const policies = rt.policies.current().policies.map((p) => ({
     name: p.name,
@@ -107,6 +114,7 @@ export function handleHealth(rt: Runtime): Reply {
       policies,
       judge: rt.judgeName,
       enforcement: rt.config.enforcement.mode,
+      sockets: { agent: rt.config.daemon.socket, admin: rt.config.daemon.adminSocket },
       uptime: Math.max(0, Math.round((rt.now() - rt.startedAt) / 1000)),
     },
   };

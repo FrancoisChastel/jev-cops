@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { statSync } from "node:fs";
 import { createMockJudge, parseVerdict, type VerdictResponse } from "@jevdict/core";
 import { buildEvent, type EventShape } from "../../../tests/fixtures/context/index.ts";
 import { createRuntime } from "./daemon.ts";
@@ -300,15 +301,72 @@ describe("hold tokens (T7/T8: only the adapter that got the hold can resolve it)
 });
 
 describe("budget", () => {
-  test("read and reset through the API; unknown sessions are 404", async () => {
+  test("read on the agent socket, reset on the admin socket; unknown sessions are 404", async () => {
     td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
     const { event } = await judge("rm -rf /srv/data");
     const sid = event.session.id;
     const before = await td.call("GET", `/v1/budget/${sid}`);
     expect((before.body as { spent: number }).spent).toBeGreaterThan(0);
-    const reset = await td.call("POST", "/v1/budget/reset", { session_id: sid });
+    const reset = await td.callAdmin("POST", "/v1/budget/reset", { session_id: sid });
     expect(reset.body).toMatchObject({ session_id: sid, spent: 0 });
     expect((await td.call("GET", "/v1/budget/sess_nobody")).status).toBe(404);
+    const nobody = await td.callAdmin("POST", "/v1/budget/reset", { session_id: "sess_nobody" });
+    expect(nobody.status).toBe(404);
+  });
+});
+
+describe("admin socket (H1: human-only routes are not on the socket the sandbox mounts)", () => {
+  test("budget reset is 404 on the agent socket and leaves the budget alone", async () => {
+    td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
+    const { event } = await judge("rm -rf /srv/data");
+    const sid = event.session.id;
+    const spent = async () =>
+      ((await (td as TestDaemon).call("GET", `/v1/budget/${sid}`)).body as { spent: number }).spent;
+    const before = await spent();
+    expect(before).toBeGreaterThan(0);
+    const res = await td.call("POST", "/v1/budget/reset", { session_id: sid });
+    expect(res).toEqual({ status: 404, body: { error: "not found" } });
+    expect(await spent()).toBe(before);
+    expect(td.audit().some((l) => l.payload.action === "budget-reset")).toBe(false);
+  });
+
+  test("the admin socket is mode 0600 in a 0700 directory", async () => {
+    td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    const admin = td.config.daemon.adminSocket;
+    expect(statSync(admin).mode & 0o777).toBe(0o600);
+    expect(statSync(td.config.daemon.socket).mode & 0o777).toBe(0o600);
+    expect(td.daemon.listening.adminSocket).toBe(admin);
+  });
+
+  test("the admin socket serves health, explain and budget reset, nothing agent-facing", async () => {
+    td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
+    const { event } = await judge("rm -rf /srv/data");
+    expect((await td.callAdmin("GET", "/v1/health")).status).toBe(200);
+    expect((await td.callAdmin("GET", `/v1/explain/${event.id}`)).status).toBe(200);
+    for (const path of ["/v1/judge", "/v1/observe", "/v1/resolve"]) {
+      expect((await td.callAdmin("POST", path, bash("ls"))).status).toBe(404);
+    }
+    expect((await td.callAdmin("GET", `/v1/budget/${event.session.id}`)).status).toBe(404);
+  });
+
+  test("health on either socket reports both sockets", async () => {
+    td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    const sockets = { agent: td.config.daemon.socket, admin: td.config.daemon.adminSocket };
+    expect((await td.call("GET", "/v1/health")).body).toMatchObject({ sockets });
+    expect((await td.callAdmin("GET", "/v1/health")).body).toMatchObject({ sockets });
+  });
+
+  test("the admin socket must be a different, short enough path", async () => {
+    td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    const rt = td.daemon.runtime;
+    const socket = `${td.dir}/x.sock`;
+    await expect(listen(rt, { socket, adminSocket: socket, http: null })).rejects.toThrow(
+      /must differ/,
+    );
+    const long = `${td.dir}/${"x".repeat(120)}.sock`;
+    await expect(listen(rt, { socket, adminSocket: long, http: null })).rejects.toThrow(
+      /socket path is \d+ bytes/,
+    );
   });
 });
 
@@ -354,17 +412,19 @@ describe("binding", () => {
     td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     const cfg = testConfig(`${td.dir}/other`, { policies: {} });
     const rt = td.daemon.runtime;
+    const { socket, adminSocket } = cfg.daemon;
     await expect(
-      listen(rt, { socket: cfg.daemon.socket, http: { host: "0.0.0.0", port: 0 } }),
+      listen(rt, { socket, adminSocket, http: { host: "0.0.0.0", port: 0 } }),
     ).rejects.toThrow(/non-loopback/);
   });
 
   test("a socket path too long for sun_path is refused, not silently truncated", async () => {
     td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     const long = `${td.dir}/${"x".repeat(120)}.sock`;
-    await expect(listen(td.daemon.runtime, { socket: long, http: null })).rejects.toThrow(
-      /socket path is \d+ bytes/,
-    );
+    const adminSocket = `${td.dir}/a2.sock`;
+    await expect(
+      listen(td.daemon.runtime, { socket: long, adminSocket, http: null }),
+    ).rejects.toThrow(/socket path is \d+ bytes/);
   });
 
   test("a second daemon on a live socket refuses to start", async () => {

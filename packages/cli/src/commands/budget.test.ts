@@ -26,14 +26,31 @@ afterAll(async () => {
 });
 
 describe("jevdict budget", () => {
-  test("shows then resets a session's budget through the socket", async () => {
+  test("shows through the agent socket, resets through the admin socket", async () => {
     const socket = td.config.daemon.socket;
+    const adminSocket = td.config.daemon.adminSocket;
     const shown = captureIo();
     expect(await runBudgetCommand([sid, "--socket", socket], shown)).toBe(0);
     expect(shown.stdout[0]).toMatch(new RegExp(`^${sid}: spent [1-9]\\d*/100$`));
     const reset = captureIo();
-    expect(await runBudgetCommand([sid, "--reset", "--socket", socket], reset)).toBe(0);
+    expect(await runBudgetCommand([sid, "--reset", "--admin-socket", adminSocket], reset)).toBe(0);
     expect(reset.stdout).toEqual([`${sid}: reset; now 0/100`]);
+  });
+
+  test("--reset never goes to the agent socket, which does not serve it (H1)", async () => {
+    const io = captureIo();
+    const agentAsAdmin = ["--reset", "--admin-socket", td.config.daemon.socket];
+    expect(await runBudgetCommand([sid, ...agentAsAdmin], io)).toBe(1);
+    expect(io.stderr.join("\n")).toContain("not found");
+    const viaSocket = captureIo();
+    const onlySocket = ["--reset", "--socket", td.config.daemon.socket];
+    expect(
+      await runBudgetCommand(
+        [sid, ...onlySocket, "--admin-socket", `${td.dir}/none.sock`],
+        viaSocket,
+      ),
+    ).toBe(1);
+    expect(viaSocket.stderr.join("\n")).toContain(`${td.dir}/none.sock`);
   });
 
   test("unknown session or unreachable daemon exits 1; usage exits 2", async () => {

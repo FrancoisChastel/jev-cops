@@ -45,8 +45,8 @@ function sameValue(a: unknown, b: unknown): boolean {
 
 /**
  * Leaves a repo override may change, and the direction that tightens. Everything else
- * (judge provider/model, socket, audit, store, policies dir, other thresholds) is not a
- * tightening a repo can be trusted to make, so it is rejected.
+ * (judge provider/model, the agent and admin sockets, audit, store, policies dir, other
+ * thresholds) is not a tightening a repo can be trusted to make, so it is rejected.
  */
 const LOWER_IS_TIGHTER = new Set([
   "policy.bands.annotate",

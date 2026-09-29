@@ -158,6 +158,20 @@ prints:
   agents are not linked as subagent sessions.
 - **User-typed commands are not judged.** Commands the user types with `!` (`user_bash`)
   bypass `tool_call`.
+- **Without OpenShell, the sockets are reachable by the agent.** The agent runs as you, so
+  it can connect to `jevdictd.sock` itself. The hold token stops it from approving a hold
+  the extension received (it never sees the verdict response), but it can post judge
+  requests of its own and resolve those. `jevdictd-admin.sock` (budget reset) is
+  human-only only when it is not mounted into the sandbox.
+
+### Sockets
+
+The extension talks to the agent socket only (`~/.jevdict/jevdictd.sock`, or the path the
+installer baked in). `jevdictd` also listens on an admin socket
+(`~/.jevdict/jevdictd-admin.sock`, `daemon.admin_socket`) that serves `/v1/budget/reset`,
+`/v1/health` and `/v1/explain/<id>`; the agent socket answers `/v1/budget/reset` with 404.
+Never mount the admin socket into a sandbox: `jevdict budget <session> --reset` is how a
+human resets a budget.
 
 ## Claude Code
 

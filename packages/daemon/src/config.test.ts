@@ -38,6 +38,7 @@ describe("defaults", () => {
     expect(config.judge).toMatchObject({ provider: "off", timeoutMs: 10_000, cacheTtlMs: 600_000 });
     expect(config.daemon).toMatchObject({
       socket: join(home, ".jevdict", "jevdictd.sock"),
+      adminSocket: join(home, ".jevdict", "jevdictd-admin.sock"),
       http: null,
       home,
       judgeDeadlineMs: 12_000,
@@ -137,6 +138,31 @@ describe("repo override can only tighten", () => {
       "context.budget.limit",
       "policy.bands.deny",
     ]);
+  });
+
+  test("moving either socket from the repo is rejected; the user file may move both", () => {
+    write(
+      userFile(),
+      '[daemon]\nsocket = "/run/j/agent.sock"\nadmin_socket = "/run/j/admin.sock"\n',
+    );
+    write(
+      join(cwd, ".jevdict.toml"),
+      '[daemon]\nsocket = "/tmp/mine.sock"\nadmin_socket = "/tmp/admin.sock"\n',
+    );
+    const { config, rejected } = load();
+    expect(config.daemon.socket).toBe("/run/j/agent.sock");
+    expect(config.daemon.adminSocket).toBe("/run/j/admin.sock");
+    expect(rejected.map((r) => r.split(":")[0]).sort()).toEqual([
+      "daemon.admin_socket",
+      "daemon.socket",
+    ]);
+  });
+
+  test("a relative admin socket resolves against its file's directory", () => {
+    const flag = write(join(root, "flag.toml"), '[daemon]\nadmin_socket = "run/admin.sock"\n');
+    expect(load({ configPath: flag }).config.daemon.adminSocket).toBe(
+      join(root, "run", "admin.sock"),
+    );
   });
 
   test("a longer hold token life from the repo is rejected; the user file may set it", () => {

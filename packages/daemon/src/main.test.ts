@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { readAudit } from "./audit.ts";
-import { parseDaemonArgs } from "./main.ts";
+import { DEFAULT_DAEMON_CONFIG } from "./config.ts";
+import { applyArgs, parseDaemonArgs } from "./main.ts";
 import { policyModule } from "./testing/policies.ts";
 
 describe("parseDaemonArgs", () => {
@@ -13,6 +14,8 @@ describe("parseDaemonArgs", () => {
       "a.toml",
       "--socket",
       "/s",
+      "--admin-socket",
+      "/a",
       "--http",
       "127.0.0.1:9",
       "--enforce",
@@ -23,6 +26,7 @@ describe("parseDaemonArgs", () => {
         help: false,
         configPath: "a.toml",
         socket: "/s",
+        adminSocket: "/a",
         http: { host: "127.0.0.1", port: 9 },
         mode: "enforce",
       },
@@ -42,6 +46,18 @@ describe("parseDaemonArgs", () => {
   });
 });
 
+describe("applyArgs", () => {
+  test("--socket and --admin-socket override the config, resolved to absolute paths", () => {
+    const args = { help: false, socket: "rel/d.sock", adminSocket: "rel/a.sock" };
+    const applied = applyArgs(DEFAULT_DAEMON_CONFIG, args);
+    expect(applied.daemon.socket).toBe(resolve("rel/d.sock"));
+    expect(applied.daemon.adminSocket).toBe(resolve("rel/a.sock"));
+    expect(applyArgs(DEFAULT_DAEMON_CONFIG, { help: false }).daemon).toEqual(
+      DEFAULT_DAEMON_CONFIG.daemon,
+    );
+  });
+});
+
 describe("jevdictd process", () => {
   let dir: string;
   beforeEach(() => {
@@ -53,6 +69,7 @@ describe("jevdictd process", () => {
       [
         "[daemon]",
         `socket = "${join(dir, "d.sock")}"`,
+        `admin_socket = "${join(dir, "a.sock")}"`,
         "[policies]",
         `dir = "${join(dir, "policies")}"`,
         "[audit]",
@@ -87,6 +104,7 @@ describe("jevdictd process", () => {
     expect(await proc.exited).toBe(0);
     const stderr = await new Response(proc.stderr).text();
     expect(stderr).toContain(`jevdictd listening on ${socket}`);
+    expect(stderr).toContain(`admin ${join(dir, "a.sock")}`);
     expect(stderr).toContain("1 policy");
     expect(stderr).toContain("judge off");
     expect(stderr).toContain("WARNING: enforcement = observe");
@@ -94,6 +112,7 @@ describe("jevdictd process", () => {
     const kinds = readAudit(join(dir, "audit.jsonl")).lines.map((l) => l.payload.event);
     expect(kinds).toEqual(["boot", "shutdown"]);
     expect(existsSync(socket)).toBe(false);
+    expect(existsSync(join(dir, "a.sock"))).toBe(false);
   });
 
   test("a broken config exits 1 with the reason", async () => {

@@ -3,14 +3,7 @@ import { dirname } from "node:path";
 import type { Server } from "bun";
 import type { DaemonConfig, HttpBind } from "./config.ts";
 import { createRuntime, type DaemonDeps, type Runtime } from "./daemon.ts";
-import {
-  handleBudget,
-  handleBudgetReset,
-  handleExplain,
-  handleHealth,
-  handleResolve,
-} from "./human.ts";
-import { handleJudge, handleObserve, type Reply } from "./service.ts";
+import { createHandler } from "./routes.ts";
 
 /** Largest request body accepted (an event with a big Write is well under this). */
 export const MAX_BODY_BYTES = 1_048_576;
@@ -24,112 +17,6 @@ export function assertLoopback(host: string): void {
   if (!LOOPBACK_HOSTS.has(host)) {
     throw new Error(`refusing to bind HTTP on non-loopback address "${host}"`);
   }
-}
-
-function message(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
-}
-
-function toResponse(r: Reply): Response {
-  return r.status === 204 || r.body === null
-    ? new Response(null, { status: r.status })
-    : Response.json(r.body, { status: r.status });
-}
-
-/** 500 plus an `anomaly` audit line; the adapter treats non-200 as unreachable (T2). */
-async function safely(rt: Runtime, route: string, fn: () => Promise<Reply>): Promise<Reply> {
-  try {
-    return await fn();
-  } catch (cause) {
-    const error = message(cause);
-    try {
-      rt.audit.append({ kind: "anomaly", payload: { reason: "internal error", route, error } });
-    } catch (auditCause) {
-      rt.log.log("error", "audit append failed", { error: message(auditCause) });
-    }
-    rt.log.log("error", "internal error", { route, error });
-    return { status: 500, body: { error: "internal error" } };
-  }
-}
-
-/**
- * Past `judgeDeadlineMs` a judge request answers 504 `{ error: "judge timeout" }`, which
- * the adapter maps to `deny` (T3); an anomaly line records it. The late judgement still
- * finishes and writes its own line; its failure is swallowed.
- */
-async function withDeadline(rt: Runtime, work: Promise<Reply>, body: unknown): Promise<Reply> {
-  const ms = rt.config.daemon.judgeDeadlineMs;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), ms);
-  });
-  const outcome = await Promise.race([work, late]);
-  clearTimeout(timer);
-  if (outcome !== null) return outcome;
-  work.catch(() => undefined);
-  const id = (body as { id?: unknown } | null)?.id;
-  rt.audit.append({
-    kind: "anomaly",
-    ...(typeof id === "string" ? { event_id: id } : {}),
-    payload: { reason: "judge deadline exceeded", deadline_ms: ms },
-  });
-  return { status: 504, body: { error: "judge timeout" } };
-}
-
-async function readJson(req: Request): Promise<{ ok: true; body: unknown } | { ok: false }> {
-  try {
-    return { ok: true, body: await req.json() };
-  } catch {
-    return { ok: false };
-  }
-}
-
-type Route = (rt: Runtime, body: unknown, param: string) => Reply | Promise<Reply>;
-
-const POST_ROUTES: Readonly<Record<string, Route>> = {
-  "/v1/judge": (rt, body) => withDeadline(rt, handleJudge(rt, body), body),
-  "/v1/observe": (rt, body) => handleObserve(rt, body),
-  "/v1/resolve": (rt, body) => handleResolve(rt, body),
-  "/v1/budget/reset": (rt, body) => handleBudgetReset(rt, body),
-};
-
-function getRoute(path: string): { route: Route; param: string } | null {
-  if (path === "/v1/health") return { route: (rt) => handleHealth(rt), param: "" };
-  const m = /^\/v1\/(explain|budget)\/([^/]+)$/.exec(path);
-  if (m === null) return null;
-  const param = decodeURIComponent(m[2] ?? "");
-  const route: Route =
-    m[1] === "explain" ? (rt, _b, p) => handleExplain(rt, p) : (rt, _b, p) => handleBudget(rt, p);
-  return { route, param };
-}
-
-async function dispatch(rt: Runtime, req: Request): Promise<Reply> {
-  const path = new URL(req.url).pathname;
-  if (req.method === "GET") {
-    const found = getRoute(path);
-    if (found === null) return { status: 404, body: { error: "not found" } };
-    return safely(rt, path, async () => found.route(rt, null, found.param));
-  }
-  const route = POST_ROUTES[path];
-  if (req.method !== "POST" || route === undefined) {
-    return { status: 404, body: { error: "not found" } };
-  }
-  const json = await readJson(req);
-  if (!json.ok) return { status: 400, body: { error: "invalid JSON" } };
-  return safely(rt, path, async () => route(rt, json.body, ""));
-}
-
-/** The request handler for both listeners; tracks in-flight requests for draining. */
-export function createHandler(rt: Runtime, inflight: Set<Promise<unknown>>) {
-  return async (req: Request): Promise<Response> => {
-    const work = dispatch(rt, req);
-    inflight.add(work);
-    try {
-      return toResponse(await work);
-    } finally {
-      inflight.delete(work);
-    }
-  };
 }
 
 async function socketInUse(path: string): Promise<boolean> {
@@ -164,39 +51,75 @@ async function prepareSocket(path: string): Promise<void> {
 
 /** Where the daemon listens, and how to stop listening. */
 export interface Listening {
+  /** The agent-facing socket (the one a sandbox mounts). */
   readonly socket: string;
-  /** `http://127.0.0.1:<port>` when HTTP is on. */
+  /** The human-only socket (budget reset); never mounted into a sandbox. */
+  readonly adminSocket: string;
+  /** `http://127.0.0.1:<port>` when HTTP is on; it serves the agent-facing routes. */
   readonly httpUrl: string | null;
   stop(): Promise<void>;
 }
 
+/** The listeners to open: both Unix sockets and optional loopback HTTP. */
+export interface ListenOptions {
+  readonly socket: string;
+  readonly adminSocket: string;
+  readonly http: HttpBind | null;
+}
+
+function serveUnix(fetch: ReturnType<typeof createHandler>, path: string): Server<undefined> {
+  const server = Bun.serve({ fetch, maxRequestBodySize: MAX_BODY_BYTES, unix: path });
+  chmodSync(path, 0o600);
+  return server;
+}
+
+/** Opens every listener; if one fails, the ones already open are closed again. */
+function openServers(rt: Runtime, opts: ListenOptions, inflight: Set<Promise<unknown>>) {
+  const agent = createHandler(rt, inflight, "agent");
+  const servers: Server<undefined>[] = [];
+  let web: Server<undefined> | null = null;
+  try {
+    servers.push(serveUnix(agent, opts.socket));
+    servers.push(serveUnix(createHandler(rt, inflight, "admin"), opts.adminSocket));
+    if (opts.http !== null) {
+      const { host: hostname, port } = opts.http;
+      web = Bun.serve({ fetch: agent, maxRequestBodySize: MAX_BODY_BYTES, hostname, port });
+      servers.push(web);
+    }
+  } catch (cause) {
+    for (const s of servers) s.stop(true);
+    throw cause;
+  }
+  return { servers, web };
+}
+
 /**
- * Listens on the Unix socket (mode 0600) and, when configured, on loopback HTTP only.
- * `stop` stops accepting, waits up to 2 s for in-flight requests, removes the socket.
+ * Listens on the agent socket and the admin socket (both mode 0600, in 0700 directories)
+ * and, when configured, on loopback HTTP only (agent routes). The two sockets must
+ * differ. `stop` stops accepting, waits up to 2 s for in-flight requests, removes both
+ * sockets.
  */
 export async function listen(
   rt: Runtime,
-  opts: { socket: string; http: HttpBind | null } = rt.config.daemon,
+  opts: ListenOptions = rt.config.daemon,
 ): Promise<Listening> {
   if (opts.http !== null) assertLoopback(opts.http.host);
-  await prepareSocket(opts.socket);
-  const inflight = new Set<Promise<unknown>>();
-  const fetch = createHandler(rt, inflight);
-  const common = { fetch, maxRequestBodySize: MAX_BODY_BYTES };
-  const servers: Server<undefined>[] = [Bun.serve({ ...common, unix: opts.socket })];
-  chmodSync(opts.socket, 0o600);
-  if (opts.http !== null) {
-    servers.push(Bun.serve({ ...common, hostname: opts.http.host, port: opts.http.port }));
+  if (opts.socket === opts.adminSocket) {
+    throw new Error(`the agent and admin sockets must differ: ${opts.socket}`);
   }
-  const web = servers[1];
+  await prepareSocket(opts.socket);
+  await prepareSocket(opts.adminSocket);
+  const inflight = new Set<Promise<unknown>>();
+  const { servers, web } = openServers(rt, opts, inflight);
   return {
     socket: opts.socket,
-    httpUrl: web === undefined ? null : `http://${opts.http?.host}:${web.port}`,
+    adminSocket: opts.adminSocket,
+    httpUrl: web === null ? null : `http://${opts.http?.host}:${web.port}`,
     async stop() {
       for (const s of servers) s.stop(true);
       const drained = Promise.allSettled([...inflight]);
       await Promise.race([drained, new Promise((r) => setTimeout(r, DRAIN_MS))]);
-      if (existsSync(opts.socket)) unlinkSync(opts.socket);
+      for (const path of [opts.socket, opts.adminSocket]) if (existsSync(path)) unlinkSync(path);
     },
   };
 }
