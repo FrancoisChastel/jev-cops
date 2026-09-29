@@ -18,6 +18,8 @@ import { type RunningDaemon, startDaemon } from "../server.ts";
 export interface TestDaemonOptions {
   /** File name → module source, written into the policies directory. */
   policies: Readonly<Record<string, string>>;
+  /** Load policies from this directory instead (e.g. the repo's `policies/`); `policies` is then ignored. */
+  policiesDir?: string;
   judge?: Judge;
   mode?: EnforcementMode;
   deadlineMs?: number;
@@ -57,7 +59,7 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
       home: "/home/dev",
       judgeDeadlineMs: opts.deadlineMs ?? 12_000,
     },
-    policies: { dir: join(dir, "policies") },
+    policies: { dir: opts.policiesDir ?? join(dir, "policies") },
     judge: {
       provider: "off",
       model: null,
