@@ -21,7 +21,8 @@ export interface Bands {
 
 /** Fixed, agent-safe sentences used when no policy supplies one. */
 export interface PolicyTexts {
-  reasons: Record<"allow" | "annotate" | "hold" | "deny" | "budget" | "rewrite", string>;
+  /** Band reason per verdict, plus the budget hold and the rewrite-without-input cases. */
+  reasons: Record<Verdict | "budget" | "missingRewrite", string>;
   /** Context note for an `annotate` that no policy explained. */
   annotateNote: string;
   /** Context note when the budget raised an `allow` to `annotate`. */
@@ -80,10 +81,12 @@ export const DEFAULT_POLICY_CONFIG: Readonly<PolicyConfig> = deepFreeze({
     reasons: {
       allow: "No policy concern with this action.",
       annotate: "This action carries some risk in the current context.",
+      rewrite: "This action was rewritten to a safer form.",
       hold: "This action is risky in the current context and needs a human decision.",
       deny: "This action is too risky in the current context.",
+      kill: "This action is blocked and the session is stopped.",
       budget: "The session's risk budget is exhausted; a human must review further actions.",
-      rewrite: "A safer form of this action could not be produced; a human must review it.",
+      missingRewrite: "A safer form of this action could not be produced; a human must review it.",
     },
     annotateNote: "Jevdict flagged this action as moderately risky; stay within the task.",
     budgetNote: "Most of this session's risk budget is spent; further risky actions will be held.",
