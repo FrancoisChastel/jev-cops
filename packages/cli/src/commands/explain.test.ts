@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { buildEvent } from "../../../../tests/fixtures/context/index.ts";
 import { startTestDaemon, withFreshId } from "../../../daemon/src/testing/daemon.ts";
 import { policyModule } from "../../../daemon/src/testing/policies.ts";
+import { withHarness } from "../../../daemon/src/testing/session.ts";
 import { captureIo } from "../io.ts";
 import { runExplainCommand } from "./explain.ts";
 
@@ -21,11 +22,15 @@ let keep: string;
 
 beforeAll(async () => {
   const td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
-  const e1 = withFreshId(
-    buildEvent(
-      { tool: "Bash", kind: "exec", input: { command: `rm -rf /srv/data # ${INJECTION}` } },
-      { task: "t" },
+  // A Pi hold: Claude Code holds never resolve into a precedent (D-069 proposal).
+  const e1 = withHarness(
+    withFreshId(
+      buildEvent(
+        { tool: "Bash", kind: "exec", input: { command: `rm -rf /srv/data # ${INJECTION}` } },
+        { task: "t" },
+      ),
     ),
+    "pi",
   );
   const e2 = withFreshId(
     buildEvent({ tool: "Bash", kind: "exec", input: { command: "ls" } }, { task: "t" }),

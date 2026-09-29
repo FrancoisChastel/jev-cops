@@ -1,7 +1,6 @@
 import {
   type CaseFile,
   type Event,
-  type Judgement,
   type PostEvent,
   type PreEvent,
   parseEvent,
@@ -14,16 +13,16 @@ import {
   type ReturnedVerdict,
 } from "./audit-payload.ts";
 import type { Runtime } from "./daemon.ts";
-import { HOLD_TOKEN_HASH_PREFIX, type MintedHoldToken, mintHoldToken } from "./hold-tokens.ts";
+import { deliver, type IssuedToken, recordHold, tokenTrace } from "./holds.ts";
 import type { KillRecord } from "./kill-latch.ts";
-import { proposeScope } from "./precedents.ts";
 import { type NoHumanReason, noHumanOf } from "./session-facts.ts";
 import { harnessVerdict, latchedVerdict } from "./verdict-map.ts";
 
-/** A route's answer: HTTP status and JSON body (null → empty body). */
+/** A route's answer: HTTP status, JSON body (null → empty body), extra response headers. */
 export interface Reply {
   readonly status: number;
   readonly body: unknown;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /** 400 with the schema error, so the adapter can log why and fail closed. */
@@ -46,43 +45,8 @@ function parsePhase<P extends Event["phase"]>(
   return { ok: true, event: parsed.value as Extract<Event, { phase: P }> };
 }
 
-/** `name@version` → `name`: core waives a precedent's policies by name. */
-function policyName(key: string): string {
-  const at = key.lastIndexOf("@");
-  return at > 0 ? key.slice(0, at) : key;
-}
-
-/**
- * Records a hold the harness will show a human, with the daemon's proposed precedent
- * scope, a fresh single-use token (only its hash is stored; the token expires after
- * `daemon.hold_token_ttl_ms`) and the confirm view the token unlocks. Returns the token
- * for the adapter.
- */
-function recordHold(
-  rt: Runtime,
-  event: PreEvent,
-  cf: CaseFile,
-  j: Judgement,
-  reason: string,
-): MintedHoldToken {
-  const minted = mintHoldToken();
-  const expiresAt = rt.now() + rt.config.daemon.holdTokenTtlMs;
-  rt.precedents.recordHold(
-    {
-      eventId: event.id,
-      sessionId: event.session.id,
-      scope: proposeScope(j.normalized, cf.task),
-      policies: j.decision.policies.map(policyName),
-    },
-    { hash: minted.hash, expiresAt },
-  );
-  const view = { event_id: event.id, verdict: "hold", reason, raw: j.normalized.raw } as const;
-  rt.confirmViews.put({ ...view, detail: j.decision.detail }, expiresAt);
-  return minted;
-}
-
-/** What the audit records as returned to the harness: never the raw token, a hash prefix. */
-function returnedOf(response: VerdictResponse, token: MintedHoldToken | null): ReturnedVerdict {
+/** What the audit records as returned to the harness: never a raw token, a hash prefix. */
+function returnedOf(response: VerdictResponse, token: IssuedToken | null): ReturnedVerdict {
   return {
     verdict: response.verdict,
     reason: response.reason,
@@ -91,7 +55,7 @@ function returnedOf(response: VerdictResponse, token: MintedHoldToken | null): R
     risk: response.risk,
     features: response.features,
     jev: response.jev,
-    ...(token === null ? {} : { hold_token_sha256: token.hash.slice(0, HOLD_TOKEN_HASH_PREFIX) }),
+    ...tokenTrace(token),
   };
 }
 
@@ -159,8 +123,7 @@ async function judgeLive(rt: Runtime, sent: PreEvent, cf: CaseFile, root: string
     payload: judgePayload({ ...record, mapping, enforcement: mode, home, repoHints }),
   });
   if (response.verdict === "kill") latchOnKill(rt, event, root);
-  const body = token === null ? response : { ...response, hold_token: token.token };
-  return { status: 200, body } satisfies Reply;
+  return { status: 200, ...deliver(response, token) } satisfies Reply;
 }
 
 /**

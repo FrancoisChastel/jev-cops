@@ -39,6 +39,8 @@ export interface ReturnedVerdict {
   readonly jev?: readonly JevAnswer[];
   /** First hex characters of the SHA-256 of the hold token, when one was issued. */
   readonly hold_token_sha256?: string;
+  /** Same, for the view-only token of a hold nothing can resolve (Claude Code). */
+  readonly view_token_sha256?: string;
 }
 
 /** Everything a `judge` audit line is built from. */

@@ -134,9 +134,10 @@ export async function dispatch(rt: Runtime, req: Request, surface: Surface): Pro
 }
 
 function toResponse(r: Reply): Response {
+  const init = { status: r.status, ...(r.headers === undefined ? {} : { headers: r.headers }) };
   return r.status === 204 || r.body === null
-    ? new Response(null, { status: r.status })
-    : Response.json(r.body, { status: r.status });
+    ? new Response(null, init)
+    : Response.json(r.body, init);
 }
 
 /** The request handler for one surface's listeners; tracks in-flight requests for draining. */

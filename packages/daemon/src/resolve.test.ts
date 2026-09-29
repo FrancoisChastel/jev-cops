@@ -1,13 +1,15 @@
 /**
  * `POST /v1/resolve` over the agent socket: precedents from a human's allow, and the
  * single-use hold tokens that keep anyone but the adapter that got the hold from
- * resolving it (T7/T8).
+ * resolving it (T7/T8). The holds here are Pi's; a Claude Code hold never resolves
+ * (`claude-code/holds.test.ts`).
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { parseVerdict, type VerdictResponse } from "@jevdict/core";
 import { buildEvent, type EventShape } from "../../../tests/fixtures/context/index.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "./testing/daemon.ts";
 import { policyModule } from "./testing/policies.ts";
+import { withHarness } from "./testing/session.ts";
 
 const TASK = "Fix the flaky test in auth/";
 /** Holds any delete; names the path so the precedent test can check narrowing. */
@@ -30,9 +32,8 @@ afterEach(async () => {
 
 async function judge(command: string, shape: EventShape = {}) {
   const input = { command };
-  const event = withFreshId(
-    buildEvent({ tool: "Bash", kind: "exec", input }, { task: TASK, ...shape }),
-  );
+  const built = buildEvent({ tool: "Bash", kind: "exec", input }, { task: TASK, ...shape });
+  const event = withHarness(withFreshId(built), "pi");
   const res = await (td as TestDaemon).call("POST", "/v1/judge", event);
   return { event, status: res.status, body: res.body as VerdictResponse & Record<string, unknown> };
 }
