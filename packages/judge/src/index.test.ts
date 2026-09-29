@@ -3,6 +3,7 @@ import { DEFAULT_JUDGE_CONFIG, type Question } from "@jevdict/core";
 import { createJudge } from "./index.ts";
 import { fakeFetch, json } from "./testing/fetch.ts";
 import { MOCK_ANSWERS, NOUL, QUESTIONS, STATE } from "./testing/fixtures.ts";
+import { textModel } from "./testing/model.ts";
 
 const jevNoul = () =>
   json({ model: "jev-x", answers: { [NOUL.name]: { type: "noul", noul: 0.9 } } });
@@ -102,6 +103,21 @@ describe("createJudge: openrouter", () => {
     expect(fake.sent[0]?.headers.get("authorization")).toBe("Bearer or-key");
     expect(second).toMatchObject({ ok: true, cached: true, provider: "openrouter" });
     expect(fake.sent).toHaveLength(1);
+  });
+});
+
+describe("createJudge: vercel-ai", () => {
+  test("needs no key and is wrapped with the cache", async () => {
+    // Arrange
+    const model = textModel(JSON.stringify({ [NOUL.name]: { p: 0.2, confidence: 0.7 } }), "byo");
+    const judge = createJudge({ provider: "vercel-ai", model }, { env: {} });
+    // Act
+    const first = await judge.ask(STATE, [NOUL]);
+    const second = await judge.ask(STATE, [NOUL]);
+    // Assert
+    expect(first).toMatchObject({ ok: true, provider: "vercel-ai", model: "byo", cached: false });
+    expect(second).toMatchObject({ ok: true, cached: true });
+    expect(model.doGenerateCalls).toHaveLength(1);
   });
 });
 

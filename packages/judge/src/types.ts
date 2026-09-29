@@ -1,4 +1,5 @@
 import type { Answer, JudgeConfig } from "@jevdict/core";
+import type { VercelAiModel } from "./providers/vercel-ai.ts";
 import type { Env, FetchLike } from "./shared.ts";
 
 /** Semantic layer off: every request answers `disabled` and the floor stands. */
@@ -42,10 +43,19 @@ export interface OpenRouterConfig {
 }
 
 /**
+ * Vercel AI SDK: bring your own `LanguageModel` instance (any AI SDK provider package).
+ * No key is read here; the model instance carries its own credentials.
+ */
+export interface VercelAiConfig {
+  readonly provider: "vercel-ai";
+  readonly model: VercelAiModel;
+}
+
+/**
  * Which semantic judge the daemon uses (`judge.provider` in config, D-004). Every
  * variant answers the same typed questions behind the core `Judge` interface.
  */
-export type ProviderConfig = OffConfig | MockConfig | JevConfig | OpenRouterConfig;
+export type ProviderConfig = OffConfig | MockConfig | JevConfig | OpenRouterConfig | VercelAiConfig;
 
 /** What the factory reads from its surroundings; both default to the real ones. */
 export interface JudgeDeps {

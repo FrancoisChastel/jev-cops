@@ -13,6 +13,7 @@ import {
 } from "@jevdict/core";
 import { createJevJudge, JEV_API_KEY_ENV } from "./providers/jev.ts";
 import { createOpenRouterJudge, OPENROUTER_API_KEY_ENV } from "./providers/openrouter.ts";
+import { createVercelAiJudge } from "./providers/vercel-ai.ts";
 import { type Env, missingKeyJudge, resolveApiKey } from "./shared.ts";
 import type { JudgeDeps, ProviderConfig } from "./types.ts";
 
@@ -23,6 +24,7 @@ export {
   OPENROUTER_DEFAULT_REFERER,
   OPENROUTER_DEFAULT_TITLE,
 } from "./providers/openrouter.ts";
+export type { VercelAiModel } from "./providers/vercel-ai.ts";
 export type { Env, FetchLike } from "./shared.ts";
 export type * from "./types.ts";
 
@@ -57,6 +59,8 @@ function buildProvider(config: RealConfig, env: Env): Built {
       return withKey("openrouter", config.apiKey, env, OPENROUTER_API_KEY_ENV, (apiKey) =>
         createOpenRouterJudge({ ...config, apiKey }),
       );
+    case "vercel-ai":
+      return { ready: true, judge: createVercelAiJudge({ model: config.model }) };
   }
 }
 
