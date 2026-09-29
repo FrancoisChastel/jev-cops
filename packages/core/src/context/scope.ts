@@ -93,25 +93,27 @@ export function hostAllowed(host: string, list: TaskAllowlist): boolean {
 const READ_TOOLS = ["Read", "Grep", "Glob"];
 
 /** Task keyword → tools that task plausibly needs. A small, deliberately loose table. */
-export const EXPECTED_TOOLS: ReadonlyArray<{ keywords: RegExp; tools: ReadonlyArray<string> }> = [
-  {
-    keywords: /\b(?:tests?|fix(?:es)?|bugs?|flaky|debug|failing|refactor|implement|build|lint)\b/i,
-    tools: ["Bash", "Edit", "Write", "MultiEdit", ...READ_TOOLS],
-  },
-  {
-    keywords: /\b(?:docs?|documentation|readme|changelog)\b/i,
-    tools: ["Edit", "Write", "WebFetch", ...READ_TOOLS],
-  },
-  {
-    keywords: /\b(?:research|investigate|explain|review|summari[sz]e|analy[sz]e)\b/i,
-    tools: ["WebFetch", "WebSearch", ...READ_TOOLS],
-  },
-  {
-    keywords: /\b(?:install|upgrade|update|bump|dependency|dependencies|deps)\b/i,
-    tools: ["Bash", "Edit", "WebFetch", ...READ_TOOLS],
-  },
-  { keywords: /\b(?:deploy|release|publish)\b/i, tools: ["Bash", ...READ_TOOLS] },
-];
+export const EXPECTED_TOOLS: ReadonlyArray<{ keywords: RegExp; tools: ReadonlyArray<string> }> =
+  Object.freeze([
+    {
+      keywords:
+        /\b(?:tests?|fix(?:es)?|bugs?|flaky|debug|failing|refactor|implement|build|lint)\b/i,
+      tools: ["Bash", "Edit", "Write", "MultiEdit", ...READ_TOOLS],
+    },
+    {
+      keywords: /\b(?:docs?|documentation|readme|changelog)\b/i,
+      tools: ["Edit", "Write", "WebFetch", ...READ_TOOLS],
+    },
+    {
+      keywords: /\b(?:research|investigate|explain|review|summari[sz]e|analy[sz]e)\b/i,
+      tools: ["WebFetch", "WebSearch", ...READ_TOOLS],
+    },
+    {
+      keywords: /\b(?:install|upgrade|update|bump|dependency|dependencies|deps)\b/i,
+      tools: ["Bash", "Edit", "WebFetch", ...READ_TOOLS],
+    },
+    { keywords: /\b(?:deploy|release|publish)\b/i, tools: ["Bash", ...READ_TOOLS] },
+  ]);
 
 /** Union of the tools every matching keyword row expects; null when no row matches. */
 export function expectedTools(task: string | null): ReadonlySet<string> | null {
