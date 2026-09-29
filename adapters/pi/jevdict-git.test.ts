@@ -68,7 +68,7 @@ describe("Pi end to end: jevdictd derives env.git from the call's cwd", () => {
       default_branch: "main",
       dirty: false,
     });
-    expect(p.decision.policies).toContain("default-branch-guard@1");
+    expect(p.decision.policies).toContain("default-branch-guard@2");
     expect(p.decision.detail).toContain("branch main; default main");
     expect(p.why.environment).toContain("default branch");
   });
@@ -79,7 +79,7 @@ describe("Pi end to end: jevdictd derives env.git from the call's cwd", () => {
     expect(run.blocked?.reason ?? "").not.toContain(GUARD_REASON);
     const p = lastJudge().payload as unknown as Payload;
     expect(p).not.toHaveProperty("derived");
-    expect(p.decision.policies).not.toContain("default-branch-guard@1");
+    expect(p.decision.policies).not.toContain("default-branch-guard@2");
   });
 
   test("scope uses the repo root, not the cwd: a sibling directory is in the repo", async () => {

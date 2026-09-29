@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { bashPre, CTX_HOME } from "../../../../tests/fixtures/context/index.ts";
 import { resolveContextConfig } from "./config.ts";
-import { environmentScore } from "./environment.ts";
+import { defaultBranches, environmentScore, isOnDefaultBranch } from "./environment.ts";
 
 const CFG = resolveContextConfig({ home: CTX_HOME });
 const MAIN = { repo: "/work/repo", branch: "main", dirty: false, default_branch: "main" };
@@ -35,6 +35,43 @@ describe("environmentScore: weighted exposure", () => {
     const git = { repo: "/work/repo", branch: "master" };
     const n = await bashPre("ls", { git, sandbox: "openshell" });
     expect(environmentScore(n, CFG).why).toEqual(["default branch"]);
+  });
+
+  test.each([
+    ["main", "trunk"],
+    ["master", "develop"],
+    ["trunk", "trunk"],
+  ])("D-068: branch %s with reported default %s is the default branch", async (branch, dflt) => {
+    const git = { repo: "/work/repo", branch, default_branch: dflt };
+    const n = await bashPre("ls", { git, sandbox: "openshell" });
+    expect(environmentScore(n, CFG).why).toEqual(["default branch"]);
+  });
+
+  test("D-068: a feature branch is not the default, whatever is reported", async () => {
+    const git = { repo: "/work/repo", branch: "feat/x", default_branch: "trunk" };
+    const n = await bashPre("ls", { git, sandbox: "openshell" });
+    expect(environmentScore(n, CFG).why).toEqual([]);
+  });
+
+  test("defaultBranches: main and master always, plus the reported one", () => {
+    expect(defaultBranches(undefined, CFG)).toEqual(["main", "master"]);
+    expect(defaultBranches({ repo: "/r", default_branch: "trunk" }, CFG)).toEqual([
+      "main",
+      "master",
+      "trunk",
+    ]);
+    expect(defaultBranches({ repo: "/r", default_branch: "main" }, CFG)).toEqual([
+      "main",
+      "master",
+    ]);
+  });
+
+  test("isOnDefaultBranch: an unknown branch is not the default", () => {
+    expect(isOnDefaultBranch(undefined, CFG)).toBe(false);
+    expect(isOnDefaultBranch({ repo: "/r" }, CFG)).toBe(false);
+    expect(isOnDefaultBranch({ repo: "/r", branch: "master", default_branch: "trunk" }, CFG)).toBe(
+      true,
+    );
   });
 
   test("target host credential class: prod 0.3, staging 0.15, dev 0, unknown 0.05", async () => {

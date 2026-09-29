@@ -284,6 +284,40 @@ describe("createPolicyEngine: end to end over fixtures", () => {
     expect(decision.flags.precedent).toBe("none");
   });
 
+  test("ctx.config carries the call's home and the policy config's protected paths", async () => {
+    // Arrange
+    const seen: unknown[] = [];
+    const probe: PolicyDefinition = {
+      name: "probe",
+      version: 1,
+      owner: "test",
+      when: (_e, ctx) => {
+        seen.push(ctx.config);
+        return false;
+      },
+      decide: () => "allow",
+      reason: "probe",
+    };
+    const policyConfig = resolvePolicyConfig({
+      when: { budgetMs: 1_000 },
+      protectedPaths: ["~/bin/jevdict-hook"],
+    });
+    const engine = createPolicyEngine({
+      policies: [probe],
+      judge: createDisabledJudge(),
+      contextConfig: CONTEXT,
+      policyConfig,
+    });
+
+    // Act
+    await engine.judge(pre("ls"), session(testClock()), { home: "/home/other" });
+
+    // Assert
+    expect(seen).toEqual([
+      { home: "/home/other", protectedPaths: ["/home/other/bin/jevdict-hook"] },
+    ]);
+  });
+
   test("holdKey groups calls by kind and verbs, not by arguments (T7)", async () => {
     const engine = engineWith([], createDisabledJudge(), testClock());
     const a = await engine.judge(pre("rm -rf /tmp/a"), session(testClock()), OPTS);

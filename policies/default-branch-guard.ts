@@ -1,30 +1,19 @@
-import { definePolicy, type PolicyEvent } from "@jevdict/sdk";
+import { definePolicy, type PolicyContext, type PolicyEvent } from "@jevdict/sdk";
 
 /**
  * default-branch-guard (spec §Starter policy set): irreversible git on the default
  * branch → hold, deny when headless. Deterministic; asks nothing.
  *
- * Invariant: the default branch is `env.git.default_branch`, or `main`/`master` when the
- * adapter did not report one (D-024); an unknown current branch is not the default, as
- * in the environment feature. A force push whose refspec names the default branch counts
- * too, whatever branch is checked out, since that is the branch it overwrites.
+ * Invariant: the default branches are `ctx.env.defaultBranches`: `main` and `master`
+ * always, plus the reported `env.git.default_branch` (D-068), so repointing `origin/HEAD`
+ * cannot make `main` stop counting. An unknown current branch is not the default, as in
+ * the environment feature. A force push whose refspec names a default branch counts too,
+ * whatever branch is checked out, since that is the branch it overwrites.
  */
 
-/** D-024 fallback, mirrored from the context engine's `fallbackDefaultBranches`. */
-const FALLBACK_DEFAULT_BRANCHES: readonly string[] = ["main", "master"];
 const IRREVERSIBLE_VERBS: readonly string[] = ["force", "hard", "irreversible"];
 
 type Command = PolicyEvent["commands"][number];
-
-function defaultBranches(e: PolicyEvent): readonly string[] {
-  const reported = e.env.git?.default_branch;
-  return reported === undefined ? FALLBACK_DEFAULT_BRANCHES : [reported];
-}
-
-function onDefaultBranch(e: PolicyEvent): boolean {
-  const branch = e.env.git?.branch;
-  return branch !== undefined && defaultBranches(e).includes(branch);
-}
 
 /** The destination branch a push word names: `main`, `+main`, `HEAD:main`, `refs/heads/main`. */
 function pushDestination(word: string): string {
@@ -42,20 +31,21 @@ function irreversibleGit(c: Command): boolean {
   return c.verbs.includes("git") && c.verbs.some((v) => IRREVERSIBLE_VERBS.includes(v));
 }
 
-function hitsDefaultBranch(e: PolicyEvent): boolean {
-  const branches = defaultBranches(e);
-  const onDefault = onDefaultBranch(e);
-  return e.commands.some((c) => irreversibleGit(c) && (onDefault || pushesTo(c, branches)));
+function hitsDefaultBranch(e: PolicyEvent, ctx: PolicyContext): boolean {
+  const { defaultBranches, onDefaultBranch } = ctx.env;
+  return e.commands.some(
+    (c) => irreversibleGit(c) && (onDefaultBranch || pushesTo(c, defaultBranches)),
+  );
 }
 
 export default definePolicy({
   name: "default-branch-guard",
-  version: 1,
+  version: 2,
   owner: "cyber-team",
-  when: (e) => hitsDefaultBranch(e),
+  when: (e, ctx) => hitsDefaultBranch(e, ctx),
   decide: (e) => (e.session.mode === "headless" ? "deny" : "hold"),
   reason: "Irreversible git operation on the default branch.",
-  detail: (e) =>
-    `branch ${e.env.git?.branch ?? "unknown"}; default ${defaultBranches(e).join("/")}; mode ${e.session.mode ?? "unknown"}`,
+  detail: (e, ctx) =>
+    `branch ${e.env.git?.branch ?? "unknown"}; default ${ctx.env.defaultBranches.join("/")}; mode ${e.session.mode ?? "unknown"}`,
   range: ["hold", "deny"],
 });

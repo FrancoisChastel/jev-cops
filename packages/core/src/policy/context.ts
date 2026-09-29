@@ -1,17 +1,21 @@
 import { posix } from "node:path";
 import { budgetStatus } from "../context/budget.ts";
 import { type ContextConfig, deepFreeze } from "../context/config.ts";
+import { defaultBranches, isOnDefaultBranch } from "../context/environment.ts";
 import type { FeatureResult } from "../context/features.ts";
 import { secretPathReads } from "../context/record.ts";
 import { hostAllowed, type RepoHints, taskAllowlist } from "../context/scope.ts";
 import { type SequenceMatch, sequenceScore } from "../context/sequence.ts";
 import { taintFraction, tokenTaint } from "../context/taint.ts";
 import type { CaseFile } from "../context/types.ts";
+import { expandHome } from "../normalizer/paths.ts";
 import type { NormalizedEvent } from "../normalizer/types.ts";
 import { parseDuration } from "./duration.ts";
 import type {
   BudgetView,
   CaseFileView,
+  EnvView,
+  PolicyConfigView,
   PolicyContext,
   ScopeView,
   SequenceView,
@@ -26,6 +30,10 @@ export interface PolicyContextInputs {
   floor: number;
   contextConfig: ContextConfig;
   repoHints?: RepoHints;
+  /** `~`/`$HOME` for this call (the daemon's); default `contextConfig.home`. */
+  home?: string;
+  /** `[policy] protectedPaths` as configured; default none. */
+  protectedPaths?: readonly string[];
 }
 
 function isUnder(path: string, root: string): boolean {
@@ -87,6 +95,30 @@ function casefileView(cf: CaseFile): CaseFileView {
   };
 }
 
+function envView(n: NormalizedEvent, cfg: ContextConfig): EnvView {
+  const git = n.event.env?.git;
+  return {
+    defaultBranches: defaultBranches(git, cfg),
+    onDefaultBranch: isOnDefaultBranch(git, cfg),
+  };
+}
+
+/** `~`/`$HOME` expanded; absolute ones normalized; relative ones kept; empty ones dropped. */
+function protectedPathsOf(paths: readonly string[], home: string): string[] {
+  return paths
+    .map((p) => expandHome(p.trim(), home))
+    .filter((p) => p !== "")
+    .map((p) => {
+      const normal = p.startsWith("/") ? posix.normalize(p) : p;
+      return normal.length > 1 ? normal.replace(/\/+$/, "") : normal;
+    });
+}
+
+function configView(inputs: PolicyContextInputs): PolicyConfigView {
+  const home = inputs.home ?? inputs.contextConfig.home;
+  return { home, protectedPaths: protectedPathsOf(inputs.protectedPaths ?? [], home) };
+}
+
 function budgetView(cf: CaseFile, cfg: ContextConfig): BudgetView {
   const { spent, limit } = cf.budget;
   const status = budgetStatus(cf.budget, cfg.budget);
@@ -98,7 +130,8 @@ function budgetView(cf: CaseFile, cfg: ContextConfig): BudgetView {
  * The frozen `ctx` a policy receives. Every helper reads the case file, never writes
  * it: the case-file view exposes queries only, `session.task` is the case file's task
  * (T11), and the budget is a snapshot before this event is charged. Sequence matches
- * are computed on first use.
+ * are computed on first use. `env` answers the default-branch question (D-068) and
+ * `config` carries the daemon's home and protected paths.
  */
 export function buildPolicyContext(inputs: PolicyContextInputs): PolicyContext {
   const { n, cf } = inputs;
@@ -116,5 +149,7 @@ export function buildPolicyContext(inputs: PolicyContextInputs): PolicyContext {
     taint: taintView(inputs),
     casefile: casefileView(cf),
     budget: budgetView(cf, inputs.contextConfig),
+    env: envView(n, inputs.contextConfig),
+    config: configView(inputs),
   });
 }

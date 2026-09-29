@@ -49,8 +49,11 @@ export interface EnvironmentConfig {
   hostClassWeights: Record<HostClass | "unknown", number>;
   /** Host (lower-case) → credential class; hosts absent here are `unknown`. */
   hostClasses: Record<string, HostClass>;
-  /** Branch names treated as default when `env.git.default_branch` is absent. */
-  fallbackDefaultBranches: string[];
+  /**
+   * Branch names that always count as default, in addition to the reported
+   * `env.git.default_branch` (D-068: the agent can repoint `origin/HEAD`).
+   */
+  defaultBranches: string[];
 }
 
 /** Taint token rules. */
@@ -162,7 +165,7 @@ export const DEFAULT_CONTEXT_CONFIG: Readonly<ContextConfig> = deepFreeze({
     },
     hostClassWeights: { prod: 0.3, staging: 0.15, dev: 0, unknown: 0.05 },
     hostClasses: {},
-    fallbackDefaultBranches: ["main", "master"],
+    defaultBranches: ["main", "master"],
   },
   taint: { minLength: 4, maxCandidatesPerEvent: 500, outputTaint: 1 },
   scope: {

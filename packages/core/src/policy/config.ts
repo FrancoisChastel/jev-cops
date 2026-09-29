@@ -60,6 +60,12 @@ export interface PolicyConfig {
   when: { budgetMs: number; degradeAfter: number; trackedSessions: number };
   /** Kinds the 100 % budget rule does not hold ("every non-trivial action"). */
   trivialKinds: CallKind[];
+  /**
+   * Extra paths policies must protect (`[policy] protectedPaths`: the hook and daemon
+   * binaries, a relocated config dir). `~`/`$HOME` expand to the daemon's home; relative
+   * entries are project-relative. Reach policies as `ctx.config.protectedPaths`.
+   */
+  protectedPaths: string[];
   texts: PolicyTexts;
   judge: JudgeConfig;
 }
@@ -77,6 +83,7 @@ export const DEFAULT_POLICY_CONFIG: Readonly<PolicyConfig> = deepFreeze({
   precedent: { maxRiskDelta: 0.3 },
   when: { budgetMs: 2, degradeAfter: 3, trackedSessions: 1_000 },
   trivialKinds: ["fs.read"],
+  protectedPaths: [],
   texts: {
     reasons: {
       allow: "No policy concern with this action.",

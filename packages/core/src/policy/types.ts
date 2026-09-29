@@ -147,6 +147,25 @@ export interface BudgetView {
   readonly holdAll: boolean;
 }
 
+/** Environment helpers, so policies never duplicate the default-branch rule. */
+export interface EnvView {
+  /** `main`, `master` (config) and the reported `default_branch` (D-068). */
+  readonly defaultBranches: readonly string[];
+  /** The current branch is one of {@link defaultBranches}; false when it is unknown. */
+  readonly onDefaultBranch: boolean;
+}
+
+/** Daemon configuration a policy may read. */
+export interface PolicyConfigView {
+  /** What `~`/`$HOME` expand to: daemon config, never the event (D-003). */
+  readonly home: string;
+  /**
+   * `[policy] protectedPaths`: absolute after `~`/`$HOME` expansion, or project-relative
+   * as written; trailing slashes dropped. Empty by default.
+   */
+  readonly protectedPaths: readonly string[];
+}
+
 /** The helper API a policy receives as `ctx` (spec §Policy-as-code example). Frozen. */
 export interface PolicyContext {
   readonly session: PolicySession;
@@ -158,6 +177,8 @@ export interface PolicyContext {
   readonly taint: TaintView;
   readonly casefile: CaseFileView;
   readonly budget: BudgetView;
+  readonly env: EnvView;
+  readonly config: PolicyConfigView;
 }
 
 /** A policy callback that receives answers; bivariant so specific policies share a list. */

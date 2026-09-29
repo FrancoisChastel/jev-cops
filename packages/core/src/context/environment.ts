@@ -1,4 +1,5 @@
 import type { NormalizedEvent } from "../normalizer/types.ts";
+import type { GitInfo } from "../schema/event.ts";
 import { type ContextConfig, DEFAULT_CONTEXT_CONFIG } from "./config.ts";
 
 /** Exposure of the call's target in [0, 1], with the reasons that added weight. */
@@ -11,11 +12,27 @@ function isUnder(path: string, root: string): boolean {
   return path === root || path.startsWith(root === "/" ? "/" : `${root}/`);
 }
 
-function onDefaultBranch(n: NormalizedEvent, cfg: ContextConfig): boolean {
-  const git = n.event.env?.git;
-  if (git?.branch === undefined) return false;
-  if (git.default_branch !== undefined) return git.branch === git.default_branch;
-  return cfg.environment.fallbackDefaultBranches.includes(git.branch);
+/**
+ * Branch names that count as the default branch: the configured ones (`main`, `master`)
+ * always, plus the reported `default_branch` (D-068). The reported value alone can never
+ * make `main` stop counting: the agent can repoint `origin/HEAD` in its own repo.
+ */
+export function defaultBranches(
+  git: Readonly<GitInfo> | undefined,
+  cfg: ContextConfig = DEFAULT_CONTEXT_CONFIG,
+): string[] {
+  const reported = git?.default_branch;
+  const always = cfg.environment.defaultBranches;
+  return reported === undefined ? [...always] : [...new Set([...always, reported])];
+}
+
+/** True when the current branch is a default branch; an unknown branch is not (D-024). */
+export function isOnDefaultBranch(
+  git: Readonly<GitInfo> | undefined,
+  cfg: ContextConfig = DEFAULT_CONTEXT_CONFIG,
+): boolean {
+  const branch = git?.branch;
+  return branch !== undefined && defaultBranches(git, cfg).includes(branch);
 }
 
 function cwdOutsideRepo(n: NormalizedEvent): boolean {
@@ -34,7 +51,7 @@ function hostWeight(n: NormalizedEvent, cfg: ContextConfig): { weight: number; w
 }
 
 /**
- * Weighted sum of exposure signals, clamped to 1: default branch, cwd outside the repo
+ * Weighted sum of exposure signals, clamped to 1: default branch (D-068), cwd outside the repo
  * (or no repo known), dirty tree, headless mode, no sandbox (absent sandbox info counts
  * as none), and the highest credential class among the target hosts. Pure.
  */
@@ -45,7 +62,7 @@ export function environmentScore(
   const w = cfg.environment.weights;
   const env = n.event.env;
   const signals: [boolean, number, string][] = [
-    [onDefaultBranch(n, cfg), w.defaultBranch, "default branch"],
+    [isOnDefaultBranch(env?.git, cfg), w.defaultBranch, "default branch"],
     [cwdOutsideRepo(n), w.cwdOutsideRepo, "cwd outside repo"],
     [env?.git?.dirty === true, w.dirtyTree, "dirty tree"],
     [n.event.session.mode === "headless", w.headless, "headless"],

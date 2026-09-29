@@ -68,8 +68,10 @@ async function readEvent(rt: Runtime, event: PreEvent, cf: CaseFile, o: JudgeCal
   const n = await normalize(event, { home: o.home });
   const features = computeFeatures(n, cf, rt.contextConfig, hintsOf(o));
   const floor = floorRisk(features.features, rt.config).risk;
-  const inputs = { n, cf, features, floor, contextConfig: rt.contextConfig, ...hintsOf(o) };
-  return { n, features, floor, e: buildPolicyEvent(n, cf.task), ctx: buildPolicyContext(inputs) };
+  const { contextConfig, config } = rt;
+  const inputs = { n, cf, features, floor, contextConfig, ...hintsOf(o), home: o.home };
+  const ctx = buildPolicyContext({ ...inputs, protectedPaths: config.protectedPaths });
+  return { n, features, floor, e: buildPolicyEvent(n, cf.task), ctx };
 }
 
 async function judgeEvent(

@@ -26,7 +26,7 @@ function session(clock: TestClock = testClock()): CaseFile {
   return cf;
 }
 
-function contextFor(n: NormalizedEvent, cf: CaseFile) {
+function contextFor(n: NormalizedEvent, cf: CaseFile, protectedPaths: string[] = []) {
   const features = computeFeatures(n, cf, CFG);
   return buildPolicyContext({
     n,
@@ -34,6 +34,8 @@ function contextFor(n: NormalizedEvent, cf: CaseFile) {
     features,
     floor: floorRisk(features.features).risk,
     contextConfig: CFG,
+    home: CTX_HOME,
+    protectedPaths,
   });
 }
 
@@ -150,6 +152,40 @@ describe("buildPolicyContext", () => {
     expect(ctx.taint.of("/home/dev/build-cache")).toBe(1);
     expect(ctx.taint.of("node_modules")).toBe(0);
     expect(ctx.taint.fraction).toBe(1);
+  });
+
+  test("env: default branches and whether the call is on one (D-068)", async () => {
+    const git = { repo: "/work/repo", branch: "main", default_branch: "trunk" };
+    const ctx = contextFor(await bashPre("ls", { git }), session());
+    expect(ctx.env).toEqual({
+      defaultBranches: ["main", "master", "trunk"],
+      onDefaultBranch: true,
+    });
+    const feature = contextFor(await bashPre("ls"), session());
+    expect(feature.env.onDefaultBranch).toBe(false);
+  });
+
+  test("config: the daemon's home and the protected paths, ~ expanded, frozen", async () => {
+    const paths = ["~/bin/jevdict-hook", "$HOME/.local/bin/jevdictd", "/opt/j/", "policies", ""];
+    const ctx = contextFor(await bashPre("ls"), session(), paths);
+    expect(ctx.config).toEqual({
+      home: CTX_HOME,
+      protectedPaths: [
+        `${CTX_HOME}/bin/jevdict-hook`,
+        `${CTX_HOME}/.local/bin/jevdictd`,
+        "/opt/j",
+        "policies",
+      ],
+    });
+    expect(Object.isFrozen(ctx.config.protectedPaths)).toBe(true);
+  });
+
+  test("config defaults: home from the context config, no protected paths", async () => {
+    const n = await bashPre("ls");
+    const cf = session();
+    const features = computeFeatures(n, cf, CFG);
+    const ctx = buildPolicyContext({ n, cf, features, floor: 0, contextConfig: CFG });
+    expect(ctx.config).toEqual({ home: CTX_HOME, protectedPaths: [] });
   });
 
   test("casefile is a read-only view and budget a snapshot", async () => {

@@ -29,7 +29,9 @@ to the agent; `detail` only to the human. `definePolicy` throws at import on a m
 
 **`ctx` (PolicyContext).** `taint.fraction`, `taint.of(token)`; `scope.pathInRepo(p)`,
 `scope.hostAllowed(h)`; `sequence.secretReadWithin("2m")`, `sequence.matched(pattern)`;
-`casefile.recentCalls("5m")`, `hostsSeen()`, `filesWritten()`; `features`, `floor`, `budget`.
+`casefile.recentCalls("5m")`, `hostsSeen()`, `filesWritten()`; `features`, `floor`, `budget`;
+`env.defaultBranches` (`main`, `master` and the reported default, D-068), `env.onDefaultBranch`;
+`config.home` (the daemon's `~`) and `config.protectedPaths` (`[policy] protectedPaths`).
 
 **Fixtures.** `{ "policy": "<name>", "cases": [{ "name", "event": <pre event>, "history"?:
 [pre|post events], "task"?, "answers"?: { "<question>": Answer }, "config"?: { "context"?,
