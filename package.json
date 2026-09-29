@@ -19,7 +19,8 @@
     "typecheck": "bun x tsc -p tsconfig.json --noEmit",
     "lint": "bun x biome check .",
     "lint:fix": "bun x biome check --write .",
-    "check": "bun run lint && bun run typecheck && bun test"
+    "check": "bun run lint && bun run typecheck && bun test",
+    "gate": "bun packages/cli/src/main.ts test policies"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
