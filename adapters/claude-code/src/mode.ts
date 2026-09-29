@@ -5,7 +5,8 @@
  * `--print`) with no permission host (`--permission-prompt-tool`, unless
  * `--permission-prompts none`). A wrong "interactive" guess only yields an `ask` that a
  * host-less `-p` run denies; but that run then shows the ask's reason to Claude (observed on
- * 2.1.280), so when the parent cannot be read the session counts as headless.
+ * 2.1.280), so a parent that cannot be read, or is not recognizably `claude`, counts as
+ * headless.
  */
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -20,7 +21,15 @@ export interface ProcInfo {
 /** Reads a process by pid; null when it cannot be read. */
 export type ProcReader = (pid: number) => ProcInfo | null;
 
-const SHELLS: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "ash"]);
+/** Shells and wrappers between Claude Code and a shell-form hook (compared lower-case, no `.exe`). */
+const SHELLS: ReadonlySet<string> = new Set([
+  ...["sh", "bash", "zsh", "dash", "ksh", "fish", "ash", "tcsh", "csh"],
+  ...["cmd", "powershell", "pwsh", "env"],
+]);
+/** How many shell layers are unwrapped before giving up (and counting the session headless). */
+const MAX_SHELL_LAYERS = 3;
+/** An npm install runs `node …/@anthropic-ai/claude-code/cli.js`. */
+const CLAUDE_PACKAGE = /[\\/]claude-code[\\/]/i;
 /** A cluster of short flags (`-cp`) that includes `p`. */
 const SHORT_CLUSTER = /^-[A-Za-z]*p[A-Za-z]*$/;
 const PS_TIMEOUT_MS = 1_000;
@@ -47,16 +56,36 @@ export function modeOfArgs(args: readonly string[]): SessionMode {
   return flags.some(isPrint) && !hasHost(flags) ? "headless" : "interactive";
 }
 
+/** An executable's base name: lower-case, no login-shell `-`, no extension, Windows paths too. */
+function exeName(path: string | undefined): string {
+  return basename((path ?? "").replaceAll("\\", "/"))
+    .toLowerCase()
+    .replace(/^-/, "")
+    .replace(/\.(exe|cmd|[cm]?[jt]s)$/, "");
+}
+
+/** True when an argv is Claude Code's: `claude …`, or an interpreter running Claude Code. */
+export function isClaude(args: readonly string[]): boolean {
+  return args.slice(0, 2).some((a) => exeName(a) === "claude" || CLAUDE_PACKAGE.test(a));
+}
+
 /**
- * The mode of the session whose `claude` spawned this hook: `ppid` is the hook's parent
- * (claude itself in exec form, a shell in shell form, then its parent is read).
+ * The mode of the session whose `claude` spawned this hook. `ppid` is the hook's parent:
+ * claude itself in exec form; in shell form up to {@link MAX_SHELL_LAYERS} shells are
+ * unwrapped. Anything that cannot be read, or that is not recognizably Claude Code, counts
+ * as headless: a hold is then denied, never asked (an ask a host-less run cannot show a
+ * human would show its reason, with the daemon's detail, to Claude).
  */
 export function detectMode(ppid: number, read: ProcReader): SessionMode {
-  const parent = read(ppid);
-  if (parent === null) return "headless";
-  if (!SHELLS.has(basename(parent.args[0] ?? ""))) return modeOfArgs(parent.args);
-  const claude = read(parent.ppid);
-  return claude === null ? "headless" : modeOfArgs(claude.args);
+  let pid = ppid;
+  for (let layer = 0; layer <= MAX_SHELL_LAYERS; layer += 1) {
+    const proc = read(pid);
+    if (proc === null) return "headless";
+    if (isClaude(proc.args)) return modeOfArgs(proc.args);
+    if (!SHELLS.has(exeName(proc.args[0]))) return "headless";
+    pid = proc.ppid;
+  }
+  return "headless";
 }
 
 /** One line of `ps -o ppid= -o args=`: the ppid, then the argv split on whitespace. */

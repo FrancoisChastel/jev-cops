@@ -1,7 +1,7 @@
 /**
  * How Claude Code runs one command hook and reads what it did, per the hooks reference
  * (code.claude.com/docs/en/hooks, v2.1.285; checked against a real claude 2.1.280):
- * - exec form: `command` spawned with `args`, the event's JSON on stdin;
+ * - exec form: `command` spawned with `args` by the `claude` process, the event's JSON on stdin;
  * - `timeout` seconds, then the hook is cancelled and "renders no decision";
  * - stdout is JSON when it starts with `{` and ends with `}` (surrounding whitespace
  *   ignored), otherwise plain text; JSON that does not parse is a non-blocking error;
@@ -30,15 +30,20 @@ export interface HookRun {
   readonly ms: number;
 }
 
-/** How to spawn: environment, cwd, timeout, and whether the parent looks like `claude -p`. */
+/**
+ * How to spawn: environment, cwd, timeout, and the hook's parent: a stand-in `claude`
+ * (`claude -p` when headless), or, with `direct`, the test process itself (which the hook
+ * does not recognize as Claude Code, so it counts the session headless).
+ */
 export interface SpawnOptions {
   readonly env: Readonly<Record<string, string>>;
   readonly cwd: string;
   readonly timeoutS: number;
   readonly headless: boolean;
+  readonly direct?: boolean;
 }
 
-const PARENT = join(import.meta.dir, "fake-claude-parent.ts");
+const CLAUDE = join(import.meta.dir, "claude.ts");
 
 /** Stdout as Claude Code reads it: JSON object, plain text, or a parse failure. */
 export function readStdout(stdout: string): {
@@ -55,9 +60,11 @@ export function readStdout(stdout: string): {
   }
 }
 
-function argvOf(hook: HookCommand, headless: boolean): string[] {
-  const direct = [hook.command, ...hook.args];
-  return headless ? [process.execPath, PARENT, "-p", "--", ...direct] : direct;
+/** The hook under a stand-in `claude` parent (`-p` when headless), or spawned directly. */
+function argvOf(hook: HookCommand, o: SpawnOptions): string[] {
+  const own = [hook.command, ...hook.args];
+  if (o.direct === true) return own;
+  return [process.execPath, CLAUDE, ...(o.headless ? ["-p"] : []), "--hook", ...own];
 }
 
 /** Spawns `hook` once with `payload` on stdin and reads its outcome. */
@@ -69,7 +76,7 @@ export async function spawnHook(
   const started = performance.now();
   let proc: Bun.Subprocess<Blob, "pipe", "pipe">;
   try {
-    proc = Bun.spawn(argvOf(hook, o.headless), {
+    proc = Bun.spawn(argvOf(hook, o), {
       cwd: o.cwd,
       env: { ...o.env },
       stdin: new Blob([payload]),

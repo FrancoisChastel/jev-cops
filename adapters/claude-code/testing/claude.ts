@@ -1,13 +1,14 @@
 /**
- * Stand-in for a headless `claude -p` process in the fake runner: started as
- * `bun fake-claude-parent.ts -p -- <hook command> <hook args…>`, it spawns the hook as its
- * own child with inherited stdio, so the hook reads `-p` in its parent's argv exactly as it
- * would under a real print-mode `claude` (mode.ts), and exits with the hook's exit code.
+ * Stand-in for the `claude` process in the fake runner: started as
+ * `bun claude.ts [-p] --hook <hook command> <hook args…>` (Bun would swallow a bare `--`),
+ * it spawns the hook as its own child with inherited stdio, so the hook finds a parent that
+ * is recognizably Claude Code (its argv names `claude.ts`) and reads `-p` there exactly as
+ * under a real print-mode `claude` (mode.ts). Exits with the hook's exit code.
  */
-const separator = process.argv.indexOf("--");
+const separator = process.argv.indexOf("--hook");
 const command = separator < 0 ? [] : process.argv.slice(separator + 1);
 if (command.length === 0) {
-  process.stderr.write("fake-claude-parent: no hook command after --\n");
+  process.stderr.write("claude.ts: no hook command after --hook\n");
   process.exit(64);
 }
 const child = Bun.spawn(command, { stdin: "inherit", stdout: "inherit", stderr: "inherit" });

@@ -65,7 +65,7 @@ describe("compiled jevdict-hook", () => {
 
   test(`a benign call: exit 0, no output; cold start and p50 under ${MAX_COLD_MS} ms`, async () => {
     const hook = hookCommand(td.config.daemon.socket, binary);
-    const opts = { env: env(), cwd: dir, timeoutS: 30, headless: false };
+    const opts = { env: env(), cwd: dir, timeoutS: 30, headless: false, direct: true };
     const times: number[] = [];
     for (let i = 0; i < RUNS; i += 1) {
       const run = await spawnHook(hook, benign(), opts);

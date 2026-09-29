@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   detectMode,
+  isClaude,
   modeOfArgs,
   type ProcInfo,
   parseProcCmdline,
@@ -36,29 +37,62 @@ function table(procs: Record<number, ProcInfo>) {
   return (pid: number): ProcInfo | null => procs[pid] ?? null;
 }
 
+describe("isClaude", () => {
+  test.each([
+    [["claude", "-p"], true],
+    [["/opt/homebrew/bin/claude"], true],
+    [["C:\\Users\\me\\.local\\bin\\claude.exe", "-p"], true],
+    [["node", "/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js", "-p"], true],
+    [["bun", "/repo/adapters/claude-code/testing/claude.ts", "-p"], true],
+    [["bun", "test"], false],
+    [["/usr/bin/nix", "develop"], false],
+    [[], false],
+  ] as const)("%p → %p", (args, expected) => {
+    expect(isClaude(args)).toBe(expected);
+  });
+});
+
 describe("detectMode: the parent claude's argv", () => {
   test("exec form: the hook's parent is claude", () => {
     const read = table({ 10: { ppid: 1, args: ["claude", "-p", "go"] } });
     expect(detectMode(10, read)).toBe("headless");
+    expect(detectMode(10, table({ 10: { ppid: 1, args: ["claude"] } }))).toBe("interactive");
   });
 
-  test("shell form: the parent is a shell, so its parent is read", () => {
+  test("shell form: shells are unwrapped, nested ones and Windows ones included", () => {
     const read = table({
       10: { ppid: 9, args: ["/bin/sh", "-c", "jevdict-hook --harness claude-code"] },
       9: { ppid: 1, args: ["claude"] },
     });
     expect(detectMode(10, read)).toBe("interactive");
-    const headless = table({
+    const nested = table({
       10: { ppid: 9, args: ["bash", "-c", "x"] },
-      9: { ppid: 1, args: ["claude", "--print", "go"] },
+      9: { ppid: 8, args: ["-zsh"] },
+      8: { ppid: 7, args: ["C:\\Windows\\System32\\cmd.exe", "/c", "x"] },
+      7: { ppid: 1, args: ["claude"] },
     });
-    expect(detectMode(10, headless)).toBe("headless");
+    expect(detectMode(10, nested)).toBe("interactive");
   });
 
-  test("an unreadable parent counts as headless (no human: a hold is denied, never asked)", () => {
+  test("a parent that is not recognizably claude counts as headless", () => {
+    expect(detectMode(10, table({ 10: { ppid: 1, args: ["bun", "test"] } }))).toBe("headless");
+    expect(
+      detectMode(10, table({ 10: { ppid: 1, args: ["direnv", "exec", ".", "claude"] } })),
+    ).toBe("headless");
+  });
+
+  test("an unreadable process, or too many shells, counts as headless", () => {
     expect(detectMode(10, table({}))).toBe("headless");
     const orphan = table({ 10: { ppid: 9, args: ["sh", "-c", "x"] } });
     expect(detectMode(10, orphan)).toBe("headless");
+    const shells = table({
+      10: { ppid: 9, args: ["sh"] },
+      9: { ppid: 8, args: ["sh"] },
+      8: { ppid: 7, args: ["sh"] },
+      7: { ppid: 6, args: ["sh"] },
+      6: { ppid: 1, args: ["claude"] },
+    });
+    expect(detectMode(10, shells)).toBe("headless");
   });
 });
 
