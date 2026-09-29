@@ -24,7 +24,9 @@ import { parseJudged, parseView } from "./verdict.ts";
 /** The agent-facing cause of a failed request: "judge timeout" or "judge unreachable (…)". */
 export function causeOf(error: unknown): string {
   if (error instanceof Error && error.message === TIMEOUT) return TIMEOUT;
-  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  const name = typeof code === "string" ? code : error instanceof Error ? error.name : "Error";
+  const message = error instanceof Error ? `${name}: ${error.message}` : String(error);
   return `judge unreachable (${message.replace(/\s+/g, " ").slice(0, 160)})`;
 }
 

@@ -3,6 +3,7 @@ import type { PreEvent } from "@jevdict/core";
 import { claudeCodePayload } from "../../../tests/fixtures/claude-code/index.ts";
 import { reply, testDeps } from "../testing/doubles.ts";
 import { TIMEOUT } from "./client.ts";
+import { causeOf } from "./events-pre.ts";
 import { runHook, withDeadline } from "./hook.ts";
 import { PROCEED } from "./output.ts";
 
@@ -184,6 +185,15 @@ describe("runHook PreToolUse: fail closed (plan §5 rows 2–5)", () => {
     const out = await runHook(BASH, deps);
     expect(out).toMatchObject({ exitCode: 2 });
     expect(out.stderr).toContain("ps exploded");
+  });
+});
+
+describe("causeOf", () => {
+  test("names the transport error by its code when it has one", () => {
+    const refused = Object.assign(new Error("Was there a typo?"), { code: "FailedToOpenSocket" });
+    expect(causeOf(refused)).toBe("judge unreachable (FailedToOpenSocket: Was there a typo?)");
+    expect(causeOf(new Error(TIMEOUT))).toBe(TIMEOUT);
+    expect(causeOf("weird")).toBe("judge unreachable (weird)");
   });
 });
 
