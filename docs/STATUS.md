@@ -55,15 +55,27 @@ Updated: 2026-09-29
   providers) on fake transports; no network in tests. `.env.example`. 114 tests.
   Decisions D-042–D-046.
 
-**Totals:** 1264 tests + 11 todo, `bun run check` green.
+- **M0 steps 8–9 — daemon and CLI**: `jevdictd` (`packages/daemon`: TOML config with
+  tighten-only repo override, hash-chained append-only audit log, SQLite precedents +
+  sessions, policy hot reload, Unix socket + loopback HTTP, routes `/v1/judge`,
+  `/v1/observe`, `/v1/resolve`, `/v1/explain/:id`, `/v1/health`, `/v1/budget/reset`,
+  headless hold→deny, observe mode, 504 judge deadline); `jevdict` (`packages/cli`:
+  `test`, `explain`, `replay`, `budget`; `install`/`doctor` stubbed to M1); `bun run build`
+  compiles both with the WASM grammar embedded; `dist/jevdict test policies` → PASS.
+  Smoke-tested end to end: the spec's `git push --force` on `main`, headless → `deny`.
+  T2/T3 (daemon side), T6 audit flag, T7 scope/TTL, T12 chain live. 137 tests.
+  Decisions D-047–D-053.
+
+**Totals:** 1412 tests + 9 todo, `bun run check` green, `bun run gate` PASS.
 
 ## In progress
 
-- M0 steps 8–9: daemon and CLI.
+- M0 step 10: Pi adapter (`adapters/pi`): blocking + rewriting end to end with a captured
+  run; `docs/adapters.md` Pi section from the v0.87.1 docs.
 
 ## Next
 
-- M0 step 10: Pi adapter (blocking + rewriting end to end, captured run).
+- M0 gate review, then M1 (Claude Code hooks, `install`, `doctor`, config-tamper policy).
 
 ## Known gaps carried forward (from the normalizer report)
 
@@ -72,7 +84,6 @@ Updated: 2026-09-29
 - Claude Code `run_in_background` not mapped to spawn.
 - Not expanded: brace expansion, `env -S`, aliases, `tar --to-command`, `vim -c`; inline
   python/node code is flagged opaque but not parsed.
-- `bun build --compile` will need the grammar `.wasm` embedded (M0 step 10).
 - Coverage report: `bunfig.toml` has `coverage = false`; enable in CI once the threshold is met.
 - SDK friction to address: `ctx.env.onDefaultBranch` and `ctx.config` helpers so policies
   stop duplicating D-024's list; `git push --force` normalizes to `net` so net policies

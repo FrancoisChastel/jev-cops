@@ -9,8 +9,9 @@ The same `git push --force` is allowed on a feature branch the user asked about,
 on the default branch, and denied in a headless session. What changes is the context,
 not the command string.
 
-> **Status: M0 in progress.** Core schema, normalizer and context engine are being
-> built; no adapter is usable yet. See [docs/STATUS.md](docs/STATUS.md).
+> **Status: M0 nearly complete.** Core, policy engine, SDK, starter policies, judge
+> providers, daemon and CLI are built and tested; the Pi adapter is in progress and no
+> harness is wired up yet. See [docs/STATUS.md](docs/STATUS.md).
 
 ## How it works
 
@@ -38,24 +39,32 @@ Jevdict is not a sandbox and not the last line of defence. Anything that must ne
 happen belongs to a kernel-enforced policy such as [OpenShell](https://github.com/NVIDIA/openshell);
 Jevdict compiles its hard findings down to it.
 
-## Quickstart (developers, today)
+## Quickstart
+
+Requires [Bun](https://bun.sh) ≥ 1.3. Node is not a supported runtime.
 
 ```bash
 git clone https://github.com/FrancoisChastel/jevdict && cd jevdict
 bun install
-bun run check          # lint + typecheck + tests
+bun run check          # lint + typecheck + 1400 tests
+bun run gate           # jevdict test: every starter policy against its fixtures
+bun run build          # dist/jevdictd and dist/jevdict, WASM grammar embedded
 ```
 
-Requires [Bun](https://bun.sh) ≥ 1.3. Node is not a supported runtime.
-
-## Quickstart (users, once M0 ships)
+Run the judge and ask it about a tool call:
 
 ```bash
-bun add -g jevdict
-jevdict install pi           # writes the Pi extension, prints known gaps
-jevdictd                     # start the judge on a Unix socket
-jevdict doctor               # canary tool call: proves the hook fires and blocks
+./dist/jevdictd --enforce --socket /tmp/jevdictd.sock      # default mode is observe
+curl -s --unix-socket /tmp/jevdictd.sock -X POST http://localhost/v1/judge \
+  -H 'content-type: application/json' --data @tests/fixtures/events/pre-bash.json
+./dist/jevdict explain <event-id> --audit ~/.jevdict/audit.jsonl
 ```
+
+Configuration lives in `~/.config/jevdict/jevdict.toml` (see `packages/daemon/src/config.ts`
+for every key and default); a repo-local `.jevdict.toml` may only tighten it. Judge API keys
+are read from the environment only (`.env.example`).
+
+`jevdict install <harness>` and `jevdict doctor` arrive with M1.
 
 ## Writing a policy
 
