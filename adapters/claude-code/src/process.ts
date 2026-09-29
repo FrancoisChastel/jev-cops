@@ -11,9 +11,12 @@ import { parseHookArgs } from "./args.ts";
 import { createClient } from "./client.ts";
 import { deadlinesFrom, type HookDeps } from "./deps.ts";
 import { runHook, withDeadline } from "./hook.ts";
+import { checkIntact, type IntactCheck } from "./intact.ts";
 import { appendHookLog, type HookLogLine, hookLogPath } from "./log.ts";
 import { detectMode, readProc } from "./mode.ts";
 import { failClosed, type HookOutput } from "./output.ts";
+import type { ConfigChangeInput } from "./payload.ts";
+import { managedDirFor, readSettingsFile, type SettingsFile, settingsFiles } from "./settings.ts";
 import { readHarnessVersion } from "./state.ts";
 
 /** What the hook needs from its process; tests pass a recording double. */
@@ -22,6 +25,8 @@ export interface HookPort {
   readonly home: string;
   /** The hook's parent (Claude Code in exec form), for the session mode. */
   readonly ppid: number;
+  /** Claude Code's managed-settings directory on this OS (settings.ts), or null. */
+  readonly managedDir: string | null;
   readStdin(): Promise<string>;
   write(fd: 1 | 2, text: string): void;
   exit(code: 0 | 2): void;
@@ -37,6 +42,17 @@ export interface HookSelf {
 }
 
 const EAGAIN_PAUSE_MS = 1;
+const SCOPES: Readonly<Record<string, SettingsFile["scope"]>> = {
+  user_settings: "user",
+  project_settings: "project",
+  local_settings: "local",
+  policy_settings: "managed",
+};
+
+/** The settings scope a ConfigChange source names (skills live under the project). */
+function scopeOf(source: string): SettingsFile["scope"] {
+  return SCOPES[source] ?? "project";
+}
 
 function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -62,6 +78,7 @@ export function processPort(): HookPort {
     env: process.env,
     home: homedir(),
     ppid: process.ppid,
+    managedDir: managedDirFor(process.platform),
     readStdin: () => Bun.stdin.text(),
     write: (fd, text) => writeAll(fd, text),
     exit: (code) => process.exit(code),
@@ -97,7 +114,27 @@ function once<T>(read: () => T): () => T {
   };
 }
 
-function depsFor(socket: string, port: HookPort): HookDeps {
+/** The ConfigChange check over the settings files on disk now (intact.ts). */
+function configCheckFor(socket: string, self: HookSelf, port: HookPort) {
+  return (i: ConfigChangeInput): IntactCheck => {
+    const projectDir = port.env.CLAUDE_PROJECT_DIR || i.cwd;
+    const location = {
+      home: port.home,
+      projectDir,
+      configDir: port.env.CLAUDE_CONFIG_DIR || null,
+      managedDir: port.managedDir,
+    };
+    const files = settingsFiles(location);
+    const changed =
+      i.file_path === undefined ? [] : [{ scope: scopeOf(i.source), path: i.file_path }];
+    const unique = [...files, ...changed.filter((c) => !files.some((f) => f.path === c.path))];
+    const reads = unique.map((file) => ({ file, read: readSettingsFile(file.path) }));
+    const id = { ...self, socket, home: port.home, projectDir, path: port.env.PATH ?? "" };
+    return checkIntact(reads, id, i.file_path ?? null);
+  };
+}
+
+function depsFor(socket: string, self: HookSelf, port: HookPort): HookDeps {
   const logPath = hookLogPath(port.home);
   const log = (line: HookLogLine) => {
     try {
@@ -112,6 +149,7 @@ function depsFor(socket: string, port: HookPort): HookDeps {
     mode: once(() => detectMode(port.ppid, (pid) => readProc(pid))),
     harnessVersion: once(() => readHarnessVersion(port.home)),
     log,
+    configCheck: configCheckFor(socket, self, port),
   };
 }
 
@@ -122,10 +160,10 @@ function emit(out: HookOutput, port: HookPort): 0 | 2 {
   return out.exitCode;
 }
 
-async function outcome(argv: readonly string[], port: HookPort): Promise<HookOutput> {
+async function outcome(argv: readonly string[], self: HookSelf, port: HookPort) {
   const args = parseHookArgs(argv, port.home);
   if (!args.ok) return failClosed(`jevdict hook: ${args.error}; blocking (fail closed)`);
-  const deps = depsFor(args.socket, port);
+  const deps = depsFor(args.socket, self, port);
   const stdin = await withDeadline<string | null>(
     port.readStdin(),
     deps.deadlines.judgeMs,
@@ -139,12 +177,13 @@ async function outcome(argv: readonly string[], port: HookPort): Promise<HookOut
 
 /**
  * Runs the hook as this process: exit code 2 first, fatal handlers, arguments, stdin, the
- * run, the output, the exit. `_self` is how the process was started (see {@link selfOf}).
+ * run, the output, the exit. `subcommand` precedes the hook's flags in its argv (`["hook"]` for
+ * `jevdict hook`), for the ConfigChange identity check (see {@link selfOf}).
  * Resolves with the exit code (the real port has exited by then).
  */
 export async function runHookProcess(
   argv: readonly string[],
-  _self: readonly string[],
+  subcommand: readonly string[],
   port: HookPort = processPort(),
 ): Promise<0 | 2> {
   port.setExitCode(2);
@@ -153,7 +192,7 @@ export async function runHookProcess(
     port.exit(2);
   });
   try {
-    return emit(await outcome(argv, port), port);
+    return emit(await outcome(argv, selfOf(subcommand), port), port);
   } catch (cause) {
     return emit(failClosed(`hook error (${message(cause)}); blocking (fail closed)`), port);
   }

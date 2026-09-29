@@ -5,7 +5,9 @@
  */
 import type { SessionMode } from "@jevdict/core";
 import type { DaemonClient } from "./client.ts";
+import type { IntactCheck } from "./intact.ts";
 import type { HookLogLine } from "./log.ts";
+import type { ConfigChangeInput } from "./payload.ts";
 
 /** Time limits in milliseconds. */
 export interface Deadlines {
@@ -53,4 +55,6 @@ export interface HookDeps {
   readonly harnessVersion: () => string | null;
   /** Appends to the local log; never throws. */
   readonly log: (line: HookLogLine) => void;
+  /** Whether the jevdict hook is still in force after a settings change (intact.ts). */
+  readonly configCheck: (i: ConfigChangeInput) => IntactCheck;
 }

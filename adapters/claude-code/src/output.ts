@@ -150,6 +150,11 @@ export function failClosed(message: string): HookOutput {
   return { exitCode: 2, stdout: null, stderr: tag(message) };
 }
 
+/** Exit 0 with a note on stderr only (Claude Code's debug log): nothing for the user or Claude. */
+export function quiet(message: string): HookOutput {
+  return { exitCode: 0, stdout: null, stderr: tag(message) };
+}
+
 /** Exit 0 with a warning for the user (`systemMessage`) and the debug log. */
 export function warn(message: string): HookOutput {
   const shown = tag(message);

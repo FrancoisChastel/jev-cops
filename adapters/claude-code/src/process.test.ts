@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Server } from "bun";
@@ -33,6 +33,7 @@ function fakePort(stdin: string | Promise<string>, over: Partial<HookPort> = {})
     env: {},
     home,
     ppid: process.pid,
+    managedDir: null,
     readStdin: async () => stdin,
     write: (fd, text) => {
       (fd === 1 ? rec.out : rec.err).push(text);
@@ -135,6 +136,55 @@ describe("runHookProcess: the fail-closed shell", () => {
       2,
     );
     expect(rec.err.join("")).toContain("jevdict: local log not written");
+  });
+});
+
+describe("runHookProcess: ConfigChange reads the settings files on disk", () => {
+  function settingsWith(socket: string, entry: boolean): string {
+    const self = selfOf([]);
+    const handler = {
+      type: "command",
+      command: self.command,
+      args: [...self.leading, "--harness", "claude-code", "--socket", socket],
+    };
+    const events = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit"];
+    const hooks = Object.fromEntries(
+      [...events, ...(entry ? ["ConfigChange"] : [])].map((e) => [e, [{ hooks: [handler] }]]),
+    );
+    return JSON.stringify({ hooks });
+  }
+
+  test.each([
+    [true, 0],
+    [false, 2],
+  ] as const)("jevdict block complete: %p → exit %d", async (complete, code) => {
+    const reports: unknown[] = [];
+    const socket = join(tempDir(), "d.sock");
+    servers.push(
+      Bun.serve({
+        unix: socket,
+        fetch: async (req) => {
+          reports.push(await req.json());
+          return Response.json({ ok: true, task: null, killed: false });
+        },
+      }),
+    );
+    const project = tempDir();
+    mkdirSync(join(project, ".claude"));
+    const changed = join(project, ".claude", "settings.json");
+    writeFileSync(changed, settingsWith(socket, complete));
+    const payload = JSON.stringify({
+      session_id: "s1",
+      cwd: project,
+      hook_event_name: "ConfigChange",
+      source: "project_settings",
+      file_path: changed,
+    });
+    const { port, rec } = fakePort(payload, { env: { PATH: process.env.PATH } });
+    const argv = ["--harness", "claude-code", "--socket", socket];
+    expect(await runHookProcess(argv, [], port)).toBe(code);
+    expect(reports).toEqual([expect.objectContaining({ kind: "config-change", intact: complete })]);
+    if (!complete) expect(rec.err.join("")).toContain("no jevdict hook on ConfigChange");
   });
 });
 

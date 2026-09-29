@@ -27,6 +27,7 @@ function port(stdin: string) {
     env: {},
     home: temp(),
     ppid: process.pid,
+    managedDir: null,
     readStdin: async () => stdin,
     write: (fd, text) => {
       if (fd === 1) rec.out += text;

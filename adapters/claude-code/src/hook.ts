@@ -7,6 +7,13 @@
  */
 import type { HookDeps } from "./deps.ts";
 import { onPreToolUse, sessionOf, unavailable } from "./events-pre.ts";
+import {
+  onConfigChange,
+  onPost,
+  onPrompt,
+  onSessionEnd,
+  onSessionStart,
+} from "./events-session.ts";
 import { failClosed, type HookOutput, warn } from "./output.ts";
 import { type HookEventName, type HookInput, parseHookInput } from "./payload.ts";
 
@@ -43,8 +50,17 @@ async function dispatch(input: HookInput, deps: HookDeps): Promise<HookOutput> {
   switch (input.hook_event_name) {
     case "PreToolUse":
       return onPreToolUse(input, deps);
-    default:
-      return failClosed(`${input.hook_event_name} is not handled by this hook build`);
+    case "PostToolUse":
+    case "PostToolUseFailure":
+      return onPost(input, deps);
+    case "UserPromptSubmit":
+      return onPrompt(input, deps);
+    case "ConfigChange":
+      return onConfigChange(input, deps);
+    case "SessionStart":
+      return onSessionStart(input, deps);
+    case "SessionEnd":
+      return onSessionEnd(input, deps);
   }
 }
 

@@ -66,6 +66,7 @@ export function testDeps(script: Script, overrides: Partial<HookDeps> = {}) {
     log: (line) => {
       logged.push(line);
     },
+    configCheck: () => ({ intact: true, why: "test: intact" }),
     ...overrides,
   };
   return { deps, calls, logged };
