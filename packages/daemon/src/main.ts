@@ -2,6 +2,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { err, ok, type Result } from "@jevdict/core";
+import { registerSdkModule } from "@jevdict/sdk/register";
 import {
   type DaemonConfig,
   type EnforcementMode,
@@ -150,5 +151,6 @@ export async function main(argv: readonly string[]): Promise<number> {
 }
 
 if (import.meta.main) {
+  registerSdkModule();
   process.exit(await main(process.argv.slice(2)));
 }

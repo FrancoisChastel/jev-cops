@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { registerSdkModule } from "@jevdict/sdk/register";
 import { runBudgetCommand } from "./commands/budget.ts";
 import { runExplainCommand } from "./commands/explain.ts";
 import { runReplayCommand } from "./commands/replay.ts";
@@ -71,5 +72,6 @@ export async function main(argv: readonly string[], io: Io = PROCESS_IO): Promis
 }
 
 if (import.meta.main) {
+  registerSdkModule();
   process.exit(await main(process.argv.slice(2)));
 }

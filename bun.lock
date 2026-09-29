@@ -42,6 +42,7 @@
       "dependencies": {
         "@jevdict/core": "workspace:*",
         "@jevdict/judge": "workspace:*",
+        "@jevdict/sdk": "workspace:*",
         "zod": "^4.6.5",
       },
     },

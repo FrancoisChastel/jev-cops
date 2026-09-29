@@ -20,7 +20,10 @@
     "lint": "bun x biome check .",
     "lint:fix": "bun x biome check --write .",
     "check": "bun run lint && bun run typecheck && bun test",
-    "gate": "bun packages/cli/src/main.ts test policies"
+    "gate": "bun packages/cli/src/main.ts test policies",
+    "build:daemon": "bun build --compile packages/daemon/src/main.ts --outfile dist/jevdictd",
+    "build:cli": "bun build --compile packages/cli/src/main.ts --outfile dist/jevdict",
+    "build": "bun run build:daemon && bun run build:cli"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

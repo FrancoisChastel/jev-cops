@@ -1,15 +1,27 @@
 import { fileURLToPath } from "node:url";
+import grammarFile from "tree-sitter-bash/tree-sitter-bash.wasm" with { type: "file" };
 import { Language, type Node, Parser } from "web-tree-sitter";
+import runtimeFile from "web-tree-sitter/web-tree-sitter.wasm" with { type: "file" };
 
 let cached: Promise<Parser> | undefined;
 
-function grammarPath(): string {
-  return fileURLToPath(import.meta.resolve("tree-sitter-bash/tree-sitter-bash.wasm"));
+/**
+ * The bytes of a WASM file. `embedded` is Bun's file import: the real path under
+ * `bun run`/`bun test`, a `/$bunfs/` path inside a `bun build --compile` binary. When it
+ * cannot be read, the package's own file (`import.meta.resolve`, the dev path) is used.
+ */
+async function wasmBytes(embedded: string, specifier: string): Promise<Uint8Array> {
+  const file = Bun.file(embedded);
+  if (await file.exists()) return file.bytes();
+  return Bun.file(fileURLToPath(import.meta.resolve(specifier))).bytes();
 }
 
 async function load(): Promise<Parser> {
-  await Parser.init();
-  const language = await Language.load(grammarPath());
+  const runtime = await wasmBytes(runtimeFile, "web-tree-sitter/web-tree-sitter.wasm");
+  const binary = runtime.buffer.slice(runtime.byteOffset, runtime.byteOffset + runtime.byteLength);
+  await Parser.init({ wasmBinary: binary as ArrayBuffer });
+  const grammar = await wasmBytes(grammarFile, "tree-sitter-bash/tree-sitter-bash.wasm");
+  const language = await Language.load(grammar);
   const parser = new Parser();
   parser.setLanguage(language);
   return parser;
