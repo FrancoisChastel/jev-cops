@@ -19,6 +19,7 @@ import {
   type Table,
   tightenOnly,
 } from "./config-rules.ts";
+import { DEFAULT_HOLD_TOKEN_TTL_MS } from "./hold-tokens.ts";
 
 /** `observe`: log every verdict, return `allow` (spec M4 observe-only). `enforce`: return as is. */
 export type EnforcementMode = "observe" | "enforce";
@@ -48,6 +49,8 @@ export interface DaemonConfig {
     readonly home: string;
     /** Past this a `/v1/judge` request answers 504 (T3); above the judge timeout. */
     readonly judgeDeadlineMs: number;
+    /** How long the hold token of a `hold` shown to a human stays valid (T7/T8). */
+    readonly holdTokenTtlMs: number;
   };
   readonly policies: { readonly dir: string };
   readonly judge: {
@@ -96,6 +99,7 @@ const fileSchema = z.strictObject({
       http: z.union([text, z.literal(false)]).optional(),
       home: text.optional(),
       judge_deadline_ms: z.int().positive().optional(),
+      hold_token_ttl_ms: z.int().positive().optional(),
     })
     .optional(),
   policies: z.strictObject({ dir: text.optional() }).optional(),
@@ -121,7 +125,12 @@ const fileSchema = z.strictObject({
 
 /** The spec defaults as a file-shaped table (paths still `~`-relative). */
 const DEFAULT_TABLE: Table = deepFreeze({
-  daemon: { socket: "~/.jevdict/jevdictd.sock", http: false, judge_deadline_ms: 12_000 },
+  daemon: {
+    socket: "~/.jevdict/jevdictd.sock",
+    http: false,
+    judge_deadline_ms: 12_000,
+    hold_token_ttl_ms: DEFAULT_HOLD_TOKEN_TTL_MS,
+  },
   policies: { dir: "policies" },
   judge: { provider: "off", timeout_ms: 10_000, cache_ttl_ms: 600_000 },
   context: {},
@@ -233,6 +242,7 @@ function toConfig(t: Table, home: string): DaemonConfig {
       http: bind?.ok === true ? bind.value : null,
       home: f.daemon?.home ?? home,
       judgeDeadlineMs: f.daemon?.judge_deadline_ms ?? 12_000,
+      holdTokenTtlMs: f.daemon?.hold_token_ttl_ms ?? DEFAULT_HOLD_TOKEN_TTL_MS,
     },
     policies: { dir: f.policies?.dir ?? "" },
     judge: {

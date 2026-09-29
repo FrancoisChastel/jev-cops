@@ -82,7 +82,8 @@ function parseVerdict(body: unknown, id: string): Judged | null {
   const note = typeof body.context_note === "string" ? body.context_note : null;
   const input = isObject(body.updated_input) ? body.updated_input : null;
   if (verdict === "rewrite" && input === null) return null;
-  return { verdict: verdict as Judged["verdict"], reason: body.reason, note, input };
+  const token = typeof body.hold_token === "string" ? body.hold_token : null;
+  return { verdict: verdict as Judged["verdict"], reason: body.reason, note, input, token };
 }
 
 /** Local log for the human: a TUI/RPC notification, else stderr (print/json modes). */
@@ -129,7 +130,10 @@ export function register(pi: PiApi, opts: JevdictOptions): void {
     return undefined;
   };
 
-  /** Interactive hold: ask with the daemon's normalized raw command and detail (T8). */
+  /**
+   * Interactive hold: ask with the daemon's normalized raw command and detail (T8); the
+   * answer carries the verdict's `hold_token`, which never reaches the model (T7).
+   */
   const hold = async (v: Judged, id: string, ctx: PiContext) => {
     if (!ctx.hasUI) return blocked(v.reason); // D-008: headless hold is a deny
     const shown = await call("GET", `/v1/explain/${id}`, undefined, judgeMs).catch(() => null);
@@ -140,7 +144,8 @@ export function register(pi: PiApi, opts: JevdictOptions): void {
     const message = typeof detail === "string" ? `${raw}\n\n${detail}` : raw;
     const yes = await ctx.ui.confirm(`Jevdict hold: ${v.reason}`, message);
     const decision = { event_id: id, decision: yes ? "allow" : "deny", by: "pi-user" };
-    await call("POST", "/v1/resolve", decision, shortMs).catch((err: unknown) =>
+    const answer = v.token === null ? decision : { ...decision, hold_token: v.token };
+    await call("POST", "/v1/resolve", answer, shortMs).catch((err: unknown) =>
       warn(ctx, `jevdict: resolve not recorded: ${why(err)}`),
     );
     return yes ? undefined : blocked(`${v.reason} (declined by the user)`);

@@ -50,7 +50,7 @@ Otherwise print mode waits on it.
 | `allow` | Nothing returned; the tool runs. |
 | `annotate` | The tool runs; `context_note` is appended to its result as a `[jevdict] …` text block (Pi's `tool_call` has no additional-context field). |
 | `rewrite` | `event.input` is replaced in place by `updated_input` (Pi has no `updatedInput` return); the tool runs the pinned input. |
-| `hold` | Interactive (`ctx.hasUI`: tui, rpc): `ctx.ui.confirm` shows the daemon's normalized raw command and its `detail` (fetched from `/v1/explain`), never the agent's text. Yes runs the tool and records a precedent through `/v1/resolve` (`by: "pi-user"`). No blocks it. Headless (print, json): blocked (D-008; the daemon already sends `deny`). |
+| `hold` | Interactive (`ctx.hasUI`: tui, rpc): `ctx.ui.confirm` shows the daemon's normalized raw command and its `detail` (fetched from `/v1/explain`), never the agent's text. Yes runs the tool and records a precedent through `/v1/resolve` (`by: "pi-user"`), presenting the verdict's single-use `hold_token`, which the model never sees. No blocks it. Headless (print, json): blocked (D-008; the daemon already sends `deny`). |
 | `deny` | `{ block: true, reason: "jevdict: <reason>" }`. The reason is the tool result the model sees. |
 | `kill` | Blocked with `terminate: true`, then `ctx.abort()` and `ctx.shutdown()`. |
 

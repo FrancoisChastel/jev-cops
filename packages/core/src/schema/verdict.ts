@@ -70,6 +70,15 @@ export const budgetSchema = z.strictObject({
   limit: z.number().nonnegative(),
 });
 
+/** 32 random bytes, base64url without padding. */
+const HOLD_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+
+/**
+ * The single-use capability a human-facing adapter presents to `POST /v1/resolve`: minted
+ * by the daemon for a `hold` it actually shows a human, 32 random bytes as base64url.
+ */
+export const holdTokenSchema = z.string().regex(HOLD_TOKEN, { error: "expected a hold token" });
+
 const verdictResponseShape = z.strictObject({
   schema: z.literal(VERDICT_SCHEMA),
   event_id: eventIdSchema,
@@ -83,17 +92,26 @@ const verdictResponseShape = z.strictObject({
   features: z.record(z.string(), z.number()),
   jev: z.array(jevAnswerSchema),
   budget: budgetSchema,
+  hold_token: holdTokenSchema.optional(),
 });
 
 /**
  * Canonical `jevdict.verdict/1` response. `updated_input` is set exactly when the
  * verdict is `rewrite`, so an adapter never runs a rewrite without its new input.
  * `detail` is optional so a harness-facing response can omit it entirely.
+ * `hold_token` appears only on a `hold` the harness will show a human: the adapter keeps
+ * it (the agent only ever sees `reason`) and presents it to `POST /v1/resolve`, so a
+ * process talking to the socket without it cannot approve the hold (T7/T8).
  */
-export const verdictResponseSchema = verdictResponseShape.refine(
-  (r) => (r.verdict === "rewrite") === (r.updated_input !== null),
-  { path: ["updated_input"], message: "updated_input must be set on rewrite and null otherwise" },
-);
+export const verdictResponseSchema = verdictResponseShape
+  .refine((r) => (r.verdict === "rewrite") === (r.updated_input !== null), {
+    path: ["updated_input"],
+    message: "updated_input must be set on rewrite and null otherwise",
+  })
+  .refine((r) => r.hold_token === undefined || r.verdict === "hold", {
+    path: ["hold_token"],
+    message: "hold_token is only set on hold",
+  });
 
 /** A validated semantic-judge answer; `p` and `confidence` lie in [0, 1]. */
 export type JevAnswer = z.output<typeof jevAnswerSchema>;

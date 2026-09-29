@@ -88,13 +88,21 @@ describe("T7 precedent farming through the daemon", () => {
       const e = withFreshId(
         buildEvent({ tool: "Bash", kind: "exec", input: { command: "rm -rf /srv/data/tmp" } }),
       );
-      await td.call("POST", "/v1/judge", e);
-      const widened = { event_id: e.id, decision: "allow", by: "x", scope: { pathPrefix: "/" } };
+      const judged = await td.call("POST", "/v1/judge", e);
+      const hold_token = (judged.body as { hold_token: string }).hold_token;
+      const widened = {
+        event_id: e.id,
+        decision: "allow",
+        by: "x",
+        hold_token,
+        scope: { pathPrefix: "/" },
+      };
       expect((await td.call("POST", "/v1/resolve", widened)).status).toBe(400);
       const ok = await td.call("POST", "/v1/resolve", {
         event_id: e.id,
         decision: "allow",
         by: "x",
+        hold_token,
       });
       const expected = proposeScope(await bashPre("rm -rf /srv/data/tmp"), e.session.task ?? null);
       expect((ok.body as { precedent: { scope: unknown } }).precedent.scope).toEqual(expected);

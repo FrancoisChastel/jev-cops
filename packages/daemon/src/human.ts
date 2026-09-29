@@ -14,6 +14,8 @@ const resolveSchema = z.strictObject({
   event_id: eventIdSchema,
   decision: z.enum(["allow", "deny"]),
   by: z.string().trim().min(1).max(200),
+  /** Checked against the stored hash; missing is refused with 403 like a wrong one. */
+  hold_token: z.string().max(256).optional(),
 });
 
 const budgetResetSchema = z.strictObject({ session_id: sessionIdSchema });
@@ -24,16 +26,27 @@ function badRequest(error: z.ZodError): Reply {
 }
 
 /**
- * `POST /v1/resolve`: a human resolved a held event. `allow` grants a precedent with the
- * scope the daemon proposed when it held the event; `deny` just closes the hold. Both are
- * audited. 404 when the event was not held (or was already resolved).
+ * `POST /v1/resolve`: a human resolved a held event. The request must carry the event's
+ * `hold_token`, which only the adapter that received the hold has: a missing, wrong,
+ * reused or expired token (or an event that was never held) is 403 plus an `anomaly`
+ * line, and nothing is granted (T7/T8). With a valid token, `allow` grants a precedent
+ * with the scope the daemon proposed when it held the event; `deny` just closes the
+ * hold. Both are audited.
  */
 export function handleResolve(rt: Runtime, body: unknown): Reply {
   const parsed = resolveSchema.safeParse(body);
   if (!parsed.success) return badRequest(parsed.error);
-  const { event_id, decision, by } = parsed.data;
-  const held = rt.precedents.pendingHold(event_id);
-  if (held === null) return { status: 404, body: { error: "no pending hold for this event" } };
+  const { event_id, decision, by, hold_token } = parsed.data;
+  const redeemed = rt.precedents.redeem(event_id, hold_token);
+  if (!redeemed.ok) {
+    rt.audit.append({
+      kind: "anomaly",
+      event_id,
+      payload: { reason: "resolve-without-valid-token", why: redeemed.why, decision, by },
+    });
+    return { status: 403, body: { error: "invalid hold token" } };
+  }
+  const held = redeemed.hold;
   const precedent = decision === "allow" ? rt.precedents.grant(event_id, by) : null;
   if (decision === "deny") rt.precedents.dropHold(event_id);
   rt.audit.append({

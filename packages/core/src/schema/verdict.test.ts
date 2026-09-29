@@ -154,6 +154,33 @@ describe("parseVerdict", () => {
     expect(issuePaths({ ...specExample(), verdict: "rewrite" })).toEqual(["updated_input"]);
   });
 
+  test("accepts a hold carrying a hold_token, and a hold without one", () => {
+    const token = "A".repeat(43);
+    expect(parseVerdict({ ...specExample(), hold_token: token })).toEqual({
+      ok: true,
+      value: { ...specExample(), hold_token: token } as never,
+    });
+    expect(parseVerdict(specExample()).ok).toBe(true);
+  });
+
+  test.each(VERDICTS.filter((v) => v !== "hold" && v !== "rewrite"))(
+    "rejects a hold_token on %s: only a hold is resolved by a human",
+    (verdict) => {
+      expect(issuePaths({ ...specExample(), verdict, hold_token: "b".repeat(43) })).toEqual([
+        "hold_token",
+      ]);
+    },
+  );
+
+  test.each([
+    ["too short", "c".repeat(42)],
+    ["too long", "c".repeat(44)],
+    ["not base64url", `${"c".repeat(42)}+`],
+    ["empty", ""],
+  ])("rejects a hold_token that is %s", (_label, token) => {
+    expect(issuePaths({ ...specExample(), hold_token: token })).toEqual(["hold_token"]);
+  });
+
   test.each([
     ["null", null],
     ["undefined", undefined],

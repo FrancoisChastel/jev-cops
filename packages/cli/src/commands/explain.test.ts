@@ -30,9 +30,15 @@ beforeAll(async () => {
   const e2 = withFreshId(
     buildEvent({ tool: "Bash", kind: "exec", input: { command: "ls" } }, { task: "t" }),
   );
-  await td.call("POST", "/v1/judge", e1);
+  const judged = await td.call("POST", "/v1/judge", e1);
   await td.call("POST", "/v1/judge", e2);
-  await td.call("POST", "/v1/resolve", { event_id: e1.id, decision: "allow", by: "alice" });
+  const hold_token = (judged.body as { hold_token?: string }).hold_token;
+  await td.call("POST", "/v1/resolve", {
+    event_id: e1.id,
+    decision: "allow",
+    by: "alice",
+    hold_token,
+  });
   await td.daemon.stop();
   keep = mkdtempSync(join(tmpdir(), "jevdict-explain-"));
   audit = join(keep, "audit.jsonl");

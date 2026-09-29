@@ -22,12 +22,14 @@ export function promptFlags(texts: readonly string[]): {
   return names.length === 0 ? {} : { flags: [PROMPT_LIKE_FLAG], prompt_like: names };
 }
 
-/** What the harness received for a judged event (never `detail`). */
+/** What the harness received for a judged event (never `detail`, never the raw hold token). */
 export interface ReturnedVerdict {
   readonly verdict: Verdict;
   readonly reason: string;
   readonly context_note: string | null;
   readonly updated_input: Record<string, unknown> | null;
+  /** First hex characters of the SHA-256 of the hold token, when one was issued. */
+  readonly hold_token_sha256?: string;
 }
 
 /** Everything a `judge` audit line is built from. */

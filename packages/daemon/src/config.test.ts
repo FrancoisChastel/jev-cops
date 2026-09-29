@@ -41,6 +41,7 @@ describe("defaults", () => {
       http: null,
       home,
       judgeDeadlineMs: 12_000,
+      holdTokenTtlMs: 600_000,
     });
     expect(config.audit).toEqual({ path: join(home, ".jevdict", "audit.jsonl"), forward: null });
     expect(config.store.path).toBe(join(home, ".jevdict", "jevdict.sqlite"));
@@ -136,6 +137,14 @@ describe("repo override can only tighten", () => {
       "context.budget.limit",
       "policy.bands.deny",
     ]);
+  });
+
+  test("a longer hold token life from the repo is rejected; the user file may set it", () => {
+    write(userFile(), "[daemon]\nhold_token_ttl_ms = 120000\n");
+    write(join(cwd, ".jevdict.toml"), "[daemon]\nhold_token_ttl_ms = 86400000\n");
+    const { config, rejected } = load();
+    expect(config.daemon.holdTokenTtlMs).toBe(120_000);
+    expect(rejected).toEqual([expect.stringContaining("daemon.hold_token_ttl_ms")]);
   });
 
   test("a repo value equal to the base is not a change", () => {

@@ -1,5 +1,6 @@
 import { Database, type Statement } from "bun:sqlite";
 import type { PolicyContext, PolicyEvent, PrecedentLookup, PrecedentMatch } from "@jevdict/core";
+import { hashHoldToken, sameHash } from "./hold-tokens.ts";
 import { matchScore, type PrecedentScope, scopeKey, taskHash } from "./precedent-scope.ts";
 
 export {
@@ -39,6 +40,20 @@ export interface PendingHold {
   readonly policies: readonly string[];
 }
 
+/** The stored side of a hold token: its hash and when it stops being accepted. */
+export interface HoldTokenRecord {
+  readonly hash: string;
+  readonly expiresAt: number;
+}
+
+/** Why a presented hold token was refused; recorded on the `anomaly` audit line. */
+export type RedeemFailure = "no-token" | "no-hold" | "mismatch" | "reused" | "expired";
+
+/** A redeemed hold, or why the token was refused. */
+export type Redeemed =
+  | { readonly ok: true; readonly hold: PendingHold }
+  | { readonly ok: false; readonly why: RedeemFailure };
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS precedents (
   key TEXT NOT NULL, session_id TEXT NOT NULL, scope TEXT NOT NULL, risk_delta REAL NOT NULL,
@@ -48,6 +63,9 @@ CREATE INDEX IF NOT EXISTS precedents_session ON precedents (session_id);
 CREATE TABLE IF NOT EXISTS holds (
   event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, scope TEXT NOT NULL,
   policies TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS hold_tokens (
+  event_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, expires_at INTEGER NOT NULL,
+  used_at INTEGER);
 `;
 
 const SQL = {
@@ -62,6 +80,12 @@ const SQL = {
     VALUES ($eventId, $sid, $scope, $policies, $now)`,
   hold: "SELECT * FROM holds WHERE event_id = $eventId AND at > $oldest",
   dropHold: "DELETE FROM holds WHERE event_id = $eventId",
+  putToken: `INSERT OR REPLACE INTO hold_tokens (event_id, token_hash, expires_at, used_at)
+    VALUES ($eventId, $hash, $expires, NULL)`,
+  token: "SELECT * FROM hold_tokens WHERE event_id = $eventId",
+  useToken: `UPDATE hold_tokens SET used_at = $now WHERE event_id = $eventId
+    AND used_at IS NULL`,
+  pruneTokens: "DELETE FROM hold_tokens WHERE expires_at < $oldest",
 } as const;
 
 type Bindings = Record<string, string | number | null>;
@@ -77,6 +101,12 @@ interface PrecedentRow {
   policies: string;
   event_id: string;
   granted_by: string;
+}
+
+interface TokenRow {
+  token_hash: string;
+  expires_at: number;
+  used_at: number | null;
 }
 
 interface HoldRow {
@@ -131,15 +161,44 @@ export class PrecedentStore implements PrecedentLookup {
     this.rootOf = opts.rootOf ?? ((id) => id);
   }
 
-  /** Remembers a hold shown to a human, with the scope the daemon proposes for it. */
-  recordHold(h: PendingHold): void {
-    this.st.putHold.run({
-      eventId: h.eventId,
-      sid: this.rootOf(h.sessionId),
-      scope: JSON.stringify(h.scope),
-      policies: JSON.stringify(h.policies),
-      now: this.now(),
-    });
+  /**
+   * Remembers a hold shown to a human, with the scope the daemon proposes for it and the
+   * hash of the token that may resolve it (a hold recorded without one never resolves).
+   * Tokens older than the 24 h hold cap are pruned here.
+   */
+  recordHold(h: PendingHold, token: HoldTokenRecord | null = null): void {
+    const now = this.now();
+    this.db.transaction(() => {
+      this.st.putHold.run({
+        eventId: h.eventId,
+        sid: this.rootOf(h.sessionId),
+        scope: JSON.stringify(h.scope),
+        policies: JSON.stringify(h.policies),
+        now,
+      });
+      if (token !== null) {
+        this.st.putToken.run({ eventId: h.eventId, hash: token.hash, expires: token.expiresAt });
+      }
+      this.st.pruneTokens.run({ oldest: now - PRECEDENT_MAX_AGE_MS });
+    })();
+  }
+
+  /**
+   * Checks `token` against the hold of `eventId` and spends it: the hash is compared in
+   * constant time, and a token works once, before it expires, while its hold is pending.
+   * The caller then grants or drops the hold; nothing else resolves one.
+   */
+  redeem(eventId: string, token: string | undefined): Redeemed {
+    if (token === undefined || token === "") return { ok: false, why: "no-token" };
+    const row = this.st.token.get({ eventId }) as TokenRow | null;
+    if (row === null) return { ok: false, why: "no-hold" };
+    if (!sameHash(row.token_hash, hashHoldToken(token))) return { ok: false, why: "mismatch" };
+    if (row.used_at !== null) return { ok: false, why: "reused" };
+    if (row.expires_at <= this.now()) return { ok: false, why: "expired" };
+    const hold = this.pendingHold(eventId);
+    if (hold === null) return { ok: false, why: "no-hold" };
+    this.st.useToken.run({ eventId, now: this.now() });
+    return { ok: true, hold };
   }
 
   /** The pending hold for `eventId`, or null (unknown, resolved, or older than 24 h). */
@@ -155,9 +214,10 @@ export class PrecedentStore implements PrecedentLookup {
     };
   }
 
-  /** Drops a pending hold (resolved with deny, or granted). */
+  /** Drops a pending hold (resolved with deny, or granted) and spends its token. */
   dropHold(eventId: string): void {
     this.st.dropHold.run({ eventId });
+    this.st.useToken.run({ eventId, now: this.now() });
   }
 
   /** A human allowed held event `eventId`: records its precedent once; null if not held. */

@@ -6,6 +6,7 @@ import {
   type PolicyEvent,
 } from "@jevdict/core";
 import { bashPre, CTX_SESSION } from "../../../tests/fixtures/context/index.ts";
+import { mintHoldToken } from "./hold-tokens.ts";
 import {
   PRECEDENT_MAX_AGE_MS,
   PrecedentStore,
@@ -39,13 +40,15 @@ async function event(command: string, task: string | null = TASK): Promise<Polic
 
 async function hold(eventId: string, command: string, task: string | null = TASK) {
   const n: NormalizedEvent = await bashPre(command);
-  store.recordHold({
-    eventId,
-    sessionId: CTX_SESSION,
-    scope: proposeScope(n, task),
-    policies: ["off-repo-write"],
-  });
+  const minted = mintHoldToken();
+  store.recordHold(
+    { eventId, sessionId: CTX_SESSION, scope: proposeScope(n, task), policies: ["off-repo-write"] },
+    { hash: minted.hash, expiresAt: at + TOKEN_TTL },
+  );
+  return minted.token;
 }
+
+const TOKEN_TTL = 600_000;
 
 describe("proposeScope (the daemon proposes, never the request)", () => {
   test("kind, first two argv words, path prefix and task hash", async () => {
@@ -129,6 +132,46 @@ describe("grant and lookup", () => {
     expect(store.lookup(child, NO_CTX)).not.toBeNull();
     const stranger = { ...e, session: { ...e.session, id: "sess_other" } };
     expect(store.lookup(stranger, NO_CTX)).toBeNull();
+  });
+});
+
+describe("redeem: a hold is resolved only with its single-use token (T7/T8)", () => {
+  test("the right token redeems the hold once", async () => {
+    const token = await hold("evt_1", "rm -rf /home/dev/build");
+    const first = store.redeem("evt_1", token);
+    expect(first).toMatchObject({ ok: true, hold: { eventId: "evt_1", sessionId: CTX_SESSION } });
+    expect(store.redeem("evt_1", token)).toEqual({ ok: false, why: "reused" });
+  });
+
+  test("a missing, wrong or unknown token is refused and the hold stays pending", async () => {
+    const token = await hold("evt_1", "rm -rf /home/dev/build");
+    expect(store.redeem("evt_1", undefined)).toEqual({ ok: false, why: "no-token" });
+    expect(store.redeem("evt_1", mintHoldToken().token)).toEqual({ ok: false, why: "mismatch" });
+    expect(store.redeem("evt_nobody", token)).toEqual({ ok: false, why: "no-hold" });
+    expect(store.redeem("evt_1", token).ok).toBe(true);
+  });
+
+  test("an expired token is refused", async () => {
+    const token = await hold("evt_1", "rm -rf /home/dev/build");
+    at += TOKEN_TTL;
+    expect(store.redeem("evt_1", token)).toEqual({ ok: false, why: "expired" });
+  });
+
+  test("a hold recorded without a token can never be redeemed", async () => {
+    const n = await bashPre("rm -rf /home/dev/build");
+    store.recordHold({
+      eventId: "evt_2",
+      sessionId: CTX_SESSION,
+      scope: proposeScope(n, TASK),
+      policies: [],
+    });
+    expect(store.redeem("evt_2", mintHoldToken().token)).toEqual({ ok: false, why: "no-hold" });
+  });
+
+  test("a hold resolved with deny (dropped) cannot be redeemed afterwards", async () => {
+    const token = await hold("evt_1", "rm -rf /home/dev/build");
+    store.dropHold("evt_1");
+    expect(store.redeem("evt_1", token)).toEqual({ ok: false, why: "reused" });
   });
 });
 

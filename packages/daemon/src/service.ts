@@ -1,6 +1,14 @@
-import { type Event, type PostEvent, type PreEvent, parseEvent } from "@jevdict/core";
+import {
+  type CaseFile,
+  type Event,
+  type Judgement,
+  type PostEvent,
+  type PreEvent,
+  parseEvent,
+} from "@jevdict/core";
 import { judgePayload, observePayload } from "./audit-payload.ts";
 import type { Runtime } from "./daemon.ts";
+import { HOLD_TOKEN_HASH_PREFIX, type MintedHoldToken, mintHoldToken } from "./hold-tokens.ts";
 import { proposeScope } from "./precedents.ts";
 import { harnessVerdict } from "./verdict-map.ts";
 
@@ -37,10 +45,30 @@ function policyName(key: string): string {
 }
 
 /**
+ * Records a hold the harness will show a human, with the daemon's proposed precedent
+ * scope and a fresh single-use token (only its hash is stored; the token expires after
+ * `daemon.hold_token_ttl_ms`). Returns the token for the adapter.
+ */
+function recordHold(rt: Runtime, event: PreEvent, cf: CaseFile, j: Judgement): MintedHoldToken {
+  const minted = mintHoldToken();
+  rt.precedents.recordHold(
+    {
+      eventId: event.id,
+      sessionId: event.session.id,
+      scope: proposeScope(j.normalized, cf.task),
+      policies: j.decision.policies.map(policyName),
+    },
+    { hash: minted.hash, expiresAt: rt.now() + rt.config.daemon.holdTokenTtlMs },
+  );
+  return minted;
+}
+
+/**
  * `POST /v1/judge`: validates a pre event, judges it on the session's case file, maps
  * the decision for the harness (detail stripped, D-008 headless hold → deny, observe
- * mode → allow), records a pending hold for `/v1/resolve`, and appends the `judge`
- * audit line with the full decision before answering.
+ * mode → allow), records a pending hold with its `hold_token` for `/v1/resolve` when the
+ * harness will ask a human, and appends the `judge` audit line with the full decision
+ * (and only a prefix of the token's hash) before answering.
  */
 export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
   const parsed = parsePhase(body, "pre");
@@ -53,23 +81,17 @@ export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
   const { value: judgement, answers } = await rt.recorder.run(() =>
     engine.judge(event, cf, { home, ...(repoHints === null ? {} : { repoHints }) }),
   );
-  const { decision, normalized } = judgement;
+  const { decision } = judgement;
   rt.degraded.update(decision.trace);
   const mode = rt.config.enforcement.mode;
   const { response, mapping } = harnessVerdict(decision, event.id, mode, event.session.mode);
-  if (response.verdict === "hold") {
-    rt.precedents.recordHold({
-      eventId: event.id,
-      sessionId: event.session.id,
-      scope: proposeScope(normalized, cf.task),
-      policies: decision.policies.map(policyName),
-    });
-  }
+  const token = response.verdict === "hold" ? recordHold(rt, event, cf, judgement) : null;
   const returned = {
     verdict: response.verdict,
     reason: response.reason,
     context_note: response.context_note,
     updated_input: response.updated_input,
+    ...(token === null ? {} : { hold_token_sha256: token.hash.slice(0, HOLD_TOKEN_HASH_PREFIX) }),
   };
   const record = {
     event,
@@ -87,7 +109,10 @@ export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
     session_id: event.session.id,
     payload: judgePayload(record),
   });
-  return { status: 200, body: response };
+  return {
+    status: 200,
+    body: token === null ? response : { ...response, hold_token: token.token },
+  };
 }
 
 /** `POST /v1/observe`: records a post event on the case file and in the audit log; 204. */

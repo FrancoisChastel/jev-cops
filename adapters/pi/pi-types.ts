@@ -86,6 +86,8 @@ export interface Judged {
   reason: string;
   note: string | null;
   input: Record<string, unknown> | null;
+  /** The `hold_token` of a `hold`: presented to `/v1/resolve`, never shown to the model. */
+  token: string | null;
 }
 
 /** A daemon reply: HTTP status and parsed JSON body (null when empty). */

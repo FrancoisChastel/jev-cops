@@ -84,7 +84,7 @@ for content taint.
 | allow | nothing returned |
 | annotate | the tool runs; `context_note` is appended to the tool result as a `[jevdict] …` text block in `tool_result`. A note from any verdict is appended, including observe mode's "would have". |
 | rewrite | `event.input` is replaced in place: keys missing from `updated_input` are deleted, the rest assigned. Nothing is returned. |
-| hold | interactive: `GET /v1/explain/<id>`, then `ctx.ui.confirm("Jevdict hold: <reason>", "<normalized raw>\n\n<detail>")`. Yes posts `/v1/resolve` `allow`, `by: "pi-user"`, and the tool runs. No posts `deny` and blocks. When the details cannot be loaded, the call is blocked without asking. Headless: blocked (the daemon already sends `deny`, D-008). |
+| hold | interactive: `GET /v1/explain/<id>`, then `ctx.ui.confirm("Jevdict hold: <reason>", "<normalized raw>\n\n<detail>")`. Yes posts `/v1/resolve` `allow`, `by: "pi-user"` with the verdict's `hold_token`, and the tool runs. No posts `deny` (with the token) and blocks. The token stays in the extension: the model only ever sees `reason`, and the daemon refuses a resolve without it (403). When the details cannot be loaded, the call is blocked without asking. Headless: blocked (the daemon already sends `deny`, D-008, and mints no token). |
 | deny | `{ block: true, reason: "jevdict: <reason>" }` |
 | kill | `{ block: true, reason, terminate: true }` plus `ctx.abort()` and `ctx.shutdown()` |
 

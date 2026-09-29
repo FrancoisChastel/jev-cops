@@ -24,6 +24,7 @@ export interface TestDaemonOptions {
   mode?: EnforcementMode;
   deadlineMs?: number;
   judgeTimeoutMs?: number;
+  holdTokenTtlMs?: number;
   http?: HttpBind | null;
   context?: ContextConfigInput;
   policy?: PolicyConfigInput;
@@ -58,6 +59,7 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
       http: opts.http ?? null,
       home: "/home/dev",
       judgeDeadlineMs: opts.deadlineMs ?? 12_000,
+      holdTokenTtlMs: opts.holdTokenTtlMs ?? 600_000,
     },
     policies: { dir: opts.policiesDir ?? join(dir, "policies") },
     judge: {
