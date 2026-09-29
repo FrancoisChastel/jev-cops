@@ -8,7 +8,9 @@
  * command and `detail` (fetched from `/v1/explain`), never the tool input's prose, and
  * only the human's answer resolves it: an agent that reads the held event id from the
  * audit log and posts its own "allow" to the socket while the human is being asked is
- * refused (no hold token). The Claude Code hold-to-ask mapping is M1.
+ * refused (no hold token), and so is its `GET /v1/explain` of that event: without the
+ * token it gets 403 and an `anomaly` line, never the human's `detail` or the audit line.
+ * The Claude Code hold-to-ask mapping is M1.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
@@ -65,6 +67,33 @@ describe("T8 social engineering the human", () => {
     expect(run.blocked?.reason).toContain("declined by the user");
     const actions = daemon.audit().filter((l) => l.kind === "precedent");
     expect(actions.map((l) => l.payload.action)).toEqual(["resolve-deny"]);
+  });
+
+  test("Pi: the agent cannot read the human's detail by curling the socket", async () => {
+    td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
+    const daemon = td;
+    const pi = new FakePi();
+    register(pi, { socket: daemon.config.daemon.socket });
+    const base = fakeContext({ cwd: daemon.dir, hasUI: true, confirm: false });
+    const curled: { status: number; body: unknown }[] = [];
+    const ctx = {
+      ...base,
+      ui: {
+        ...base.ui,
+        confirm: async (title: string, message: string) => {
+          const held = daemon.audit().findLast((l) => l.kind === "judge");
+          curled.push(await daemon.call("GET", `/v1/explain/${held?.event_id}`));
+          return base.ui.confirm(title, message);
+        },
+      },
+    };
+    await pi.run(ctx, "bash", { command: "git push --force origin main" });
+    expect(curled).toEqual([{ status: 403, body: { error: "invalid hold token" } }]);
+    expect(base.log.confirms[0]?.message).toContain("default main/master");
+    expect(daemon.audit().findLast((l) => l.kind === "anomaly")?.payload).toMatchObject({
+      reason: "explain-without-valid-token",
+      why: "no-token",
+    });
   });
 
   test.todo(
