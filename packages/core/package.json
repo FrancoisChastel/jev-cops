@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./normalizer": "./src/normalizer/index.ts",
+    "./normalizer/tools": "./src/normalizer/tools.ts",
     "./context": "./src/context/index.ts",
     "./judge": "./src/judge/index.ts",
     "./policy": "./src/policy/index.ts"

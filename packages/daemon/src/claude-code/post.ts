@@ -40,6 +40,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** A harness id part: non-empty, no whitespace (it becomes part of `sess_…`/`call_…`). */
 const idPart = z.string().max(256).regex(/^\S+$/, "must be a non-empty id without whitespace");
+/**
+ * A Claude Code id (`session_id`, `agent_id`, `tool_use_id`): non-empty, no whitespace, at
+ * most 256 characters. Shared with the command hook's parser for the other events.
+ */
+export const hookIdSchema = idPart;
 /** `tool_input` passed through as the same object, every key intact (D-010). */
 const toolInput = z.custom<Record<string, unknown>>(isRecord, { error: "expected a JSON object" });
 

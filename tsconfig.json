@@ -24,7 +24,9 @@
       "@jevdict/sdk/*": ["./packages/sdk/src/*"],
       "@jevdict/judge": ["./packages/judge/src/index.ts"],
       "@jevdict/daemon": ["./packages/daemon/src/index.ts"],
-      "@jevdict/cli": ["./packages/cli/src/index.ts"]
+      "@jevdict/cli": ["./packages/cli/src/index.ts"],
+      "@jevdict/adapter-claude-code": ["./adapters/claude-code/src/index.ts"],
+      "@jevdict/adapter-claude-code/*": ["./adapters/claude-code/src/*"]
     }
   },
   "include": ["packages/**/*.ts", "adapters/**/*.ts", "policies/**/*.ts", "tests/**/*.ts"],
