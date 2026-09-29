@@ -5,8 +5,10 @@
  * Required outcome: Precedent scope is proposed by the daemon, TTL-bound; repeated holds
  * raise the budget cost by 2x per repeat.
  *
- * Status: live (core) for the 2x budget cost. Precedent scope and TTL land with the daemon's
- * precedent store (M0 step 8) and JIT grants (M2).
+ * Status: live. Core: the 2x budget cost. Daemon: the precedent scope is the one the daemon
+ * proposed when it held the event (a resolve request carrying a scope is rejected), TTL is
+ * the session with a 24 h cap, and holds farmed with varied arguments share one coarse key
+ * so each repeat costs double end to end. OpenShell JIT grants are M2.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -16,6 +18,14 @@ import {
   DEFAULT_CONTEXT_CONFIG,
   type RiskBudget,
 } from "@jevdict/core";
+import {
+  PRECEDENT_MAX_AGE_MS,
+  PrecedentStore,
+  proposeScope,
+} from "../../packages/daemon/src/precedents.ts";
+import { startTestDaemon, withFreshId } from "../../packages/daemon/src/testing/daemon.ts";
+import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
+import { bashPre, buildEvent, CTX_SESSION } from "../fixtures/context/index.ts";
 import { pending } from "./pending.ts";
 
 const CFG = DEFAULT_CONTEXT_CONFIG.budget;
@@ -44,12 +54,78 @@ describe("T7 precedent farming: each repeated hold of one precedent key costs do
     expect(charge(budget, 0, T0, CFG).holdAll).toBe(true);
   });
 
-  test.todo(
-    "precedent scope is proposed by the daemon, never the agent (M0 step 8)",
-    pending("M0 step 8"),
-  );
-  test.todo(
-    "precedents are TTL-bound and expire with the session (M0 step 8 / M2 JIT grants)",
-    pending("M0 step 8 / M2 JIT grants"),
-  );
+  test.todo("OpenShell JIT grants from a resolved hold are time-boxed (M2)", pending("M2"));
+});
+
+const HOLD_DELETES = policyModule("guard", 1, "hold").replace(
+  "when: () => true",
+  'when: (e) => e.kind === "fs.delete"',
+);
+
+describe("T7 precedent farming through the daemon", () => {
+  test("repeated holds with varied args share one coarse key and cost double each time", async () => {
+    const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES }, now: () => T0 });
+    try {
+      const spent: number[] = [];
+      for (const n of [1, 2, 3]) {
+        const e = withFreshId(
+          buildEvent({ tool: "Bash", kind: "exec", input: { command: `rm -rf /srv/farm/${n}` } }),
+        );
+        const res = await td.call("POST", "/v1/judge", e);
+        spent.push((res.body as { budget: { spent: number } }).budget.spent);
+      }
+      const costs = spent.map((s, i) => s - (spent[i - 1] ?? 0));
+      expect(costs[0]).toBeGreaterThan(0);
+      expect(costs).toEqual([costs[0] ?? 0, 2 * (costs[0] ?? 0), 4 * (costs[0] ?? 0)]);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("precedent scope is proposed by the daemon, never the agent", async () => {
+    const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES } });
+    try {
+      const e = withFreshId(
+        buildEvent({ tool: "Bash", kind: "exec", input: { command: "rm -rf /srv/data/tmp" } }),
+      );
+      await td.call("POST", "/v1/judge", e);
+      const widened = { event_id: e.id, decision: "allow", by: "x", scope: { pathPrefix: "/" } };
+      expect((await td.call("POST", "/v1/resolve", widened)).status).toBe(400);
+      const ok = await td.call("POST", "/v1/resolve", {
+        event_id: e.id,
+        decision: "allow",
+        by: "x",
+      });
+      const expected = proposeScope(await bashPre("rm -rf /srv/data/tmp"), e.session.task ?? null);
+      expect((ok.body as { precedent: { scope: unknown } }).precedent.scope).toEqual(expected);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("precedents are TTL-bound and expire with the session", async () => {
+    let at = T0;
+    const store = new PrecedentStore(":memory:", { now: () => at });
+    try {
+      const n = await bashPre("rm -rf /srv/data/tmp");
+      const grantOne = (id: string) => {
+        store.recordHold({
+          eventId: id,
+          sessionId: CTX_SESSION,
+          scope: proposeScope(n, null),
+          policies: ["guard"],
+        });
+        store.grant(id, "x");
+      };
+      grantOne("evt_a");
+      expect(store.active(CTX_SESSION)).toHaveLength(1);
+      store.expireSession(CTX_SESSION);
+      expect(store.active(CTX_SESSION)).toHaveLength(0);
+      grantOne("evt_b");
+      at += PRECEDENT_MAX_AGE_MS;
+      expect(store.active(CTX_SESSION)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
 });
