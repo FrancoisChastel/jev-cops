@@ -14,15 +14,14 @@ more than 0.2.
 
 | Provider | Confidence | Needs | Pick it when |
 |---|---|---|---|
-| `jev` (recommended) | Calibrated probabilities from TypeSafe Jev. Noul confidence is derived as `abs(2p − 1)` (D-002) | `TYPESAFE_API_KEY` | You want the answers the spec was designed around |
+| `jev` (recommended) | Calibrated probabilities from TypeSafe Jev. A noul `p` is used as is, confidence 1 (D-038) | `TYPESAFE_API_KEY` | You want the answers the spec was designed around |
 | `openrouter` | **Self-reported** by the model in its JSON reply, with no logprobs | `OPENROUTER_API_KEY` and a model that supports structured outputs | You cannot use Jev and want one key for many models |
 | `vercel-ai` | **Self-reported**, same as OpenRouter | A `LanguageModel` instance you build (any AI SDK provider) | You already run the AI SDK, or need a local or self-hosted model |
 | `mock` | Scripted | Answers by question name | Fixtures and tests |
 | `off` | None | Nothing | Run observe-only with deterministic features only |
 
 OpenRouter and Vercel AI answers are **less calibrated** than Jev's. A model that says
-"confidence 0.95" has not measured anything. For noul questions the reported confidence
-is capped at `abs(2p − 1)`, so p = 0.55 can never count as confident. Beyond that, the
+"confidence 0.95" has not measured anything, and it is taken as given (D-038). The
 **deterministic floor is the protection**: whatever the model says, it can raise risk
 but cannot lower the floor by more than 0.2. A confidence below 0.5 discards the answer,
 and one from 0.5 to 0.8 caps that policy at `hold` (D-029).

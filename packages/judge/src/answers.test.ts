@@ -51,17 +51,21 @@ describe("normalizeProbabilities", () => {
 });
 
 describe("noul readers", () => {
-  test("derived confidence is abs(2p - 1) (D-002)", () => {
+  test("a calibrated p is used as is with confidence 1 (D-038)", () => {
     expect(readDerivedNoul("q", 0.9)).toEqual({
       ok: true,
-      value: { kind: "noul", p: 0.9, confidence: expect.closeTo(0.8, 9) },
+      value: { kind: "noul", p: 0.9, confidence: 1 },
+    });
+    expect(readDerivedNoul("q", 0.5)).toEqual({
+      ok: true,
+      value: { kind: "noul", p: 0.5, confidence: 1 },
     });
   });
 
-  test("a reported confidence is capped by the derived one", () => {
+  test("a reported confidence is taken as given, not capped by p", () => {
     const high = readReportedNoul("q", 0.55, 0.99);
     const low = readReportedNoul("q", 0.9, 0.3);
-    expect(high.ok && high.value.confidence).toBeCloseTo(0.1, 9);
+    expect(high.ok && high.value.confidence).toBe(0.99);
     expect(low.ok && low.value.confidence).toBe(0.3);
   });
 

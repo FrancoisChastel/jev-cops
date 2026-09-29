@@ -78,7 +78,7 @@ function messageContent(body: unknown): unknown {
 
 /**
  * Answers from a chat-completions body: `choices[0].message.content` parsed as JSON by
- * `parseLlmAnswers` (self-reported confidence, noul capped by `abs(2p − 1)`). Never throws.
+ * `parseLlmAnswers` (self-reported confidence, taken as given, D-038). Never throws.
  */
 export function readOpenRouterBody(
   body: unknown,

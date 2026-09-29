@@ -90,7 +90,7 @@ describe("jev: request", () => {
 });
 
 describe("jev: answers", () => {
-  test("maps SDK answers to core answers; noul confidence is derived (D-002)", async () => {
+  test("maps SDK answers to core answers; noul confidence is 1 (D-038)", async () => {
     const { judge } = judgeWith(async () => json(JEV_BODY));
     const result = await judge.ask(STATE, QUESTIONS);
     expect(result).toMatchObject({
@@ -103,7 +103,7 @@ describe("jev: answers", () => {
     expect(result.answers[NOUL.name]).toEqual({
       kind: "noul",
       p: 0.9,
-      confidence: expect.closeTo(0.8, 9),
+      confidence: 1,
     });
     expect(result.answers[CHOICE.name]).toMatchObject({ choice: "exfil", p: 0.7, confidence: 0.9 });
     expect(result.answers[SCORE.name]).toMatchObject({

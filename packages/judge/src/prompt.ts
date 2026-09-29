@@ -141,7 +141,7 @@ function parseJson(text: string): Result<unknown, string> {
 /**
  * Core answers from an LLM reply (an object, or its JSON text) shaped by
  * {@link buildAnswerSchema}. Probabilities are rescaled to sum to 1 within a tolerance;
- * a noul confidence is capped by `abs(2p − 1)`; everything goes through core
+ * a noul confidence is taken as reported (D-038); everything goes through core
  * `validateAnswers`. A missing answer, NaN or unknown label is an error value; never throws.
  */
 export function parseLlmAnswers(

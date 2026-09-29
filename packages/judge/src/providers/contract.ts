@@ -94,13 +94,13 @@ async function askOne(h: ProviderHarness, reply: Reply, q: Question) {
 }
 
 function describeHappyPath(h: ProviderHarness): void {
-  test("noul: p is mapped and confidence is abs(2p − 1)", async () => {
+  test("noul: p is mapped; confidence is 1 when calibrated (jev) else as reported (D-038)", async () => {
     const result = await askOne(h, answers({ [NOUL.name]: NOUL_WIRE }), NOUL);
     expect(result).toMatchObject({ ok: true, provider: h.name, cached: false });
     expect(result.ok && result.answers[NOUL.name]).toEqual({
       kind: "noul",
       p: 0.9,
-      confidence: expect.closeTo(0.8, 9),
+      confidence: h.name === "jev" ? 1 : NOUL_WIRE.confidence,
     });
   });
 

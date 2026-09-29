@@ -53,7 +53,7 @@ describe("vercel-ai: call", () => {
     expect(result.answers[NOUL.name]).toEqual({
       kind: "noul",
       p: 0.9,
-      confidence: expect.closeTo(0.8, 9),
+      confidence: 0.95,
     });
     expect(result.answers[CHOICE.name]).toMatchObject({ choice: "exfil", p: 0.7 });
     expect(result.answers[SCORE.name]).toMatchObject({ level: "high" });

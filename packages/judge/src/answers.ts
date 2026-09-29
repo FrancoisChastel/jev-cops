@@ -68,25 +68,25 @@ export function normalizeProbabilities(
   return ok(Object.fromEntries(keys.map((k, i) => [k, (values[i] as number) / scale])));
 }
 
-/** A noul answer from `p` alone; confidence is derived as `abs(2p − 1)` (D-002). */
+/** A noul answer from a calibrated `p` alone; it is used as is, confidence 1 (D-038). */
 export function readDerivedNoul(name: string, p: unknown): Result<NoulAnswer, string> {
   if (!isUnit(p)) return err(`${name}: p must be in [0, 1]`);
   return ok({ kind: "noul", p, confidence: deriveNoulConfidence(p) });
 }
 
 /**
- * A noul answer with a self-reported confidence, capped by the derived one: a model
- * that says p = 0.55 "with confidence 0.99" gets 0.1. The cap only makes routing stricter.
+ * A noul answer with a self-reported confidence (LLM providers): `p` and `confidence`
+ * are taken as given and go through the engine's confidence routing (D-038). The
+ * deterministic floor, not this reader, bounds a badly calibrated provider.
  */
 export function readReportedNoul(
   name: string,
   p: unknown,
   confidence: unknown,
 ): Result<NoulAnswer, string> {
-  const derived = readDerivedNoul(name, p);
-  if (!derived.ok) return derived;
+  if (!isUnit(p)) return err(`${name}: p must be in [0, 1]`);
   if (!isUnit(confidence)) return err(`${name}: confidence must be in [0, 1]`);
-  return ok({ ...derived.value, confidence: Math.min(confidence, derived.value.confidence) });
+  return ok({ kind: "noul", p, confidence });
 }
 
 /** A choice answer; `p` is the normalized probability of the chosen option. */

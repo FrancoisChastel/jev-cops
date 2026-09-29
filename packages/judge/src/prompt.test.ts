@@ -118,7 +118,7 @@ describe("parseLlmAnswers", () => {
     expect(result.value[NOUL.name]).toEqual({
       kind: "noul",
       p: 0.9,
-      confidence: expect.closeTo(0.8, 9),
+      confidence: 0.95,
     });
     expect(result.value[CHOICE.name]).toMatchObject({ kind: "choice", choice: "exfil", p: 0.7 });
     expect(result.value[SCORE.name]).toMatchObject({ kind: "score", score: 1.6, level: "high" });

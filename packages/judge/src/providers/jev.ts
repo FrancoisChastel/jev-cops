@@ -82,7 +82,7 @@ function readJevAnswer(q: Question, raw: unknown): Result<Answer, string> {
 
 /**
  * Core answers from a `/v1/systemone` body. The SDK does not check the body's shape, so
- * it is read as untrusted: noul `p` = `noul` with confidence `abs(2p − 1)` (D-002),
+ * it is read as untrusted: noul `p` = `noul` with confidence 1 (D-038),
  * choice `p` = the chosen label's probability, score `level` = the rubric label at
  * `round(score)`; probabilities are rescaled to sum to 1. Never throws.
  */
