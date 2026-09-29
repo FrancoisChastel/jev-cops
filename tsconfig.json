@@ -19,7 +19,9 @@
     "resolveJsonModule": true,
     "paths": {
       "@jevdict/core": ["./packages/core/src/index.ts"],
-      "@jevdict/core/*": ["./packages/core/src/*"]
+      "@jevdict/core/*": ["./packages/core/src/*"],
+      "@jevdict/sdk": ["./packages/sdk/src/index.ts"],
+      "@jevdict/sdk/*": ["./packages/sdk/src/*"]
     }
   },
   "include": ["packages/**/*.ts", "adapters/**/*.ts", "policies/**/*.ts", "tests/**/*.ts"],
