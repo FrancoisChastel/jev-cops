@@ -117,12 +117,17 @@ clone → check → gate → build all green. Fixes before M1:
   `config-tamper` tiered (48 fixture cases). 6 policies · 93 cases · 186 runs PASS; 2025
   tests. Decisions D-071–D-074.
 
+- **M1 step 3**: `POST /v1/session` (task once, harness pinning), kill latch with
+  admin-only unlatch, config-change latch, hold→deny for headless/unattended permission
+  modes, view-only token for Claude Code holds, `POST /v1/hooks/claude-code` for post
+  events (PreToolUse refused over HTTP). T1/T11 daemon side live. 2181 tests. Decisions
+  D-075–D-080.
+
 ## In progress
 
-- **M1** per [PLAN-M1.md](PLAN-M1.md): step 3 (daemon session route, kill latch,
-  post-over-HTTP, no Claude Code hold tokens), then steps 4–5 (the `jevdict hook` binary and
-  adapter events). The daemon must append `policies.dir`, `~/.jevdict/` and the binaries to
-  `protectedPaths` (config-tamper only knows what the daemon tells it).
+- **M1 steps 4–5**: the `jevdict hook` binary (command hook, fail closed, exit 2) and
+  adapter events; the daemon appends `policies.dir`, `~/.jevdict/` and the binaries to
+  `protectedPaths`; CLI `explain`/`replay` read `session` lines and latched judge lines.
 
 ## Next
 
