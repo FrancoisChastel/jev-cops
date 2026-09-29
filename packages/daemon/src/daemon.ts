@@ -22,6 +22,7 @@ import { KillLatch } from "./kill-latch.ts";
 import { type Logger, stderrLogger } from "./log.ts";
 import { PolicySet, type PolicySetOptions } from "./policies.ts";
 import { PrecedentStore } from "./precedents.ts";
+import { defaultJudgeInputs, type JudgeInputs, protectJudgeInputs } from "./protected-paths.ts";
 import { RepoHintsCache } from "./repo-hints.ts";
 import { SessionFactsStore } from "./session-facts.ts";
 import { SessionStore } from "./sessions.ts";
@@ -41,6 +42,8 @@ export interface DaemonDeps {
   env?: Readonly<Record<string, string | undefined>>;
   /** Replaces the hardened git runner used to derive `env.git` (tests). */
   gitRunner?: GitRunner;
+  /** What the daemon protects beyond its config (config files, own binary); see {@link defaultJudgeInputs}. */
+  inputs?: Partial<JudgeInputs>;
 }
 
 /** Per-policy `degraded` flags as last seen in a decision trace. */
@@ -283,9 +286,12 @@ function openStores(
 /**
  * Opens the stores, audit log and policy set and wires the engine from config: judge
  * from `@jevdict/judge` (keys from env only), precedents and case files from SQLite,
- * policies hot-reloaded. Throws on unreadable stores or a policy set with problems.
+ * policies hot-reloaded. The judge's own paths are appended to `[policy] protectedPaths`
+ * first, so every engine built from this runtime (after any policy reload too) and the
+ * boot line carry them. Throws on unreadable stores or a policy set with problems.
  */
-export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {}): Promise<Runtime> {
+export async function createRuntime(given: DaemonConfig, deps: DaemonDeps = {}): Promise<Runtime> {
+  const config = protectJudgeInputs(given, { ...defaultJudgeInputs(), ...deps.inputs });
   const now = deps.now ?? Date.now;
   const log = deps.log ?? stderrLogger(now);
   const policies = await PolicySet.load(config.policies.dir);

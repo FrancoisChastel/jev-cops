@@ -16,6 +16,7 @@ export * from "./kill-latch.ts";
 export * from "./log.ts";
 export * from "./policies.ts";
 export * from "./precedents.ts";
+export * from "./protected-paths.ts";
 export * from "./server.ts";
 export * from "./session-facts.ts";
 export * from "./session-route.ts";
