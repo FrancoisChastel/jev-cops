@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { loadEventFixture } from "../../../../tests/fixtures/events/index.ts";
 import { type Event, parseEvent } from "../schema/event.ts";
-import { normalize, TOOL_RULES } from "./normalize.ts";
+import { canonicalTool, normalize, TOOL_RULES } from "./normalize.ts";
 
 const HOME = "/home/dev";
 const OPTS = { home: HOME };
@@ -129,10 +129,78 @@ describe("normalize: tool mapping", () => {
     expect(n.kind).toBe("other");
   });
 
-  test("the tool table lists every spec tool", () => {
+  test("the tool table lists every spec tool and every Pi built-in", () => {
     expect(Object.keys(TOOL_RULES).sort()).toEqual(
-      ["Bash", "Edit", "MultiEdit", "NotebookEdit", "Read", "Task", "WebFetch", "Write"].sort(),
+      [
+        ...["Bash", "Edit", "MultiEdit", "NotebookEdit", "Read", "Task", "WebFetch", "Write"],
+        ...["bash", "powershell", "read", "write", "edit", "grep", "find", "ls"],
+      ].sort(),
     );
+  });
+});
+
+describe("normalize: Pi built-in tools (v0.87.1 input schemas)", () => {
+  test("bash parses input.command like Bash", async () => {
+    const n = await normalize(
+      withCall({ tool: "bash", kind: "exec", input: { command: "rm -rf ./build", timeout: 30 } }),
+      OPTS,
+    );
+    expect(n).toMatchObject({
+      kind: "fs.delete",
+      paths: ["/work/repo/build"],
+      raw: "rm -rf ./build",
+    });
+  });
+
+  test("powershell is opaque exec over input.command: the bash grammar cannot read it", async () => {
+    const command = "Remove-Item -Recurse -Force C:\\build";
+    const n = await normalize(
+      withCall({ tool: "powershell", kind: "exec", input: { command } }),
+      OPTS,
+    );
+    expect(n).toMatchObject({ kind: "exec", raw: command, paths: [] });
+    expect(n.opaque).toEqual([{ reason: "interpreter", span: command }]);
+  });
+
+  test("read is fs.read on input.path, home-expanded", async () => {
+    const n = await normalize(
+      withCall({ tool: "read", kind: "fs.read", input: { path: "~/.aws/credentials", limit: 5 } }),
+      OPTS,
+    );
+    expect(n).toMatchObject({ kind: "fs.read", paths: [`${HOME}/.aws/credentials`] });
+  });
+
+  test.each([
+    ["write", { path: "src/../x.ts", content: "export {};" }],
+    ["edit", { path: "src/../x.ts", edits: [{ oldText: "a", newText: "b" }] }],
+  ] as const)("%s is fs.write on input.path, resolved against cwd", async (tool, input) => {
+    const n = await normalize(withCall({ tool, kind: "fs.write", input }), OPTS);
+    expect(n.kind).toBe("fs.write");
+    expect(n.commands[0]?.pathRefs).toEqual([
+      { raw: "src/../x.ts", path: "/work/repo/x.ts", access: "write" },
+    ]);
+  });
+
+  test.each([
+    ["grep", { pattern: "TODO", path: "~/.ssh" }],
+    ["find", { pattern: "*.pem", path: "~/.ssh" }],
+    ["ls", { path: "~/.ssh" }],
+  ] as const)("%s is fs.read on input.path (the pattern is not a path)", async (tool, input) => {
+    const n = await normalize(withCall({ tool, kind: "fs.read", input }), OPTS);
+    expect(n).toMatchObject({ kind: "fs.read", paths: [`${HOME}/.ssh`] });
+  });
+
+  test("ls without a path is fs.read with no target", async () => {
+    const n = await normalize(withCall({ tool: "ls", kind: "fs.read", input: {} }), OPTS);
+    expect(n).toMatchObject({ kind: "fs.read", paths: [] });
+  });
+
+  test("canonicalTool maps Pi names onto the names the context engine knows", () => {
+    expect(
+      ["bash", "powershell", "read", "write", "edit", "grep", "find", "ls", "Bash", "x"].map(
+        canonicalTool,
+      ),
+    ).toEqual(["Bash", "Bash", "Read", "Write", "Edit", "Grep", "Glob", "Glob", "Bash", "x"]);
   });
 });
 

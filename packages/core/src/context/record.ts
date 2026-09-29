@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canonicalTool } from "../normalizer/normalize.ts";
 import type { NormalizedCommand, NormalizedEvent } from "../normalizer/types.ts";
 import type { ContextConfig } from "./config.ts";
 import { isSecretPath } from "./secrets.ts";
@@ -77,9 +78,11 @@ function makesExecutable(c: NormalizedCommand): boolean {
   });
 }
 
+/** An edit's replacement text: `new_string` (Claude Code) or `newText` (Pi). */
 function newStringOf(edit: unknown): string {
-  if (typeof edit !== "object" || edit === null || !Object.hasOwn(edit, "new_string")) return "";
-  const value: unknown = (edit as { new_string: unknown }).new_string;
+  if (typeof edit !== "object" || edit === null) return "";
+  const key = ["new_string", "newText"].find((k) => Object.hasOwn(edit, k));
+  const value: unknown = key === undefined ? undefined : (edit as Record<string, unknown>)[key];
   return typeof value === "string" ? value : "";
 }
 
@@ -92,7 +95,7 @@ function toolContent(n: NormalizedEvent): { text: string; full: boolean } {
   const edits: unknown = Object.hasOwn(input, "edits") ? input.edits : undefined;
   const editText = Array.isArray(edits) ? edits.map(newStringOf).join("\n") : "";
   const text = [str("content"), str("new_string"), str("new_source"), editText].join("\n");
-  return { text, full: n.event.call.tool === "Write" && str("content") !== "" };
+  return { text, full: canonicalTool(n.event.call.tool) === "Write" && str("content") !== "" };
 }
 
 function commandContent(c: NormalizedCommand): { text: string; full: boolean } {
@@ -117,7 +120,7 @@ function commandWrites(
 ): FileWrite[] {
   const writes = c.pathRefs.filter((r) => r.access === "write");
   if (writes.length === 0) return [];
-  const content = n.event.call.tool === "Bash" ? commandContent(c) : toolContent(n);
+  const content = canonicalTool(n.event.call.tool) === "Bash" ? commandContent(c) : toolContent(n);
   const sourceTaint = c.pathRefs
     .filter((r) => r.access !== "write")
     .reduce((max, r) => Math.max(max, base.files.get(r.path)?.taint ?? 0), 0);

@@ -1,5 +1,6 @@
 import { posix } from "node:path";
 import { urlHost } from "../normalizer/net.ts";
+import { canonicalTool } from "../normalizer/normalize.ts";
 import type { NormalizedEvent } from "../normalizer/types.ts";
 import { type ContextConfig, DEFAULT_CONTEXT_CONFIG } from "./config.ts";
 import type { CaseFile } from "./types.ts";
@@ -171,7 +172,7 @@ function softContributions(
   }
   const tools = expectedTools(task);
   const tool = n.event.call.tool;
-  if (tools !== null && !tools.has(tool)) {
+  if (tools !== null && !tools.has(canonicalTool(tool))) {
     out.push({ value: cfg.scope.unexpectedTool, sure: false, why: `tool not expected: ${tool}` });
   }
   return out;

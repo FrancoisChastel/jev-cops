@@ -145,6 +145,13 @@ describe("scopeScore: deterministic layer", () => {
     expect(score).toMatchObject({ value: 0.5, unsure: true });
   });
 
+  test("Pi tool names count as their canonical tool in the expected set", async () => {
+    const n = await toolEvent("bash", "exec", { command: "cat README.md" });
+    expect(scopeScore(n, caseFile(), CFG)).toMatchObject({ value: 1 });
+    const docs = scopeScore(n, caseFile("Improve the README"), CFG);
+    expect(docs).toMatchObject({ value: 0.5, unsure: true });
+  });
+
   test("combines as the min over targets; a sure 0 is not unsure", async () => {
     const n = await bashPre("cp src/a.ts /etc/cron.d/a; eval x");
     expect(scopeScore(n, caseFile(), CFG)).toMatchObject({ value: 0, unsure: false });

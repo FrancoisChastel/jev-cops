@@ -21,12 +21,15 @@ export interface NormalizeOptions {
 }
 
 /**
- * How one tool's input is read. `bash` parses `input.command`; `path` reads the first
- * string among `fields` as a file path; `url` reads `input[field]` as a URL; `spawn`
- * reads nothing (prompt and description stay in `raw`).
+ * How one tool's input is read. `bash` parses `input.command`; `shell` takes
+ * `input.command` from a shell the bash grammar cannot read (PowerShell) as one opaque
+ * `interpreter` exec; `path` reads the first string among `fields` as a file path; `url`
+ * reads `input[field]` as a URL; `spawn` reads nothing (prompt and description stay in
+ * `raw`).
  */
 export type ToolRule =
   | { reader: "bash" }
+  | { reader: "shell" }
   | { reader: "path"; fields: ReadonlyArray<string>; kind: CallKind; access: PathAccess }
   | { reader: "url"; field: string }
   | { reader: "spawn" };
@@ -37,11 +40,19 @@ const WRITE_RULE: ToolRule = {
   kind: "fs.write",
   access: "write",
 };
+const PI_READ_RULE: ToolRule = {
+  reader: "path",
+  fields: ["path"],
+  kind: "fs.read",
+  access: "read",
+};
+const PI_WRITE_RULE: ToolRule = { ...WRITE_RULE, fields: ["path"] };
 
 /**
  * The single tool → input-field mapping, so adapters stay policy-free. Tools not listed
  * are `other` (raw = JSON of the input), except an unknown non-`mcp:` tool whose
  * adapter kind is `exec` and whose input has a string `command`: that is parsed as bash.
+ * Lower-case names are Pi's built-ins (input schemas verified at Pi v0.87.1).
  */
 export const TOOL_RULES: Readonly<Record<string, ToolRule>> = {
   Bash: { reader: "bash" },
@@ -52,7 +63,35 @@ export const TOOL_RULES: Readonly<Record<string, ToolRule>> = {
   Read: { reader: "path", fields: ["file_path"], kind: "fs.read", access: "read" },
   WebFetch: { reader: "url", field: "url" },
   Task: { reader: "spawn" },
+  bash: { reader: "bash" },
+  powershell: { reader: "shell" },
+  read: PI_READ_RULE,
+  write: PI_WRITE_RULE,
+  edit: PI_WRITE_RULE,
+  grep: PI_READ_RULE,
+  find: PI_READ_RULE,
+  ls: PI_READ_RULE,
 };
+
+/**
+ * Harness-specific tool names → the name the context engine's tables use (scope's
+ * expected tools, the Bash/Write content rules). Names not listed are their own.
+ */
+export const TOOL_ALIASES: Readonly<Record<string, string>> = {
+  bash: "Bash",
+  powershell: "Bash",
+  read: "Read",
+  write: "Write",
+  edit: "Edit",
+  grep: "Grep",
+  find: "Glob",
+  ls: "Glob",
+};
+
+/** The canonical name of `tool` per {@link TOOL_ALIASES}; unknown names map to themselves. */
+export function canonicalTool(tool: string): string {
+  return lookup(TOOL_ALIASES, tool) ?? tool;
+}
 
 function stringField(input: Record<string, unknown>, field: string): string | undefined {
   const value = Object.hasOwn(input, field) ? input[field] : undefined;
@@ -69,9 +108,8 @@ function ruleFor(event: Event): ToolRule | null {
 
 function rawOf(event: Event, rule: ToolRule | null): string {
   const command = stringField(event.call.input, "command");
-  return rule?.reader === "bash" && command !== undefined
-    ? command
-    : safeStringify(event.call.input);
+  const shell = rule?.reader === "bash" || rule?.reader === "shell";
+  return shell && command !== undefined ? command : safeStringify(event.call.input);
 }
 
 interface ToolCommandParts {
@@ -151,6 +189,10 @@ async function readTool(
       const command = stringField(event.call.input, "command");
       if (command === undefined) return unparsed(event, raw);
       return normalizeCommand(command, { cwd: event.call.cwd, home: opts.home });
+    }
+    case "shell": {
+      const script = toolScript(event, raw, { kind: "exec", argv: [raw] });
+      return { ...script, opaque: [{ reason: "interpreter", span: raw }] };
     }
     case "path":
       return readPath(rule, event, raw, opts);
