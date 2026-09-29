@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,6 +9,7 @@ import {
   mintEventId,
   type PolicyConfigInput,
 } from "@jevdict/core";
+import { registerSdkModule } from "@jevdict/sdk/register";
 import { type AuditLine, readAudit } from "../audit.ts";
 import type { DaemonConfig, EnforcementMode, HttpBind } from "../config.ts";
 import { SILENT_LOGGER } from "../log.ts";
@@ -18,7 +19,12 @@ import { type RunningDaemon, startDaemon } from "../server.ts";
 export interface TestDaemonOptions {
   /** File name → module source, written into the policies directory. */
   policies: Readonly<Record<string, string>>;
-  /** Load policies from this directory instead (e.g. the repo's `policies/`); `policies` is then ignored. */
+  /**
+   * Copy the policies of this directory (e.g. the repo's `policies/`) instead; `policies`
+   * is then ignored. The copy lives in the test daemon's own directory, with
+   * `@jevdict/sdk` registered as the binary does, so a test daemon never watches or
+   * re-imports the source directory.
+   */
   policiesDir?: string;
   judge?: Judge;
   mode?: EnforcementMode;
@@ -76,7 +82,7 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
       judgeDeadlineMs: opts.deadlineMs ?? 12_000,
       holdTokenTtlMs: opts.holdTokenTtlMs ?? 600_000,
     },
-    policies: { dir: opts.policiesDir ?? join(dir, "policies") },
+    policies: { dir: join(dir, "policies") },
     judge: {
       provider: "off",
       model: null,
@@ -95,8 +101,17 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
 export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaemon> {
   const dir = mkdtempSync(join(tmpdir(), "jvd-"));
   mkdirSync(join(dir, "policies"));
-  for (const [file, source] of Object.entries(opts.policies)) {
-    writeFileSync(join(dir, "policies", file), source);
+  if (opts.policiesDir === undefined) {
+    for (const [file, source] of Object.entries(opts.policies)) {
+      writeFileSync(join(dir, "policies", file), source);
+    }
+  } else {
+    registerSdkModule();
+    const skip = /\.test\.[cm]?[jt]s$/;
+    cpSync(opts.policiesDir, join(dir, "policies"), {
+      recursive: true,
+      filter: (src) => !skip.test(src),
+    });
   }
   const config = testConfig(dir, opts);
   const daemon = await startDaemon(config, {

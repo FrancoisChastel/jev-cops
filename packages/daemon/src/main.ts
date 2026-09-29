@@ -141,23 +141,38 @@ async function boot(argv: readonly string[]): Promise<RunningDaemon | number> {
   }
 }
 
-/** Boots `jevdictd` and resolves with its exit code once SIGTERM/SIGINT stops it. */
-export async function main(argv: readonly string[]): Promise<number> {
+/** Resolves on the first SIGTERM or SIGINT, then stops listening for both. */
+export function stopSignal(): Promise<void> {
+  return new Promise((resolve) => {
+    const stop = () => {
+      process.off("SIGTERM", stop);
+      process.off("SIGINT", stop);
+      resolve();
+    };
+    process.once("SIGTERM", stop);
+    process.once("SIGINT", stop);
+  });
+}
+
+/**
+ * Boots `jevdictd` and resolves with its exit code once `stopped` resolves (SIGTERM or
+ * SIGINT by default): 0 after a clean shutdown, 1 when boot or shutdown fails, 2 on a
+ * usage error.
+ */
+export async function main(
+  argv: readonly string[],
+  stopped: () => Promise<void> = stopSignal,
+): Promise<number> {
   const booted = await boot(argv);
   if (typeof booted === "number") return booted;
-  return new Promise<number>((done) => {
-    const shutdown = () => {
-      booted.stop().then(
-        () => done(0),
-        (cause: unknown) => {
-          process.stderr.write(`jevdictd: shutdown failed: ${String(cause)}\n`);
-          done(1);
-        },
-      );
-    };
-    process.once("SIGTERM", shutdown);
-    process.once("SIGINT", shutdown);
-  });
+  await stopped();
+  try {
+    await booted.stop();
+    return 0;
+  } catch (cause) {
+    process.stderr.write(`jevdictd: shutdown failed: ${String(cause)}\n`);
+    return 1;
+  }
 }
 
 if (import.meta.main) {
