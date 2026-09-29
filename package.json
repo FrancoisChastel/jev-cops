@@ -23,7 +23,8 @@
     "gate": "bun packages/cli/src/main.ts test policies",
     "build:daemon": "bun build --compile packages/daemon/src/main.ts --outfile dist/jevdictd",
     "build:cli": "bun build --compile packages/cli/src/main.ts --outfile dist/jevdict",
-    "build": "bun run build:daemon && bun run build:cli"
+    "build:hook": "bun build --compile adapters/claude-code/src/hook-main.ts --outfile dist/jevdict-hook",
+    "build": "bun run build:daemon && bun run build:cli && bun run build:hook"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
