@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { err, ok, type Result } from "../result.ts";
@@ -85,9 +85,25 @@ function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-async function importPolicy(dir: string, file: string): Promise<Result<PolicyDefinition, string>> {
+/**
+ * The import specifier for a policy module. With `cacheBust`, a plain path with a
+ * `?v=<mtime>-<size>` query: Bun caches modules by specifier, so a changed file gets a new
+ * one and an unchanged file keeps its cached module. (Bun 1.3 ignores the query on a
+ * `file:` URL, hence the plain path.)
+ */
+async function specifier(path: string, cacheBust: boolean): Promise<string> {
+  if (!cacheBust) return pathToFileURL(path).href;
+  const s = await stat(path);
+  return `${path}?v=${s.mtimeMs}-${s.size}`;
+}
+
+async function importPolicy(
+  dir: string,
+  file: string,
+  cacheBust: boolean,
+): Promise<Result<PolicyDefinition, string>> {
   try {
-    const mod: unknown = await import(pathToFileURL(join(dir, file)).href);
+    const mod: unknown = await import(await specifier(join(dir, file), cacheBust));
     if (!isRecord(mod) || mod.default === undefined) return err(`${file}: no default export`);
     const checked = validatePolicy(mod.default);
     return checked.ok ? checked : err(`${file}: ${checked.error.join("; ")}`);
@@ -118,13 +134,22 @@ function dedupe(candidates: ReadonlyArray<Candidate>): LoadedPolicies {
   return { policies: [...kept.values()].map((c) => c.policy), problems };
 }
 
+/** Loader options. */
+export interface LoadPoliciesOptions {
+  /** Re-import files changed since the last load (the daemon's hot reload). */
+  cacheBust?: boolean;
+}
+
 /**
  * Imports every `*.ts`/`*.js`/`*.mjs` module in `dir` (not recursive; `*.test.*`, `*.d.ts`
  * and fixtures skipped) in file-name order and keeps each default export that passes
  * {@link validatePolicy}. A module that throws on import or fails validation is reported,
  * never fatal. Duplicate names keep the higher version (the earlier file on a tie).
  */
-export async function loadPolicies(dir: string): Promise<LoadedPolicies> {
+export async function loadPolicies(
+  dir: string,
+  opts: LoadPoliciesOptions = {},
+): Promise<LoadedPolicies> {
   let files: string[];
   try {
     files = (await readdir(dir)).filter((f) => CODE_FILE.test(f) && !SKIPPED_FILE.test(f)).sort();
@@ -132,7 +157,10 @@ export async function loadPolicies(dir: string): Promise<LoadedPolicies> {
     return { policies: [], problems: [`cannot read policy directory ${dir}: ${message(cause)}`] };
   }
   const results = await Promise.all(
-    files.map(async (file) => ({ file, loaded: await importPolicy(dir, file) })),
+    files.map(async (file) => ({
+      file,
+      loaded: await importPolicy(dir, file, opts.cacheBust === true),
+    })),
   );
   const candidates = results.flatMap(({ file, loaded }) =>
     loaded.ok ? [{ policy: loaded.value, file }] : [],

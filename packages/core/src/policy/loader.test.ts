@@ -125,3 +125,20 @@ describe("validatePolicy", () => {
     expect(validatePolicy(null)).toEqual({ ok: false, error: ["policy must be an object"] });
   });
 });
+
+describe("loadPolicies with cacheBust (daemon hot reload)", () => {
+  test("a changed file is re-imported, an unchanged one is not", async () => {
+    const own = await mkdtemp(join(tmpdir(), "jevdict-reload-"));
+    try {
+      await writeFile(join(own, "gamma.ts"), policySource("gamma", 1));
+      const first = await loadPolicies(own, { cacheBust: true });
+      expect(first.policies.map((p) => p.version)).toEqual([1]);
+      await writeFile(join(own, "gamma.ts"), policySource("gamma", 22));
+      const second = await loadPolicies(own, { cacheBust: true });
+      expect(second.problems).toEqual([]);
+      expect(second.policies.map((p) => p.version)).toEqual([22]);
+    } finally {
+      await rm(own, { recursive: true, force: true });
+    }
+  });
+});
