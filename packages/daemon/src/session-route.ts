@@ -51,9 +51,10 @@ function reportHead(r: SessionEvent): Payload {
 }
 
 /**
- * The first non-empty prompt of a live session becomes the task (T11), capped at
+ * The first non-empty prompt of a live root session becomes the task (T11), capped at
  * {@link MAX_TASK_BYTES}; later prompts are ignored by the case file, which logs the
- * attempt. The audit keeps the task once, and only a hash and size of other prompts.
+ * attempt. A subagent's prompt is never the user's, so it never sets the task. The audit
+ * keeps the task once, and only a hash and size of other prompts.
  */
 function onPrompt(rt: Runtime, r: SessionEvent & { kind: "prompt" }, cf: CaseFile, root: string) {
   const text = truncateUtf8(r.prompt, MAX_TASK_BYTES);
@@ -62,6 +63,7 @@ function onPrompt(rt: Runtime, r: SessionEvent & { kind: "prompt" }, cf: CaseFil
     prompt_bytes: Buffer.byteLength(r.prompt),
     truncated: text !== r.prompt,
   };
+  if (r.session.parent_id !== null) return { ...base, task_set: false, subagent: true };
   if (sessionKilled(rt, r.session.id, root)) return { ...base, task_set: false, blocked: true };
   const before = cf.task;
   cf.setTaskOnce(text);

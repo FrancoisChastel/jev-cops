@@ -92,6 +92,15 @@ describe("POST /v1/session: the task is pinned once (T11)", () => {
     expect(t.daemon.runtime.sessions.rootOf(sub.sessionId)).toBe(TEST_SESSION);
   });
 
+  test("a subagent's prompt never becomes the task, even before the user's first", async () => {
+    const t = await daemon();
+    const sub = { sessionId: `${TEST_SESSION}.agent_1`, parentId: TEST_SESSION };
+    const early = await report(t, sessionReport("prompt", { prompt: WIDER }, sub));
+    expect(early.body.task).toBeNull();
+    expect(sessionLines(t).at(-1)?.payload).toMatchObject({ task_set: false, subagent: true });
+    expect((await report(t, sessionReport("prompt", { prompt: TASK }))).body.task).toBe(TASK);
+  });
+
   test("the task is capped at 16 KB (UTF-8), never splitting a character", async () => {
     const t = await daemon();
     const long = `${"a".repeat(MAX_TASK_BYTES - 1)}é and more`;
