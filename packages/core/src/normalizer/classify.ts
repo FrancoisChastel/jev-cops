@@ -11,6 +11,7 @@ import {
 import { type Classification, type InterpreterInfo, maxKind, plain } from "./classification.ts";
 import { filePaths, rmVerbs, sedEffects, sedMode } from "./files.ts";
 import { GIT_SUBCOMMAND_KINDS, readGit } from "./git.ts";
+import { classifyHarness } from "./harness.ts";
 import { classifyInterpreter } from "./interpreters.ts";
 import { readCurl, readWget, urlHost, verbHosts } from "./net.ts";
 import { hasOption, lookup, optionValue, type Positional, parseArgs } from "./options.ts";
@@ -25,6 +26,7 @@ export {
   maxKind,
 } from "./classification.ts";
 export { FILE_RULES } from "./files.ts";
+export { HARNESS_CLIS, HARNESS_CONFIG_VERB } from "./harness.ts";
 export { INTERPRETER_INLINE_FLAGS, SHELLS } from "./interpreters.ts";
 
 function kinds(kind: CallKind, verbs: ReadonlyArray<string>): Record<string, CallKind> {
@@ -253,6 +255,8 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
     case "awk":
       return classifyAwk(args, base);
   }
+  const harness = classifyHarness(name, args);
+  if (harness !== null) return harness;
   if (lookup(SUBCOMMAND_KINDS, name) !== undefined) return classifySubcommand(name, args);
   return plain(lookup(VERB_KINDS, name) ?? "exec", [name], {
     paths: filePaths(name, args, base),

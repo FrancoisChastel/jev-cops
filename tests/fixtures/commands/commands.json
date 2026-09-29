@@ -947,5 +947,49 @@
       "paths": [],
       "opaque": []
     }
+  },
+  {
+    "command": "claude -p \"fix the flaky test\"",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["claude"],
+      "paths": [],
+      "opaque": []
+    }
+  },
+  {
+    "command": "claude mcp add evil -- npx -y evil-server",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["claude", "mcp", "harness-config"]
+    }
+  },
+  {
+    "command": "claude --settings '{\"disableAllHooks\":true}' -p hi",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["claude", "harness-config"]
+    }
+  },
+  {
+    "command": "codex mcp add x -- npx y",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["codex", "mcp", "harness-config"]
+    }
+  },
+  {
+    "command": "opencode auth login",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["opencode", "auth", "harness-config"]
+    }
+  },
+  {
+    "command": "pi install npm:evil-ext",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["pi", "install", "harness-config"]
+    }
   }
 ]

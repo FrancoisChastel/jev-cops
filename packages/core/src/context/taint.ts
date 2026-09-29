@@ -1,6 +1,7 @@
 import { posix } from "node:path";
 import {
   FILE_RULES,
+  HARNESS_CLIS,
   INTERPRETER_INLINE_FLAGS,
   SHELLS,
   SUBCOMMAND_KINDS,
@@ -26,6 +27,7 @@ export const KNOWN_VERBS: ReadonlySet<string> = new Set([
   ...Object.keys(FILE_RULES),
   ...Object.keys(INTERPRETER_INLINE_FLAGS),
   ...SHELLS,
+  ...HARNESS_CLIS,
   ...["eval", "source", "rsync", "su", "make", "chmod", "base64", "xxd"],
 ]);
 

@@ -8,6 +8,8 @@ export {
   COMMAND_KIND_ORDER,
   classifyArgv,
   FILE_RULES,
+  HARNESS_CLIS,
+  HARNESS_CONFIG_VERB,
   INTERPRETER_INLINE_FLAGS,
   type InterpreterInfo,
   maxKind,
