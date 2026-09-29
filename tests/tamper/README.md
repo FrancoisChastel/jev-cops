@@ -13,8 +13,8 @@ required outcome, until its milestone. Do not delete or weaken one (CONTRIBUTING
 | T4 | Harness gap | `T04-harness-gap.test.ts` | todo | M2 (OpenShell compiler); M1/M3 installers |
 | T5 | Obfuscation | `T05-obfuscation.test.ts` | live (core) | policy judging on file content: M0 step 5 |
 | T6 | Judge injection | `T06-judge-injection.test.ts` | live (core + policy engine + daemon audit flag) | — |
-| T7 | Precedent farming | `T07-precedent-farming.test.ts` | live (budget 2x; daemon-proposed scope, TTL, end-to-end doubling); 1 todo | OpenShell JIT grants: M2 |
-| T8 | Social engineering the human | `T08-social-engineering.test.ts` | live (Pi adapter: confirm shows the daemon's raw command and `detail`); 1 todo | Claude Code hold-to-ask: M1 |
+| T7 | Precedent farming | `T07-precedent-farming.test.ts` | live (budget 2x; daemon-proposed scope, TTL, end-to-end doubling; daemon: a direct resolve without the single-use hold token is 403 + anomaly, no precedent, token never in the audit log; budget reset only on the 0600 admin socket, 404 on the agent's); 2 todo | OpenShell JIT grants, and keeping the agent's tools off the socket (a self-posted judge request gets its own token): M2 |
+| T8 | Social engineering the human | `T08-social-engineering.test.ts` | live (Pi adapter: confirm shows the daemon's raw command and `detail`; the agent cannot answer for the human over the socket while the confirm is open); 1 todo | Claude Code hold-to-ask: M1 |
 | T9 | TOCTOU | `T09-toctou.test.ts` | live (core: opaque; Pi adapter: `rewrite` pins resolved paths in place); 1 todo | Claude Code `updatedInput`: M1 |
 | T10 | Taint laundering | `T10-taint-laundering.test.ts` | live (core) | — |
 | T11 | Task drift by rewrite | `T11-task-drift.test.ts` | live (core; the Pi adapter sends the first prompt only, `adapters/pi/jevdict.test.ts`) | subagent-spawn policy: M0 step 7 |

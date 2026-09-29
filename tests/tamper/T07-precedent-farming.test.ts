@@ -8,9 +8,14 @@
  * Status: live. Core: the 2x budget cost. Daemon: the precedent scope is the one the daemon
  * proposed when it held the event (a resolve request carrying a scope is rejected), TTL is
  * the session with a 24 h cap, and holds farmed with varied arguments share one coarse key
- * so each repeat costs double end to end. OpenShell JIT grants are M2.
+ * so each repeat costs double end to end. An agent that talks to the socket directly
+ * cannot grant a precedent without the hold's single-use token, and cannot reset its
+ * budget (that route is on the admin socket only). OpenShell JIT grants are M2; so is
+ * keeping the agent off the socket altogether (an agent that posts its own judge request
+ * receives that hold's token).
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync, statSync } from "node:fs";
 import {
   charge,
   chargeHold,
@@ -23,7 +28,11 @@ import {
   PrecedentStore,
   proposeScope,
 } from "../../packages/daemon/src/precedents.ts";
-import { startTestDaemon, withFreshId } from "../../packages/daemon/src/testing/daemon.ts";
+import {
+  startTestDaemon,
+  type TestDaemon,
+  withFreshId,
+} from "../../packages/daemon/src/testing/daemon.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { bashPre, buildEvent, CTX_SESSION } from "../fixtures/context/index.ts";
 import { pending } from "./pending.ts";
@@ -136,4 +145,111 @@ describe("T7 precedent farming through the daemon", () => {
       store.close();
     }
   });
+});
+
+/** What an agent with a shell could do: talk to the agent socket itself, like curl would. */
+function agentResolve(td: TestDaemon, eventId: string, token?: string) {
+  const body = { event_id: eventId, decision: "allow", by: "the-agent" };
+  return td.call(
+    "POST",
+    "/v1/resolve",
+    token === undefined ? body : { ...body, hold_token: token },
+  );
+}
+
+async function heldByAdapter(td: TestDaemon, command = "rm -rf /srv/farm/x") {
+  const e = withFreshId(buildEvent({ tool: "Bash", kind: "exec", input: { command } }));
+  const res = await td.call("POST", "/v1/judge", e);
+  const body = res.body as { verdict: string; hold_token: string };
+  expect(body.verdict).toBe("hold");
+  return { event: e, token: body.hold_token };
+}
+
+function grants(td: TestDaemon): number {
+  return td.audit().filter((l) => l.kind === "precedent" && l.payload.action === "grant").length;
+}
+
+describe("T7: an agent that talks to the socket directly cannot grant a precedent", () => {
+  test("resolve without the hold token: 403, an anomaly line, no precedent", async () => {
+    const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES } });
+    try {
+      const { event } = await heldByAdapter(td);
+      const res = await agentResolve(td, event.id);
+      expect(res).toEqual({ status: 403, body: { error: "invalid hold token" } });
+      expect(td.audit().at(-1)).toMatchObject({
+        kind: "anomaly",
+        event_id: event.id,
+        payload: { reason: "resolve-without-valid-token" },
+      });
+      expect(grants(td)).toBe(0);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("the adapter's token grants once; replaying it is refused", async () => {
+    const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES } });
+    try {
+      const { event, token } = await heldByAdapter(td);
+      expect((await agentResolve(td, event.id, token)).status).toBe(200);
+      expect(grants(td)).toBe(1);
+      expect((await agentResolve(td, event.id, token)).status).toBe(403);
+      expect(grants(td)).toBe(1);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("an expired token is refused", async () => {
+    let at = T0;
+    const td = await startTestDaemon({
+      policies: { "guard.ts": HOLD_DELETES },
+      now: () => at,
+      holdTokenTtlMs: 600_000,
+    });
+    try {
+      const { event, token } = await heldByAdapter(td);
+      at += 600_000;
+      expect((await agentResolve(td, event.id, token)).status).toBe(403);
+      expect(grants(td)).toBe(0);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("canary: the raw token is nowhere in the audit file an agent can read", async () => {
+    const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES } });
+    try {
+      const { event, token } = await heldByAdapter(td);
+      await agentResolve(td, event.id, token);
+      await agentResolve(td, event.id, token);
+      const shown = await td.call("GET", `/v1/explain/${event.id}`);
+      expect(readFileSync(td.config.audit.path, "utf8")).not.toContain(token);
+      expect(JSON.stringify(shown.body)).not.toContain(token);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("budget reset: 404 on the agent socket, 200 on the admin socket (mode 0600)", async () => {
+    const td = await startTestDaemon({ policies: { "guard.ts": HOLD_DELETES } });
+    try {
+      const { event } = await heldByAdapter(td);
+      const reset = { session_id: event.session.id };
+      expect((await td.call("POST", "/v1/budget/reset", reset)).status).toBe(404);
+      const budget = await td.call("GET", `/v1/budget/${event.session.id}`);
+      expect((budget.body as { spent: number }).spent).toBeGreaterThan(0);
+      expect((await td.callAdmin("POST", "/v1/budget/reset", reset)).body).toMatchObject({
+        spent: 0,
+      });
+      expect(statSync(td.config.daemon.adminSocket).mode & 0o777).toBe(0o600);
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test.todo(
+    "an agent that posts its own judge request gets that hold's token and can resolve it: closed when OpenShell keeps the agent's tools off the socket (M2)",
+    pending("M2"),
+  );
 });
