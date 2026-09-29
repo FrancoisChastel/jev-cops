@@ -1,7 +1,7 @@
 {
   "name": "@jevdict/cli",
   "version": "0.0.0",
-  "description": "jevdict: the Jevdict command line (test, explain, replay, budget)",
+  "description": "jevdict: the Jevdict command line (test, explain, replay, budget, hook)",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -16,6 +16,7 @@
     "src"
   ],
   "dependencies": {
+    "@jevdict/adapter-claude-code": "workspace:*",
     "@jevdict/core": "workspace:*",
     "@jevdict/daemon": "workspace:*",
     "@jevdict/sdk": "workspace:*",

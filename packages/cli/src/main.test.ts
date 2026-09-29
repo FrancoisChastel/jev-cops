@@ -21,6 +21,10 @@ describe("jevdict", () => {
     expect(io.stderr.join("\n")).toContain('unknown command "frob"');
   });
 
+  test("hook is a command, listed in the usage", () => {
+    expect(CLI_USAGE).toContain("hook --harness claude-code");
+  });
+
   test.each(["install", "doctor"])("%s is not yet available (M1) and exits 2", async (name) => {
     const io = captureIo();
     expect(await main([name], io)).toBe(2);

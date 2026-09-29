@@ -33,6 +33,7 @@
         "jevdict": "./src/main.ts",
       },
       "dependencies": {
+        "@jevdict/adapter-claude-code": "workspace:*",
         "@jevdict/core": "workspace:*",
         "@jevdict/daemon": "workspace:*",
         "@jevdict/sdk": "workspace:*",

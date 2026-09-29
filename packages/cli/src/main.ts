@@ -2,6 +2,7 @@
 import { registerSdkModule } from "@jevdict/sdk/register";
 import { runBudgetCommand } from "./commands/budget.ts";
 import { runExplainCommand } from "./commands/explain.ts";
+import { runHookCommand } from "./commands/hook.ts";
 import { runReplayCommand } from "./commands/replay.ts";
 import { runTestCommand } from "./commands/test.ts";
 import { EXIT, type Io, PROCESS_IO } from "./io.ts";
@@ -25,6 +26,9 @@ Commands:
   budget <session-id> [--socket path] [--reset --admin-socket path]
                                            show a session's risk budget (agent socket), or
                                            reset it (admin socket: human only, H1)
+  hook --harness claude-code [--socket path]
+                                           the Claude Code command hook: reads the hook
+                                           payload on stdin, exits 0 or 2 (fail closed)
   help                                     this text
   install, doctor                          not yet available (M1)
 
@@ -32,7 +36,7 @@ Exit codes:
   0  success (test: every fixture passed; replay: ran, whatever the delta count)
   1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
      an unknown session or an unreachable daemon)
-  2  usage error, or a command that is not available yet`;
+  2  usage error, or a command that is not available yet; hook: the call is blocked`;
 
 type Command = (argv: readonly string[], io: Io) => Promise<number>;
 
@@ -49,6 +53,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   explain: runExplainCommand,
   replay: runReplayCommand,
   budget: runBudgetCommand,
+  hook: runHookCommand,
   install: notYet("install"),
   doctor: notYet("doctor"),
 };
