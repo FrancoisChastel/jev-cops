@@ -1,19 +1,23 @@
-import type { SequencePatternName } from "../context/config.ts";
-import type { Features } from "../context/features.ts";
-import type { TaskAllowlist } from "../context/scope.ts";
-import type { CallRecord, FileWrite, SecretRead } from "../context/types.ts";
-import type { AnswerFor, Question } from "../judge/types.ts";
-import type { NetMethod, OpaqueSpan, PathAccess } from "../normalizer/types.ts";
+import type { ContextConfig, SequencePatternName } from "../context/config.ts";
+import type { FeatureResult, Features } from "../context/features.ts";
+import type { RepoHints, TaskAllowlist } from "../context/scope.ts";
+import type { CallRecord, CaseFile, FileWrite, SecretRead } from "../context/types.ts";
+import type { AnswerFor, Judge, Question } from "../judge/types.ts";
+import type { NetMethod, NormalizedEvent, OpaqueSpan, PathAccess } from "../normalizer/types.ts";
 import type {
   ActorKind,
   CallKind,
   GitInfo,
   Harness,
   Phase,
+  PostEvent,
+  PreEvent,
   SandboxKind,
   SessionMode,
 } from "../schema/event.ts";
 import type { Verdict } from "../schema/verdict.ts";
+import type { PolicyConfig } from "./config.ts";
+import type { Decision } from "./decision.ts";
 
 /**
  * Typed answers for a question list: each asked name maps to the answer type of its
@@ -200,4 +204,36 @@ export interface PrecedentMatch {
 /** Precedent store the daemon supplies (M0 step 8); synchronous (bun:sqlite). */
 export interface PrecedentLookup {
   lookup(e: PolicyEvent, ctx: PolicyContext): PrecedentMatch | null;
+}
+
+/** What the daemon wires into the engine once, at start or on policy reload. */
+export interface PolicyEngineOptions {
+  policies: readonly PolicyDefinition[];
+  /** Any provider; the engine always adds the question limit, validation and timeout. */
+  judge: Judge;
+  contextConfig?: ContextConfig;
+  policyConfig?: PolicyConfig;
+  /** Clock for budget charges; `Date.now` by default. */
+  now?: () => number;
+  precedents?: PrecedentLookup;
+}
+
+/** Per-event facts the daemon knows and the event does not carry. */
+export interface JudgeCallOptions {
+  /** `~`/`$HOME` for path expansion: daemon config, never the event (D-003). */
+  home: string;
+  repoHints?: RepoHints;
+}
+
+/** The decision plus the readings it was made from (for the audit log and `explain`). */
+export interface Judgement {
+  decision: Decision;
+  normalized: NormalizedEvent;
+  features: FeatureResult;
+}
+
+/** The daemon's only entry point into judging. */
+export interface PolicyEngine {
+  judge(event: PreEvent, casefile: CaseFile, opts: JudgeCallOptions): Promise<Judgement>;
+  observe(event: PostEvent, casefile: CaseFile, opts: JudgeCallOptions): Promise<NormalizedEvent>;
 }

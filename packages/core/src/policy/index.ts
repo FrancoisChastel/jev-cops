@@ -1,7 +1,7 @@
 /**
  * Policy engine: deterministic floor and bands, the policy contract and the read-only
  * views policies receive, the loader, question planning, confidence routing and the
- * monotonic combination into one decision.
+ * monotonic combination into one decision, and `createPolicyEngine`, the daemon's entry.
  */
 export * from "./combine.ts";
 export * from "./config.ts";
@@ -9,6 +9,7 @@ export * from "./context.ts";
 export * from "./contribute.ts";
 export * from "./decision.ts";
 export * from "./duration.ts";
+export * from "./engine.ts";
 export * from "./evaluate.ts";
 export * from "./event.ts";
 export * from "./explain.ts";
