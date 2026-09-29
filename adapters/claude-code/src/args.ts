@@ -1,0 +1,44 @@
+/**
+ * The hook's command line: `--harness claude-code [--socket path]`, as the settings entry
+ * passes it in exec form (plan §2 row 21: the socket is an argument, never an environment
+ * variable). The same parser serves the compiled `jevdict-hook`, `jevdict hook` and the
+ * ConfigChange check that the registered entry is still jevdict's (intact.ts).
+ */
+import { isAbsolute, join } from "node:path";
+import { parseArgs } from "node:util";
+
+/** The daemon's default agent socket, relative to the home directory. */
+export const DEFAULT_SOCKET_RELATIVE = ".jevdict/jevdictd.sock";
+
+/** Parsed hook arguments, or why they are refused. */
+export type HookArgs =
+  | { readonly ok: true; readonly harness: "claude-code"; readonly socket: string }
+  | { readonly ok: false; readonly error: string };
+
+/** Why a harness other than Claude Code is refused. */
+function harnessError(harness: string | undefined): string | null {
+  if (harness === undefined) return "--harness claude-code is required";
+  if (harness === "claude-code") return null;
+  if (harness === "pi") return "pi is not a hook harness: install the Pi extension instead";
+  return `unknown harness ${JSON.stringify(harness.slice(0, 32))}`;
+}
+
+/**
+ * Parses the hook's arguments. The socket defaults to `~/.jevdict/jevdictd.sock` under
+ * `home`; an explicit one must be absolute. Unknown options and positionals are refused, so
+ * a mistyped entry fails closed instead of talking to the wrong daemon.
+ */
+export function parseHookArgs(argv: readonly string[], home: string): HookArgs {
+  let values: { harness?: string | undefined; socket?: string | undefined };
+  try {
+    const options = { harness: { type: "string" }, socket: { type: "string" } } as const;
+    ({ values } = parseArgs({ args: [...argv], options, strict: true, allowPositionals: false }));
+  } catch (cause) {
+    return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
+  }
+  const refused = harnessError(values.harness);
+  if (refused !== null) return { ok: false, error: refused };
+  const socket = values.socket ?? join(home, DEFAULT_SOCKET_RELATIVE);
+  if (!isAbsolute(socket)) return { ok: false, error: `--socket must be absolute: ${socket}` };
+  return { ok: true, harness: "claude-code", socket };
+}
