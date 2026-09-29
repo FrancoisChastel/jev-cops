@@ -16,6 +16,7 @@ export type NoHumanReason = "headless" | "permission-mode";
 
 /** What `/v1/session` reports taught the daemon about a root session. */
 export interface SessionFacts {
+  /** Pinned by the first report; later reports cannot change it. */
   readonly harness: string | null;
   readonly harnessVersion: string | null;
   readonly model: string | null;
@@ -97,12 +98,16 @@ const EMPTY: SessionFacts = {
   noHuman: null,
 };
 
-/** `prev` updated by one report: later values win, `noHuman` never clears. */
+/**
+ * `prev` updated by one report: later values win, except the harness (pinned by the first
+ * report, so an agent cannot re-declare a Claude Code session as Pi to get resolvable
+ * holds) and `noHuman` (never clears).
+ */
 export function mergeFacts(prev: SessionFacts, r: SessionEvent): SessionFacts {
   const mode = r.session.mode ?? prev.mode;
   const permissionMode = r.permission_mode ?? prev.permissionMode;
   return {
-    harness: r.harness,
+    harness: prev.harness ?? r.harness,
     harnessVersion: r.harness_version ?? prev.harnessVersion,
     model: (r.kind === "start" ? r.model : undefined) ?? prev.model,
     mode,

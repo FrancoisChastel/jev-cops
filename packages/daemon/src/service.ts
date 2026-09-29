@@ -98,8 +98,31 @@ function noHumanFor(rt: Runtime, event: PreEvent, root: string): NoHumanReason |
   return noHumanOf(event.session.mode, null) ?? rt.facts.get(root)?.noHuman ?? null;
 }
 
+/**
+ * The harness `/v1/session` pinned for the event's session, or null. An event naming
+ * another harness gets an `anomaly` line: an adapter never does that, an agent posting
+ * its own request might (to farm a precedent from a Claude Code session, D-069 proposal).
+ */
+function sessionHarness(rt: Runtime, event: PreEvent, root: string): string | null {
+  const pinned = rt.facts.get(root)?.harness ?? null;
+  if (pinned !== null && pinned !== event.harness) {
+    rt.audit.append({
+      kind: "anomaly",
+      event_id: event.id,
+      session_id: event.session.id,
+      payload: {
+        reason: "harness mismatch",
+        event_harness: event.harness,
+        session_harness: pinned,
+      },
+    });
+  }
+  return pinned;
+}
+
 /** The engine's judgement of a live session's call, mapped, recorded and answered. */
 async function judgeLive(rt: Runtime, sent: PreEvent, cf: CaseFile, root: string) {
+  const pinned = sessionHarness(rt, sent, root);
   const probed = await rt.gitProbe.apply(sent);
   const event: PreEvent = probed.event;
   const repoHints = rt.repoHints.for(event, probed.remoteHost);
@@ -112,8 +135,8 @@ async function judgeLive(rt: Runtime, sent: PreEvent, cf: CaseFile, root: string
   const mode = rt.config.enforcement.mode;
   const noHuman = noHumanFor(rt, event, root);
   const { response, mapping } = harnessVerdict(judgement.decision, event.id, mode, noHuman);
-  const token =
-    response.verdict === "hold" ? recordHold(rt, event, cf, judgement, response.reason) : null;
+  const hold = { reason: response.reason, sessionHarness: pinned };
+  const token = response.verdict === "hold" ? recordHold(rt, event, cf, judgement, hold) : null;
   const returned = returnedOf(response, token);
   const record = { event: sent, derivedGit: probed.derived, judgement, answers, returned };
   rt.audit.append({

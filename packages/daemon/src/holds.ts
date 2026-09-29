@@ -34,25 +34,30 @@ function policyName(key: string): string {
   return at > 0 ? key.slice(0, at) : key;
 }
 
+const NO_PRECEDENT: ReadonlySet<string> = NO_PRECEDENT_HARNESSES;
+
 /**
  * Records a hold the harness will show a human: the T8 confirm view (daemon memory only)
  * and a fresh token that unlocks it, valid for `daemon.hold_token_ttl_ms`. For a harness
  * that reports the human's answer (Pi), also the pending hold with the daemon's proposed
- * precedent scope and the token's hash, so `/v1/resolve` can redeem it once. For
- * {@link NO_PRECEDENT_HARNESSES} the token is view-only.
+ * precedent scope and the token's hash, so `/v1/resolve` can redeem it once. The token is
+ * view-only when the event's harness, or the harness `/v1/session` pinned for its session
+ * (`sessionHarness`), is in {@link NO_PRECEDENT_HARNESSES}: an event cannot claim to come
+ * from Pi to farm a precedent in a Claude Code session.
  */
 export function recordHold(
   rt: Runtime,
   event: PreEvent,
   cf: CaseFile,
   j: Judgement,
-  reason: string,
+  hold: { readonly reason: string; readonly sessionHarness: string | null },
 ): IssuedToken {
   const minted = mintHoldToken();
   const expiresAt = rt.now() + rt.config.daemon.holdTokenTtlMs;
+  const { reason, sessionHarness } = hold;
   const view = { event_id: event.id, verdict: "hold", reason, raw: j.normalized.raw } as const;
   const full = { ...view, detail: j.decision.detail };
-  if (NO_PRECEDENT_HARNESSES.has(event.harness)) {
+  if (NO_PRECEDENT.has(event.harness) || NO_PRECEDENT.has(sessionHarness ?? "")) {
     rt.confirmViews.put(full, expiresAt, minted.hash);
     return { kind: "view", ...minted };
   }

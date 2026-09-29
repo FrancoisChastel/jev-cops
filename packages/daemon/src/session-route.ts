@@ -157,7 +157,15 @@ export function handleSession(rt: Runtime, body: unknown): Reply {
   const r = parsed.value;
   const cf = rt.sessions.openSession(r.session.id, r.session.parent_id);
   const root = rt.sessions.rootOf(r.session.id);
-  rt.facts.record(root, r);
+  const pinned = rt.facts.record(root, r).harness;
+  if (pinned !== r.harness) {
+    rt.audit.append({
+      kind: "anomaly",
+      event_id: r.id,
+      session_id: r.session.id,
+      payload: { reason: "harness mismatch", event_harness: r.harness, session_harness: pinned },
+    });
+  }
   const applied = effects(rt, r, cf, root);
   const killed = sessionKilled(rt, r.session.id, root);
   rt.audit.append({

@@ -7,11 +7,15 @@
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import type { PreEvent, VerdictResponse } from "@jevdict/core";
-import { buildEvent, type EventShape } from "../../../../tests/fixtures/context/index.ts";
+import {
+  buildEvent,
+  CTX_SESSION,
+  type EventShape,
+} from "../../../../tests/fixtures/context/index.ts";
 import { VIEW_TOKEN_HEADER } from "../holds.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "../testing/daemon.ts";
 import { policyModule } from "../testing/policies.ts";
-import { withHarness } from "../testing/session.ts";
+import { sessionReport, withHarness } from "../testing/session.ts";
 
 const GUARD = policyModule(
   "guard",
@@ -117,6 +121,48 @@ describe("a Claude Code hold", () => {
     const allowed = await judge(observing, event());
     expect(allowed.body.verdict).toBe("allow");
     expect(allowed.headers).not.toHaveProperty(VIEW_TOKEN_HEADER);
+  });
+});
+
+describe("a session pinned to Claude Code by /v1/session", () => {
+  test("an event claiming another harness still gets no resolvable token, and an anomaly", async () => {
+    const t = await daemon();
+    const start = sessionReport("start", {}, { sessionId: CTX_SESSION });
+    expect((await t.call("POST", "/v1/session", start)).status).toBe(200);
+    const e = withHarness(event(), "pi");
+    const { body, headers } = await judge(t, e);
+    expect(body.verdict).toBe("hold");
+    expect(body).not.toHaveProperty("hold_token");
+    expect(headers[VIEW_TOKEN_HEADER]).toMatch(TOKEN);
+    expect(t.audit().find((l) => l.kind === "anomaly")).toMatchObject({
+      event_id: e.id,
+      payload: { reason: "harness mismatch", event_harness: "pi", session_harness: "claude-code" },
+    });
+    const res = await t.call("POST", "/v1/resolve", {
+      event_id: e.id,
+      decision: "allow",
+      by: "agent",
+      hold_token: headers[VIEW_TOKEN_HEADER],
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("a later report naming another harness does not unpin it", async () => {
+    const t = await daemon();
+    await t.call("POST", "/v1/session", sessionReport("start", {}, { sessionId: CTX_SESSION }));
+    const repin = sessionReport("prompt", { prompt: "x" }, { harness: "pi" });
+    expect((await t.call("POST", "/v1/session", repin)).status).toBe(200);
+    expect(t.daemon.runtime.facts.get(CTX_SESSION)?.harness).toBe("claude-code");
+    const { body } = await judge(t, withHarness(event(), "pi"));
+    expect(body).not.toHaveProperty("hold_token");
+    expect(t.audit().filter((l) => l.payload.reason === "harness mismatch")).toHaveLength(2);
+  });
+
+  test("a matching harness writes no anomaly", async () => {
+    const t = await daemon();
+    await t.call("POST", "/v1/session", sessionReport("start", {}, { sessionId: CTX_SESSION }));
+    await judge(t, event());
+    expect(t.audit().some((l) => l.kind === "anomaly")).toBe(false);
   });
 });
 
