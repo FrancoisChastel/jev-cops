@@ -79,6 +79,13 @@ describe("appending", () => {
     expect(readAudit(path).lines[0]?.payload).toEqual({ b: [1, null], c: "x" });
   });
 
+  test("a closed log refuses appends and closing twice is harmless", () => {
+    const log = AuditLog.open(path);
+    log.close();
+    log.close();
+    expect(() => log.append({ kind: "boot", payload: {} })).toThrow(/closed/);
+  });
+
   test("a forward file receives byte-identical lines", () => {
     const fwd = join(dir, "copy.jsonl");
     const log = AuditLog.open(path, { forward: fwd });

@@ -64,7 +64,7 @@ export interface Runtime {
   readonly startedAt: number;
   /** The engine for the policy set in force (rebuilt after a reload). */
   engine(): PolicyEngine;
-  /** Stops timers and watchers, writes the shutdown line, closes the stores. */
+  /** Stops timers and watchers, writes the shutdown line, closes the stores. Idempotent. */
   close(): void;
 }
 
@@ -244,6 +244,7 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
     payload: bootPayload(config, built.judge.name, policies, warnings),
   });
   const lockfiles = new Set(Object.keys(cores.contextConfig.scope.registries));
+  let closed = false;
   return {
     config,
     audit,
@@ -260,6 +261,8 @@ export async function createRuntime(config: DaemonConfig, deps: DaemonDeps = {})
     startedAt: now(),
     engine: engineFactory({ policies, judge, cores, now, precedents }),
     close() {
+      if (closed) return;
+      closed = true;
       stopGc();
       policies.close();
       audit.append({ kind: "boot", payload: { event: "shutdown" } });

@@ -115,6 +115,7 @@ export class AuditLog {
   private seq: number;
   private prev: string;
   private pendingAnomaly: string | null;
+  private closed = false;
 
   private constructor(
     readonly path: string,
@@ -147,8 +148,12 @@ export class AuditLog {
     return log;
   }
 
-  /** Appends one line and returns it as written. */
+  /**
+   * Appends one line and returns it as written. Throws once closed: a closed descriptor's
+   * number can be reused by another file, so a late write must never reach it.
+   */
   append(entry: AuditEntry): AuditLine {
+    if (this.closed) throw new Error(`audit log ${this.path} is closed`);
     const body = plain({ ...entry, seq: this.seq + 1, at: this.now(), prev: this.prev });
     const line: AuditLine = { ...body, hash: lineHash(body) };
     const text = `${canonicalJson(line)}\n`;
@@ -159,8 +164,10 @@ export class AuditLog {
     return line;
   }
 
-  /** Flushes to disk and closes; the log must not be used afterwards. */
+  /** Flushes to disk and closes; later appends throw. Idempotent. */
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
     for (const fd of [this.fd, this.forwardFd]) {
       if (fd === null) continue;
       fsyncSync(fd);

@@ -205,6 +205,7 @@ export async function listen(
 export interface RunningDaemon {
   readonly runtime: Runtime;
   readonly listening: Listening;
+  /** Idempotent: a second call waits for the first. */
   stop(): Promise<void>;
 }
 
@@ -221,12 +222,13 @@ export async function startDaemon(
     runtime.close();
     throw cause;
   }
+  let stopping: Promise<void> | null = null;
   return {
     runtime,
     listening,
-    async stop() {
-      await listening.stop();
-      runtime.close();
+    stop() {
+      stopping ??= listening.stop().then(() => runtime.close());
+      return stopping;
     },
   };
 }
