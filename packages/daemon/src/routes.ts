@@ -1,3 +1,4 @@
+import { handleClaudeCodeHook } from "./claude-code/route.ts";
 import { handleConfirmView } from "./confirm-view.ts";
 import type { Runtime } from "./daemon.ts";
 import {
@@ -80,6 +81,7 @@ const POST_ROUTES: Readonly<Record<Surface, Readonly<Record<string, Route>>>> = 
     "/v1/observe": (rt, body) => handleObserve(rt, body),
     "/v1/resolve": (rt, body) => handleResolve(rt, body),
     "/v1/session": (rt, body) => handleSession(rt, body),
+    "/v1/hooks/claude-code": (rt, body) => handleClaudeCodeHook(rt, body),
   },
   admin: {
     "/v1/budget/reset": (rt, body) => handleBudgetReset(rt, body),

@@ -186,13 +186,12 @@ export async function handleJudge(rt: Runtime, body: unknown): Promise<Reply> {
 }
 
 /**
- * `POST /v1/observe`: completes a missing `env.git` like `/v1/judge`, records the post
- * event on the case file and in the audit log (as sent, plus `derived.git`); 204.
+ * Records a validated post event: completes a missing `env.git` like `/v1/judge`, feeds
+ * the case file (taint, secret reads, failures) and appends the `observe` line (the event
+ * as sent, plus `derived.git`). Shared by `/v1/observe` and `/v1/hooks/claude-code`.
  */
-export async function handleObserve(rt: Runtime, body: unknown): Promise<Reply> {
-  const parsed = parsePhase(body, "post");
-  if (!parsed.ok) return parsed.reply;
-  const probed = await rt.gitProbe.apply(parsed.event);
+export async function observeEvent(rt: Runtime, sent: PostEvent): Promise<void> {
+  const probed = await rt.gitProbe.apply(sent);
   const event: PostEvent = probed.event;
   const cf = rt.sessions.open(event);
   await rt.engine().observe(event, cf, { home: rt.config.daemon.home });
@@ -200,7 +199,14 @@ export async function handleObserve(rt: Runtime, body: unknown): Promise<Reply> 
     kind: "observe",
     event_id: event.id,
     session_id: event.session.id,
-    payload: observePayload(parsed.event, probed.derived),
+    payload: observePayload(sent, probed.derived),
   });
+}
+
+/** `POST /v1/observe`: validates a post event and {@link observeEvent}s it; 204. */
+export async function handleObserve(rt: Runtime, body: unknown): Promise<Reply> {
+  const parsed = parsePhase(body, "post");
+  if (!parsed.ok) return parsed.reply;
+  await observeEvent(rt, parsed.event);
   return { status: 204, body: null };
 }
