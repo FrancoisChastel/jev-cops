@@ -106,25 +106,28 @@ clone → check → gate → build all green. Fixes before M1:
 | L5 | low | README status stale | fixed |
 | L6 | note | Audit chain is unkeyed SHA-256 from a public genesis: locally it detects mid-file edits/deletions, not truncation of the tail or a full rewrite. The real control is off-box shipping (M2); do not rely on local verification alone | documented (below) |
 
+- **Pre-M1 hardening**: token-gated minimal `explain` on agent channels, full explain on
+  the admin socket (D-065); scores stripped from agent-reachable verdicts (D-066); the
+  daemon derives `env.git` from `cwd` with git hardened against agent-controlled
+  `.git/config` — `filter` drivers and `ext::` lazy fetch closed, proven by canaries
+  (D-067). Headless hold stays deny on Claude Code (D-070). 1721 tests + 10 todo.
+
+## In progress
+
+- **M1** per [PLAN-M1.md](PLAN-M1.md) (from the current Claude Code docs, v2.1.285): steps
+  1–5 — core tool table + D-068, `config-tamper` (tiered), daemon session route + kill
+  latch + post-over-HTTP, the `jevdict hook` binary, adapter events.
+
 ## Next
 
-- **`/v1/explain` on the agent socket returns the full audit line** (`detail`, trace,
-  taint evidence), so an agent that curls the socket reads what only the human should
-  see, and the verdict response's `features`/`jev` are an oracle for tuning judge
-  injection (T6). Proposed: on the agent socket serve only a minimal T8 view (`raw`,
-  `detail`, `reason`) of a *pending* hold and only with its `hold_token`; full explain on
-  the admin socket only; decide whether harness responses keep `features`/`jev` (the spec
-  includes them — owner decision).
 - Self-minted holds: an agent that posts its own `/v1/judge` gets that hold's token and a
   precedent matching its later real call; only OpenShell (keeping tool processes off the
   socket) closes it — T07 todo for M2.
 - Carriers not yet parsed: `watch`, `script -c`, `tmux`/`screen` command strings, `flock`,
   `chroot`, `nsenter`, `sudo -s`, `vim -c '!…'`, `parallel`; T5 "exec of a freshly written
   file is judged on its content" uses the write's taint, not its content.
-- Daemon derives `env.git` (repo root, branch, default branch, dirty) from `call.cwd` when
-  the adapter sends none — Pi sends none today, so repo/branch are unknown (D-058).
-- M1: Claude Code HTTP + command hooks, hold→ask / hold→defer, `jevdict install
-  claude-code`, `jevdict doctor` with a canary, `config-tamper` policy live.
+- M1 steps 6–9: `jevdict install claude-code`/`install pi`, `jevdict doctor` + canary,
+  tamper T1/T2/T3/T4/T8/T9 on Claude Code, docs + a real `claude` capture.
 
 ## Known gaps carried forward (from the normalizer report)
 

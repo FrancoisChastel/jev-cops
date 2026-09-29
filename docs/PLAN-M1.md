@@ -514,4 +514,7 @@ Everything else in this plan is a proposed DECISIONS row (§7), chosen as the sa
    `range` becomes `["annotate", "kill"]`. Fixtures add: memory write → annotate; plan write →
    annotate; `~/.claude/skills/x/SKILL.md` write → hold; `~/.claude/settings.json` Edit → kill.
 2. **Build order unchanged.** Steps 1–5 first, then stop and report, then 6–9.
+3. **Decision numbering.** The pre-M1 hardening landed first as D-065–D-070, so the §7
+   proposals are recorded from D-071 on, in the order they land. D-068 (main/master always
+   default) is implemented in step 1 alongside the core changes.
 
