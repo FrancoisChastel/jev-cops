@@ -25,6 +25,7 @@ export {
 } from "./command.ts";
 export { decodeLiteral, isDecoder, MAX_DECODE_CHARS } from "./decode.ts";
 export { GIT_SUBCOMMAND_KINDS } from "./git.ts";
+export { canonicalJson, sha256Hex } from "./hash.ts";
 export {
   type NormalizeOptions,
   normalize,
