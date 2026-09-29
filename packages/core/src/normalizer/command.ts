@@ -3,7 +3,7 @@ import { type ParsedScript, parseScript, type RawCommand } from "./bash.ts";
 import { type Classification, classifyArgv, maxKind } from "./classify.ts";
 import { decodeLiteral, isDecoder } from "./decode.ts";
 import { absolutize } from "./paths.ts";
-import { redirectRefs } from "./redirects.ts";
+import { redirectHosts, redirectRefs } from "./redirects.ts";
 import type {
   DecodedLiteral,
   NormalizedCommand,
@@ -158,11 +158,13 @@ function argRefs(raw: RawCommand, c: Classification, cwd: string): PathRef[] {
 
 function commandKind(ctx: CommandContext, redirects: ReadonlyArray<PathRef>): CallKind {
   if (ctx.c.interpreter !== null) return "exec";
-  const fromRedirects = redirects.reduce<CallKind>(
+  const fromFiles = redirects.reduce<CallKind>(
     (kind, r) => maxKind(kind, r.access === "write" ? "fs.write" : "fs.read"),
     ctx.c.kind,
   );
-  return ctx.raw.background ? maxKind(fromRedirects, "spawn") : fromRedirects;
+  const fromSockets = redirectHosts(ctx.raw.redirects).length > 0 ? "net" : "other";
+  const kind = maxKind(fromFiles, fromSockets);
+  return ctx.raw.background ? maxKind(kind, "spawn") : kind;
 }
 
 function unique(values: ReadonlyArray<string>): string[] {
@@ -181,7 +183,7 @@ function buildCommand(ctx: CommandContext, scope: Scope, redirects: PathRef[]): 
     kind: commandKind(ctx, redirects),
     targets: {
       paths: unique(pathRefs.map((r) => r.path)),
-      hosts: c.hosts.filter((h) => !/[$`]/.test(h)),
+      hosts: unique([...c.hosts, ...redirectHosts(raw.redirects)]).filter((h) => !/[$`]/.test(h)),
     },
     pathRefs,
     verbs: raw.background ? [...c.verbs, "background"] : c.verbs,
