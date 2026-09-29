@@ -22,6 +22,9 @@ Then stop and report.
 
 ## Blocked / waiting on owner
 
-- Headless `hold` semantics (also Pi, which has no "ask") — needed before the Pi adapter.
-- Confirm spec default thresholds/budget for the pilot.
-- Name check on PyPI and `.dev` (npm is free).
+- Name check on PyPI and `.dev` (npm is free). Not blocking until publish.
+
+## Working agreements
+
+- Headless `hold` → `deny` (D-008); pilot thresholds = spec defaults (D-009).
+- Planning and stage reviews on Fable 5.1; implementation on Opus 5.5.

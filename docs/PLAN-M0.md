@@ -179,15 +179,14 @@ second set is ignored and logged (T11) · budget: cost = round(risk·20) · deca
 from the spec's "required outcome"; `test.todo` until its milestone, then live.
 T5, T6, T9, T10, T11 have their core-level assertions live in this session.
 
-## Needs your answer (from spec §Open decisions) — not blocking this session
+## Open decisions (from spec §Open decisions)
 
-1. **Headless `hold`** (also applies to Pi, whose `tool_call` can only allow or block —
-   there is no "ask"): treat `hold` as `deny` with the reason, or as allow-and-annotate?
-   I need this before step 10. Safer default if you say nothing: **deny**.
-2. **Thresholds/budget**: I am using the spec defaults (100 points, 0.3/0.5/0.8 bands)
-   as constants in `jevdict.toml` defaults. Say if the pilot should start elsewhere.
-3. **Name**: `jevdict` and `@jevdict/*` are free on npm (checked 2026-09-29). PyPI and
-   the `.dev` domain not checked.
+1. **Headless `hold`** — **decided 2026-09-29: `deny` with the reason.** Applies to
+   headless sessions on every harness and to Pi, whose `tool_call` can only allow or block.
+2. **Thresholds/budget** — **decided 2026-09-29: spec defaults** (100 points, 10/min decay,
+   0.3 / 0.5 / 0.8 bands) as the `jevdict.toml` defaults for the pilot.
+3. **Name** — `jevdict` and `@jevdict/*` are free on npm (checked 2026-09-29). PyPI and
+   the `.dev` domain still to check; owner will decide.
 
 Answered by your ground rules: Jev behind a feature flag and mocked in tests (data path);
 provider pluggable (jev / openrouter / vercel-ai) per your later note — see DECISIONS.md D-004.
