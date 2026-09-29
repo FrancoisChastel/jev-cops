@@ -11,7 +11,8 @@
     "./schema": "./src/schema/index.ts",
     "./normalizer": "./src/normalizer/index.ts",
     "./context": "./src/context/index.ts",
-    "./judge": "./src/judge/index.ts"
+    "./judge": "./src/judge/index.ts",
+    "./policy": "./src/policy/index.ts"
   },
   "files": [
     "src",

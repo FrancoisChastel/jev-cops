@@ -207,6 +207,17 @@ export function taintFraction(
   if (pre.event.actor?.kind === "user") return NO_TAINT;
   const units = taintUnits(pre);
   if (units.length === 0) return NO_TAINT;
+  const scored = units.map(unitScorer(pre, cf, cfg));
+  const total = scored.reduce((sum, s) => sum + s.weight, 0);
+  const matched = [...new Set(scored.flatMap((s) => s.matched))];
+  return { value: Math.min(1, total / units.length), matched };
+}
+
+function unitScorer(
+  pre: NormalizedEvent,
+  cf: CaseFile,
+  cfg: ContextConfig,
+): (unit: TaintUnit) => Scored {
   const roots = trustedRoots(pre, cfg.home);
   const entries = cf
     .taintSet()
@@ -214,8 +225,24 @@ export function taintFraction(
     .map((e) => ({ ...e, lower: e.value.toLowerCase() }));
   const typed = taskTokens(cf.task, pre.event.call.cwd, cfg.home);
   const files = cf.filesWritten();
-  const scored = units.map((u) => scoreUnit(u, entries, files, typed));
-  const total = scored.reduce((sum, s) => sum + s.weight, 0);
-  const matched = [...new Set(scored.flatMap((s) => s.matched))];
-  return { value: Math.min(1, total / units.length), matched };
+  return (unit) => scoreUnit(unit, entries, files, typed);
+}
+
+/**
+ * Taint level of one token in the context of pre event `pre`, by the same rules as
+ * {@link taintFraction}: the max taint of the entries it contains (or of the self-written
+ * file it names), 0 when the user typed it in the task or the actor is the user, and
+ * cwd/repo/home entries ignored. An absolute token is also matched as a path. Pure.
+ */
+export function tokenTaint(
+  token: string,
+  pre: NormalizedEvent,
+  cf: CaseFile,
+  cfg: ContextConfig = DEFAULT_CONTEXT_CONFIG,
+): number {
+  if (pre.event.actor?.kind === "user" || token === "") return 0;
+  const path = token.startsWith("/") ? posix.normalize(token) : undefined;
+  const unit: TaintUnit =
+    path === undefined ? { strings: [token] } : { strings: [token, path], path };
+  return unitScorer(pre, cf, cfg)(unit).weight;
 }
