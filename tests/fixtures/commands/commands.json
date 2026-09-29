@@ -1015,5 +1015,414 @@
       "verbs": ["git", "checkout"],
       "paths": []
     }
+  },
+  {
+    "tool": "SendUserFile",
+    "input": {
+      "file_path": "/work/repo/report.md",
+      "message": "done"
+    },
+    "expect": {
+      "kind": "net",
+      "hosts": [],
+      "paths": []
+    }
+  },
+  {
+    "tool": "PushNotification",
+    "input": {
+      "file_path": "/work/repo/report.md",
+      "message": "done"
+    },
+    "expect": {
+      "kind": "net",
+      "hosts": [],
+      "paths": []
+    }
+  },
+  {
+    "tool": "RemoteTrigger",
+    "input": {
+      "file_path": "/work/repo/report.md",
+      "message": "done"
+    },
+    "expect": {
+      "kind": "net",
+      "hosts": [],
+      "paths": []
+    }
+  },
+  {
+    "tool": "ShareOnboardingGuide",
+    "input": {
+      "file_path": "/work/repo/report.md",
+      "message": "done"
+    },
+    "expect": {
+      "kind": "net",
+      "hosts": [],
+      "paths": []
+    }
+  },
+  {
+    "tool": "Task",
+    "kind": "spawn",
+    "input": {
+      "description": "Explore",
+      "prompt": "Find the flaky test"
+    },
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["task"],
+      "paths": []
+    }
+  },
+  {
+    "tool": "mcp:github:create_issue",
+    "input": {
+      "title": "x"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["mcp", "mcp:github"],
+      "paths": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "TaskGet",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "TaskList",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "TaskUpdate",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "TaskOutput",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "TaskStop",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ToolSearch",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "WaitForMcpServers",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ListAgents",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ListMcpResourcesTool",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ReadMcpResourceTool",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "AskUserQuestion",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "EnterPlanMode",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ExitPlanMode",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ScheduleWakeup",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ReportFindings",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "SubagentHandback",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "LSP",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "SendMessage",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "EnterWorktree",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "ExitWorktree",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "Skill",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "SendFeedback",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "CronDelete",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
+  },
+  {
+    "tool": "CronList",
+    "input": {
+      "path": "/etc/passwd",
+      "command": "rm -rf /"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": [],
+      "hosts": [],
+      "opaque": []
+    }
   }
 ]
