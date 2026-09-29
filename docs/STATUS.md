@@ -41,17 +41,24 @@ Updated: 2026-09-29
   1–5 + budget + precedents with a named test per rule, `createPolicyEngine` (139 lines).
   T6 floor-cap test live. 178 tests. Decisions D-028–D-037.
 
-**Totals:** 1056 tests + 11 todo, `bun run check` green.
+- **M0 steps 6–7 — SDK and starter policies**: `@jevdict/sdk` (`definePolicy` with
+  inferred answer types, `jev.noul/choice/score`, JSON fixture format + runner,
+  `describeFixtures` for `bun test`), policies `tainted-destructive`,
+  `default-branch-guard`, `off-repo-write`, `exfil-after-secrets` with 27 fixture cases
+  that pass alone and with the whole set. Review fixes: D-038 (noul confidence), D-039
+  (exfil fallback), D-040 (`/private/tmp`). 95 tests. Decisions D-038–D-041.
+
+**Totals:** 1150 tests + 11 todo, `bun run check` green.
 
 ## In progress
 
-- M0 step 6–7: `@jevdict/sdk` (`definePolicy`, `jev.*` builders, fixture runner) and the
-  starter policies with `*.fixtures.json`.
+- M0 step 4 (providers): `@jevdict/judge` package with `jev`, `openrouter`, `vercel-ai`
+  (in a worktree, merged after review).
 
 ## Next
 
-- M0 step 4 (providers): `@jevdict/judge` package with `jev`, `openrouter`, `vercel-ai`.
-- M0 steps 8–10: daemon, `jevdict test`/`explain`, Pi adapter.
+- M0 steps 8–10: daemon (`POST /v1/judge`, `/v1/observe`, SQLite stores, audit chain),
+  `jevdict test`/`explain`, Pi adapter.
 
 ## Known gaps carried forward (from the normalizer report)
 
@@ -62,6 +69,11 @@ Updated: 2026-09-29
   python/node code is flagged opaque but not parsed.
 - `bun build --compile` will need the grammar `.wasm` embedded (M0 step 10).
 - Coverage report: `bunfig.toml` has `coverage = false`; enable in CI once the threshold is met.
+- SDK friction to address: `ctx.env.onDefaultBranch` and `ctx.config` helpers so policies
+  stop duplicating D-024's list; `git push --force` normalizes to `net` so net policies
+  match it with `net.host === null`; taint extractor registers `app.git` as a host; one
+  missing recorded answer invalidates the whole batch (faithful to one request, but
+  surprising for fixture authors).
 - Policy engine: hot reload needs Bun's `import()` cache busted (daemon, step 8);
   `when`-overrun/degraded state is in-memory only; headless `hold → deny` (D-008) is the
   daemon/adapter's mapping, not `combine`'s.
