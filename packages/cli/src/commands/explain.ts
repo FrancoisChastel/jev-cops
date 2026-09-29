@@ -1,9 +1,11 @@
 import { parseArgs } from "node:util";
 import { FEATURE_NAMES, gitSchema } from "@jevdict/core";
 import { type AuditLine, readAudit } from "@jevdict/daemon";
+import { isLatchedLine, latchedView } from "../audit-session.ts";
 import { type JudgePayload, judgeView } from "../audit-view.ts";
 import { configuredPaths } from "../config-paths.ts";
 import { EXIT, type Io } from "../io.ts";
+import { relatedLines, renderLatched, taskLine } from "./explain-session.ts";
 
 const f2 = (n: number) => n.toFixed(2);
 
@@ -88,34 +90,56 @@ function judge(p: JudgePayload): string[] {
 
 function tail(p: JudgePayload, related: readonly AuditLine[]): string[] {
   const b = p.decision.budget;
-  const out = [`budget: ${b.spent}/${b.limit} after this event`];
-  if (p.flags?.includes("prompt-like-string") === true) {
-    out.push(`WARNING prompt-like string in the judged state: ${(p.prompt_like ?? []).join(", ")}`);
-  }
-  for (const r of related) {
-    const action = typeof r.payload.action === "string" ? r.payload.action : r.kind;
-    const by = typeof r.payload.by === "string" ? ` by ${r.payload.by}` : "";
-    out.push(`related: ${r.kind} ${action}${by} at ${new Date(r.at).toISOString()}`);
-  }
-  out.push("detail (human only, never sent to the agent):");
-  out.push(...p.decision.detail.split("\n").map((l) => `  ${l}`));
-  return out;
+  const warning =
+    p.flags?.includes("prompt-like-string") === true
+      ? [`WARNING prompt-like string in the judged state: ${(p.prompt_like ?? []).join(", ")}`]
+      : [];
+  return [
+    `budget: ${b.spent}/${b.limit} after this event`,
+    ...warning,
+    ...relatedLines(related),
+    "detail (human only, never sent to the agent):",
+    ...p.decision.detail.split("\n").map((l) => `  ${l}`),
+  ];
 }
 
-/** The human rendering of a judge line (spec: "the agent sees reasons, the human details"). */
+/**
+ * The human rendering of a judge line (spec: "the agent sees reasons, the human details").
+ * `lines` is the whole log, where the session's task is looked up when the event has none.
+ */
 export function renderExplain(
   line: AuditLine,
   p: JudgePayload,
   related: readonly AuditLine[],
+  lines: readonly AuditLine[] = [],
 ): string[] {
   return [
     ...header(line, p),
+    taskLine(p.event, lines),
     ...command(p),
     ...features(p),
     ...policies(p),
     ...judge(p),
     ...tail(p, related),
   ];
+}
+
+type Rendered = { ok: true; lines: string[] } | { ok: false; error: string };
+
+/** A judge line rendered for a human: a latched one, or a judged one; malformed → error. */
+function render(
+  line: AuditLine,
+  related: readonly AuditLine[],
+  all: readonly AuditLine[],
+): Rendered {
+  if (isLatchedLine(line)) {
+    const latched = latchedView(line);
+    if (!latched.ok) return latched;
+    return { ok: true, lines: renderLatched(line, latched.payload, related, all) };
+  }
+  const view = judgeView(line);
+  if (!view.ok) return view;
+  return { ok: true, lines: renderExplain(line, view.payload, related, all) };
 }
 
 /**
@@ -142,7 +166,8 @@ export async function runExplainCommand(argv: readonly string[], io: Io): Promis
     return EXIT.usage;
   }
   const path = parsed.values.audit ?? configuredPaths().audit;
-  const related = readAudit(path).lines.filter((l) => l.event_id === eventId);
+  const all = readAudit(path).lines;
+  const related = all.filter((l) => l.event_id === eventId);
   const line = related.findLast((l) => l.kind === "judge");
   if (line === undefined) {
     io.err(`jevdict explain: no judged event ${eventId} in ${path}`);
@@ -153,11 +178,11 @@ export async function runExplainCommand(argv: readonly string[], io: Io): Promis
     io.out(JSON.stringify({ line, related: others }, null, 2));
     return EXIT.ok;
   }
-  const view = judgeView(line);
-  if (!view.ok) {
-    io.err(`jevdict explain: malformed audit line: ${view.error}`);
+  const rendered = render(line, others, all);
+  if (!rendered.ok) {
+    io.err(`jevdict explain: malformed audit line: ${rendered.error}`);
     return EXIT.failed;
   }
-  for (const text of renderExplain(line, view.payload, others)) io.out(text);
+  for (const text of rendered.lines) io.out(text);
   return EXIT.ok;
 }

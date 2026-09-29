@@ -7,7 +7,21 @@ import { type ReplayReport, replayAudit } from "../replay-engine.ts";
 
 const f2 = (n: number) => n.toFixed(2);
 
-/** Human rendering: one line per delta, notes per event, problems, the delta count. */
+/** Calls the kill latch answered: one line each, their extra notes, and their count. */
+function renderLatched(report: ReplayReport): string[] {
+  if (report.latched.length === 0) return [];
+  const lines = report.latched.flatMap((l) => [
+    `${l.eventId}  kill (latched since ${l.latchedBy}, cause ${l.cause}; not a policy decision)`,
+    ...l.notes.slice(1).map((note) => `${l.eventId}  note: ${note}`),
+  ]);
+  const count = `${report.latched.length} latched call(s) replayed as kill (the latch is state, not a policy decision; never a delta)`;
+  return [...lines, count];
+}
+
+/**
+ * Human rendering: one line per delta, notes per event, the calls the kill latch answered
+ * (apart), problems, the delta count.
+ */
 export function renderReplay(report: ReplayReport, header: string): string[] {
   const lines = [`${header}: ${report.events.length} judged event(s)`];
   for (const e of report.events) {
@@ -16,6 +30,7 @@ export function renderReplay(report: ReplayReport, header: string): string[] {
     }
     for (const note of e.notes) lines.push(`${e.eventId}  note: ${note}`);
   }
+  lines.push(...renderLatched(report));
   for (const p of report.problems) lines.push(`PROBLEM ${p}`);
   lines.push(`${report.deltas} ${report.deltas === 1 ? "delta" : "deltas"}`);
   return lines;
