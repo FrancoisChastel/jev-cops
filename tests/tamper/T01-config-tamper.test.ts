@@ -74,7 +74,8 @@ const REPO_POLICIES = join(import.meta.dir, "..", "..", "policies");
 
 describe("T1 config tampering", () => {
   test("Claude Code: a Write to settings.json is `kill`: blocked, turn ended, the session stays ended", async () => {
-    const t = (td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES }));
+    td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
+    const t = td;
     const ws = claudeWorkspace();
     try {
       const c = claudeCode(t.config.daemon.socket, ws);
@@ -93,7 +94,8 @@ describe("T1 config tampering", () => {
   });
 
   test("Claude Code: the ConfigChange hook fires, blocks a change that drops the jevdict hook, and latches the session", async () => {
-    const t = (td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES }));
+    td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
+    const t = td;
     const ws = claudeWorkspace();
     try {
       const settings = join(ws.cwd, ".claude", "settings.json");
