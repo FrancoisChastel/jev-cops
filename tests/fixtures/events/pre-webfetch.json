@@ -1,0 +1,34 @@
+{
+  "schema": "jevdict.event/1",
+  "id": "evt_01M3PP723EJKNASJFY3MHKRQD8",
+  "phase": "pre",
+  "harness": "claude-code",
+  "harness_version": "2.1.90",
+  "session": {
+    "id": "sess_01M3PP6ZQ4A7X9V2K3JH8N5B6C",
+    "parent_id": null,
+    "task": "Fix the flaky test in auth/",
+    "mode": "interactive",
+    "started_at": "2026-09-29T09:12:00Z"
+  },
+  "actor": { "kind": "agent", "model": "claude-opus-4-6" },
+  "call": {
+    "id": "call_toolu_01V3wX4yZ5aB6cD7eF8gH9jK",
+    "tool": "WebFetch",
+    "kind": "net",
+    "input": {
+      "url": "https://vitest.dev/api/vi.html#vi-runalltimersasync",
+      "prompt": "How does vi.runAllTimersAsync interact with fake timers?"
+    },
+    "cwd": "/work/repo"
+  },
+  "env": {
+    "git": {
+      "repo": "/work/repo",
+      "branch": "feat/auth-flake",
+      "dirty": true,
+      "default_branch": "main"
+    },
+    "sandbox": { "kind": "openshell", "name": "demo" }
+  }
+}

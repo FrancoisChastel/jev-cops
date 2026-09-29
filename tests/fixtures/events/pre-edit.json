@@ -1,0 +1,36 @@
+{
+  "schema": "jevdict.event/1",
+  "id": "evt_01M3PP723E16BZVCZH2ZDB0N36",
+  "phase": "pre",
+  "harness": "claude-code",
+  "harness_version": "2.1.90",
+  "session": {
+    "id": "sess_01M3PP6ZQ4A7X9V2K3JH8N5B6C",
+    "parent_id": null,
+    "task": "Fix the flaky test in auth/",
+    "mode": "interactive",
+    "started_at": "2026-09-29T09:12:00Z"
+  },
+  "actor": { "kind": "agent", "model": "claude-opus-4-6" },
+  "call": {
+    "id": "call_toolu_01D4eFg5HjK6mN7pQ8rS9tU2",
+    "tool": "Edit",
+    "kind": "fs.write",
+    "input": {
+      "file_path": "/work/repo/auth/session.test.ts",
+      "old_string": "await sleep(50);",
+      "new_string": "await vi.runAllTimersAsync();",
+      "replace_all": false
+    },
+    "cwd": "/work/repo"
+  },
+  "env": {
+    "git": {
+      "repo": "/work/repo",
+      "branch": "feat/auth-flake",
+      "dirty": true,
+      "default_branch": "main"
+    },
+    "sandbox": { "kind": "openshell", "name": "demo" }
+  }
+}
