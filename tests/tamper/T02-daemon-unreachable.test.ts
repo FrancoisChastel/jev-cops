@@ -6,9 +6,13 @@
  *
  * Status: live (daemon side): an internal failure answers non-200 with an `anomaly` audit
  * line, never a verdict, so the adapter's "non-200 = unreachable" rule applies; a socket
- * nobody listens on refuses connections. The adapter's fail-closed mapping is M0 step 10.
+ * nobody listens on refuses connections. Live (Pi adapter): with the daemon stopped, exec,
+ * write and unknown tools are blocked; read-only tools continue and warn locally. The
+ * Claude Code adapter's fail-closed hook is M1.
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { register } from "../../adapters/pi/jevdict.ts";
+import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import {
   startTestDaemon,
   type TestDaemon,
@@ -52,5 +56,26 @@ describe("T2 daemon killed or unreachable", () => {
     await expect(attempt).rejects.toThrow();
   });
 
-  test.todo(REQUIRED_OUTCOME, pending("M0 step 10 (Pi adapter)"));
+  test(`Pi: ${REQUIRED_OUTCOME}`, async () => {
+    td = await startTestDaemon({ policies: { "deny.ts": policyModule("deny", 1, "deny") } });
+    const socket = td.config.daemon.socket;
+    await td.daemon.stop();
+    const pi = new FakePi();
+    register(pi, { socket });
+    const ctx = fakeContext({ cwd: td.dir, hasUI: true });
+    for (const [tool, input] of [
+      ["bash", { command: "rm -rf /srv/x" }],
+      ["edit", { path: "a.ts", edits: [{ oldText: "a", newText: "b" }] }],
+      ["some_extension_tool", { target: "/srv/x" }],
+    ] as const) {
+      const run = await pi.run(ctx, tool, input);
+      expect(run.blocked).toMatchObject({ block: true });
+      expect(run.blocked?.reason).toContain("fail closed");
+    }
+    const read = await pi.run(ctx, "read", { path: "README.md" }, "# readme");
+    expect(read.blocked).toBeUndefined();
+    expect(ctx.log.notes.map((n) => n.message).join("\n")).toContain("observe-only, fail open");
+  });
+
+  test.todo(`Claude Code: ${REQUIRED_OUTCOME}`, pending("M1 (Claude Code hooks)"));
 });

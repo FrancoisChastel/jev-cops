@@ -5,11 +5,13 @@
  * Required outcome: Adapter returns `deny` with reason "judge timeout", never allow-by-timeout
  *
  * Status: live (daemon side): a judge that sleeps 15 s gets `504 { error: "judge timeout" }`
- * at the per-request deadline, never a verdict. Mapping 504 to `deny` is the adapter's
- * (M0 step 10).
+ * at the per-request deadline, never a verdict. Live (Pi adapter): the 504 blocks the call
+ * with reason "judge timeout". The Claude Code hook's mapping is M1.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { createMockJudge } from "@jevdict/core";
+import { register } from "../../adapters/pi/jevdict.ts";
+import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import {
   startTestDaemon,
   type TestDaemon,
@@ -56,5 +58,25 @@ describe("T3 hook timeout", () => {
     expect(res).toEqual({ status: 504, body: { error: "judge timeout" } });
   });
 
-  test.todo(REQUIRED_OUTCOME, pending("M0 step 10 (Pi adapter)"));
+  test(`Pi: ${REQUIRED_OUTCOME}`, async () => {
+    td = await startTestDaemon({
+      policies: { "asks.ts": ASKS },
+      judge: createMockJudge(
+        { "asks/ok": { kind: "noul", p: 1, confidence: 1 } },
+        { delayMs: 15_000 },
+      ),
+      deadlineMs: 200,
+      judgeTimeoutMs: 1_000,
+      policy: { ask: { min: 0 } },
+    });
+    const pi = new FakePi();
+    register(pi, { socket: td.config.daemon.socket });
+    const started = performance.now();
+    const run = await pi.run(fakeContext({ cwd: td.dir }), "bash", { command: "ls" });
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(run.blocked).toMatchObject({ block: true });
+    expect(run.blocked?.reason).toContain("judge timeout");
+  });
+
+  test.todo(`Claude Code: ${REQUIRED_OUTCOME}`, pending("M1 (Claude Code hooks)"));
 });

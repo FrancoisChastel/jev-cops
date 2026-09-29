@@ -5,12 +5,33 @@
  * Required outcome: `rewrite` pins resolved absolute paths and expanded args via
  * `updatedInput`; unpinnable dynamic constructs are opaque exec.
  *
- * Status: live (core) for "unpinnable dynamic constructs are opaque exec". Pinning via
- * `rewrite` lands with the policy engine and the Pi adapter (M0 steps 5 and 10).
+ * Status: live (core) for "unpinnable dynamic constructs are opaque exec"; live (Pi
+ * adapter) for pinning: a `rewrite` carrying the resolved absolute path replaces the input
+ * Pi runs, in place (Pi's contract; it has no `updatedInput`). Claude Code's
+ * `updatedInput` mapping is M1.
  */
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { register } from "../../adapters/pi/jevdict.ts";
+import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
+import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { bashPre } from "../fixtures/context/index.ts";
 import { pending } from "./pending.ts";
+
+/** A rewrite policy that pins every resolved path of a relative `rm` (test-only). */
+const PIN = `export default {
+  name: "pin", version: 1, owner: "tests",
+  when: (e) => e.commands.some((c) => c.argv[0] === "rm") && e.opaque.length === 0,
+  decide: () => "rewrite",
+  rewrite: (e) => ({ command: "rm -rf -- " + e.paths.join(" ") }),
+  reason: "Pinned resolved paths.",
+};
+`;
+
+let td: TestDaemon | null = null;
+afterEach(async () => {
+  await td?.stop();
+  td = null;
+});
 
 describe("T9 TOCTOU: what cannot be pinned is opaque", () => {
   test("a $(…) path is opaque and never appears among the resolved paths", async () => {
@@ -35,8 +56,18 @@ describe("T9 TOCTOU: what cannot be pinned is opaque", () => {
     expect(n.paths).toEqual(["/work/repo/dist", "/home/dev/tmp"]);
   });
 
+  test("Pi: rewrite pins resolved absolute paths and expanded args in the input Pi runs", async () => {
+    td = await startTestDaemon({ policies: { "pin.ts": PIN } });
+    const pi = new FakePi();
+    register(pi, { socket: td.config.daemon.socket });
+    const ctx = fakeContext({ cwd: td.dir });
+    const run = await pi.run(ctx, "bash", { command: "rm -rf ./build/../dist ~/tmp" });
+    expect(run.blocked).toBeUndefined();
+    expect(run.input).toEqual({ command: `rm -rf -- ${td.dir}/dist /home/dev/tmp` });
+  });
+
   test.todo(
-    "rewrite pins resolved absolute paths and expanded args via updatedInput (M0 step 5)",
-    pending("M0 step 5"),
+    "Claude Code: rewrite pins resolved absolute paths and expanded args via updatedInput",
+    pending("M1 (Claude Code hooks)"),
   );
 });
