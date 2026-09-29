@@ -1,0 +1,18 @@
+{
+  "name": "@jevdict/adapter-pi",
+  "version": "0.0.0",
+  "description": "Jevdict extension for the Pi coding agent: forwards tool calls to jevdictd and maps verdicts back",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./jevdict.ts",
+  "types": "./jevdict.ts",
+  "exports": {
+    ".": "./jevdict.ts",
+    "./install": "./install.ts"
+  },
+  "files": [
+    "jevdict.ts",
+    "install.ts",
+    "README.md"
+  ]
+}

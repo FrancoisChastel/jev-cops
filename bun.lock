@@ -10,6 +10,10 @@
         "typescript": "^5.9.0",
       },
     },
+    "adapters/pi": {
+      "name": "@jevdict/adapter-pi",
+      "version": "0.0.0",
+    },
     "packages/cli": {
       "name": "@jevdict/cli",
       "version": "0.0.0",
@@ -89,6 +93,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.5.14", "", { "os": "win32", "cpu": "arm64" }, "sha512-pHgAFffmZtaYoxavEsWEYNvcA7NwOIjLyqw2HXyLbt16xYryX0L4fMV2u0G9ag6LNYPIoqWaWqzUcnc6rLGGXg=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.14", "", { "os": "win32", "cpu": "x64" }, "sha512-oJWmBhoHsnhUKIke+0gXDX0mltJrWHA1UyHsrTlXwX0TL64ilVZAo+TYZm97baecV0esBdpzy3k96q+09JaZUQ=="],
+
+    "@jevdict/adapter-pi": ["@jevdict/adapter-pi@workspace:adapters/pi"],
 
     "@jevdict/cli": ["@jevdict/cli@workspace:packages/cli"],
 
