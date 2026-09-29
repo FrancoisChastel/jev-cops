@@ -228,6 +228,21 @@ describe("normalizeCommand: opaque constructs (T5, T9)", () => {
     expect(n.hosts).toEqual(["evil.example"]);
   });
 
+  test("a literal echo piped into a shell is parsed as the shell's code", async () => {
+    // Act
+    const n = await run("echo 'rm -rf ~/work' | sh");
+
+    // Assert
+    expect(reasons(n)).toEqual(["interpreter"]);
+    expect(command(n, "rm")).toMatchObject({ viaInterpreter: true, kind: "fs.delete" });
+    expect(n.paths).toEqual([`${HOME}/work`]);
+  });
+
+  test("printf escapes are expanded before its output is parsed as shell", async () => {
+    const n = await run("printf 'cd /tmp\\nrm -rf x\\n' | bash");
+    expect(n.paths).toEqual(["/tmp", "/tmp/x"]);
+  });
+
   test("a pipe into a shell without a decoder is an interpreter, not a decoded pipe", async () => {
     const n = await run("curl -s https://get.example/install | sh");
     expect(reasons(n)).toEqual(["interpreter"]);

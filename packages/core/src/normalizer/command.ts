@@ -107,7 +107,34 @@ function opaqueOf(ctx: CommandContext, writesFile: boolean): OpaqueSpan[] {
   return reasons.map((reason) => ({ reason, span }));
 }
 
-/** Shell code this command runs that is visible as text: `-c`, eval, heredocs, decoded payloads. */
+function expandEscapes(text: string): string {
+  const table: Readonly<Record<string, string>> = { n: "\n", t: "\t", "\\": "\\" };
+  return text.replace(/\\([nt\\])/g, (whole, c: string) => table[c] ?? whole);
+}
+
+/** What a literal `echo`/`printf` writes to stdout; [] when any word is dynamic. */
+function printedText(raw: RawCommand): string[] {
+  const [name, ...args] = raw.words;
+  if (!raw.words.every((w) => w.literal)) return [];
+  if (name?.value === "printf" && args[0] !== undefined) {
+    let next = 1;
+    const fill = () => args[next++]?.value ?? "";
+    return [expandEscapes(args[0].value).replace(/%s/g, fill)];
+  }
+  if (name?.value !== "echo") return [];
+  const flags = args.filter((w) => /^-[neE]+$/.test(w.value)).map((w) => w.value);
+  const text = args
+    .slice(flags.length)
+    .map((w) => w.value)
+    .join(" ");
+  return [flags.some((f) => f.includes("e")) ? expandEscapes(text) : text];
+}
+
+/**
+ * Shell code this command runs that is visible as text: `-c` code, eval, its own
+ * heredocs, and, when it reads a pipe, the heredocs and literal echo/printf output of
+ * earlier stages (or their decoded literals when a decoder sits in between).
+ */
 function nestedCode(ctx: CommandContext): string[] {
   const interp = ctx.c.interpreter;
   if (interp === null || !interp.shell) return [];
@@ -116,7 +143,7 @@ function nestedCode(ctx: CommandContext): string[] {
   const feeders = earlierStages(ctx);
   const piped = fedByDecoder(ctx)
     ? feeders.flatMap((s) => decodedOf(s.raw).map((d) => d.decoded))
-    : feeders.flatMap((s) => s.raw.heredocs);
+    : feeders.flatMap((s) => [...s.raw.heredocs, ...printedText(s.raw)]);
   return [...ctx.raw.heredocs, ...(readsPipe(ctx) ? piped : [])];
 }
 
