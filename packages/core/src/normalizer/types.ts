@@ -103,3 +103,10 @@ export type NormalizedScript = Pick<
   NormalizedEvent,
   "commands" | "paths" | "hosts" | "opaque" | "decodedLiterals" | "kind"
 >;
+
+/** A path-shaped argument before resolution; `index` is its position in the argv. */
+export interface PathArg {
+  value: string;
+  index: number;
+  access: PathAccess;
+}
