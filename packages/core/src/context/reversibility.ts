@@ -1,4 +1,4 @@
-import { mcpServer } from "../normalizer/normalize.ts";
+import { mcpServer, toolRule } from "../normalizer/normalize.ts";
 import type { NormalizedCommand, NormalizedEvent } from "../normalizer/types.ts";
 import { type ContextConfig, DEFAULT_CONTEXT_CONFIG } from "./config.ts";
 import type { CaseFile } from "./types.ts";
@@ -89,8 +89,9 @@ export function hostsSeenByOthers(n: NormalizedEvent, cf: CaseFile): Set<string>
  * Can this be undone? 1: delete outside the repo, a force/hard/irreversible/privilege
  * verb, a net write (POST/PUT/DELETE/PATCH or an unknown method), a write outside the
  * repo and tmp, a spawn handed a credential. 0.5: delete inside the repo, a GET to a
- * new host, anything opaque (including tools the normalizer cannot read and MCP tools,
- * whose effect is the server's). 0 otherwise.
+ * new host, anything opaque (including tools the normalizer cannot read, MCP tools, whose
+ * effect is the server's, and fixed-kind tools such as WebSearch or Artifact, whose input
+ * names no destination). 0 otherwise.
  * Uses `pathRefs.access`, `verbs` and `method` only. Assumption: git tracking cannot be
  * known without the filesystem, so a write under `env.git.repo` counts as reversible;
  * with no repo known, writes outside tmp count as irreversible.
@@ -101,7 +102,9 @@ export function reversibilityScore(
   cfg: ContextConfig = DEFAULT_CONTEXT_CONFIG,
 ): ReversibilityScore {
   const seen = hostsSeenByOthers(n, cf);
-  const unread = n.commands.length === 0 || mcpServer(n.event.call.tool) !== null;
+  const tool = n.event.call.tool;
+  const unread =
+    n.commands.length === 0 || mcpServer(tool) !== null || toolRule(tool)?.reader === "kind";
   const opaque: Finding[] =
     n.opaque.length > 0 || unread ? [{ value: 0.5, why: "opaque exec" }] : [];
   const findings = [...n.commands.flatMap((c) => commandFindings(c, n, seen, cfg)), ...opaque];

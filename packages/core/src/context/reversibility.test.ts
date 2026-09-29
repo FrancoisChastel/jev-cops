@@ -63,15 +63,22 @@ describe("reversibilityScore", () => {
     expect(await value("mcp:db:query", "other", { sql: "drop table x" })).toBe(0.5);
   });
 
-  test("Claude Code tools: inert 0, WebSearch 0, an MCP call opaque 0.5 in either spelling", async () => {
+  test("Claude Code tools: inert 0, an MCP call opaque 0.5 in either spelling", async () => {
     const cf = caseFile();
     const value = async (tool: string, input: Record<string, unknown>) =>
       reversibilityScore(await toolEvent(tool, "other", input), cf, CFG).value;
     expect(await value("TodoWrite", { todos: [] })).toBe(0);
-    expect(await value("WebSearch", { query: "bun test coverage" })).toBe(0);
     expect(await value("mcp__db__query", { sql: "drop table x" })).toBe(0.5);
     expect(await value("mcp:db:query", { sql: "drop table x" })).toBe(0.5);
   });
+
+  test.each(["WebSearch", "Artifact", "SendUserFile", "PushNotification", "RemoteTrigger"])(
+    "%s sends data to a destination the input does not name: opaque 0.5",
+    async (tool) => {
+      const n = await toolEvent(tool, "other", { file_path: "/work/repo/r.md", query: "x" });
+      expect(reversibilityScore(n, caseFile(), CFG)).toEqual({ value: 0.5, why: ["opaque exec"] });
+    },
+  );
 
   test("without a repo, writes outside /tmp are irreversible", async () => {
     const n = await bashPre("echo hi > notes.md", { git: null, cwd: "/work/scratch" });

@@ -106,8 +106,10 @@ function irreversibleVerbs(sub: string, parsed: ParsedArgs, args: ReadonlyArray<
 }
 
 /**
- * Paths a subcommand names: every positional of `add`/`rm`/`restore`, and the pathspecs
- * after `--` of `checkout` (the files it overwrites; a branch name is not a path).
+ * Paths a subcommand names: every positional of `add`/`rm`, those of a `restore` that
+ * touches the worktree (an unstage-only `restore --staged` changes the index, not the
+ * file), and the pathspecs after `--` of `checkout` (the files it overwrites; a branch
+ * name is not a path).
  */
 function subcommandPaths(
   sub: string,
@@ -115,6 +117,7 @@ function subcommandPaths(
   args: ReadonlyArray<string>,
   base: number,
 ): PathArg[] {
+  if (sub === "restore" && !restoresWorktree(parsed)) return [];
   const dash = args.indexOf("--");
   const access =
     lookup(PATH_SUBCOMMANDS, sub) ?? (sub === "checkout" && dash >= 0 ? "write" : null);

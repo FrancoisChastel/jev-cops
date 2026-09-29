@@ -196,7 +196,9 @@ describe("classifyArgv: git", () => {
     const worktree = classifyArgv(["git", "restore", "--source", "HEAD~1", "a.ts"]);
     expect(worktree).toMatchObject({ kind: "fs.write", verbs: ["git", "restore", "irreversible"] });
     expect(paths(worktree)).toEqual([["a.ts", "write"]]);
-    expect(classifyArgv(["git", "restore", "--staged", "a.ts"]).verbs).toEqual(["git", "restore"]);
+    const staged = classifyArgv(["git", "restore", "--staged", ".claude/settings.json"]);
+    expect(staged.verbs).toEqual(["git", "restore"]);
+    expect(paths(staged)).toEqual([]);
     expect(classifyArgv(["git", "restore", "-S", "-W", "a.ts"]).verbs).toContain("irreversible");
   });
 
