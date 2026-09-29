@@ -42,6 +42,12 @@ export interface FileWrite {
   executable?: boolean;
 }
 
+/** Who first contacted a host, and when. */
+export interface HostSeen {
+  at: number;
+  callId: string;
+}
+
 /** A string seen in tool output; a pre event using it scores as tainted. */
 export interface TaintEntry {
   value: string;
@@ -79,6 +85,8 @@ export interface CaseFile {
   secretReadsSince(at: number): SecretRead[];
   /** Host → first time it was contacted. */
   hostsSeen(): ReadonlyMap<string, number>;
+  /** Host → the call that first contacted it; lets a judged call exclude its own record. */
+  hostsFirstSeen(): ReadonlyMap<string, HostSeen>;
   filesWritten(): ReadonlyMap<string, FileWrite>;
   failuresInARow(): number;
   /** Calls at or after `now() - windowMs`, oldest first. */

@@ -6,6 +6,7 @@ import type {
   CallRecord,
   CaseFile,
   FileWrite,
+  HostSeen,
   RecordExtra,
   SecretRead,
   TaintEntry,
@@ -69,6 +70,9 @@ class SubagentCaseFile implements CaseFile {
   hostsSeen(): ReadonlyMap<string, number> {
     return this.shared.hostsSeen();
   }
+  hostsFirstSeen(): ReadonlyMap<string, HostSeen> {
+    return this.shared.hostsFirstSeen();
+  }
   filesWritten(): ReadonlyMap<string, FileWrite> {
     return this.shared.filesWritten();
   }
@@ -106,7 +110,7 @@ export class MemoryStorage implements CaseFileStorage {
   private readonly calls = new Map<string, CallRecord>();
   private readonly taint = new Map<string, TaintEntry>();
   private readonly secrets: SecretRead[] = [];
-  private readonly hosts = new Map<string, number>();
+  private readonly hosts = new Map<string, HostSeen>();
   private readonly files = new Map<string, FileWrite>();
   private failures = 0;
   private budget: RiskBudget | null = null;
@@ -141,11 +145,11 @@ export class MemoryStorage implements CaseFileStorage {
   addSecretReads(reads: ReadonlyArray<SecretRead>): void {
     this.secrets.push(...reads.map((r) => ({ ...r })));
   }
-  readHosts(): Map<string, number> {
-    return new Map(this.hosts);
+  readHosts(): Map<string, HostSeen> {
+    return new Map([...this.hosts].map(([h, seen]) => [h, { ...seen }]));
   }
-  addHosts(hosts: ReadonlyArray<string>, at: number): void {
-    for (const h of hosts) if (!this.hosts.has(h)) this.hosts.set(h, at);
+  addHosts(hosts: ReadonlyArray<string>, at: number, callId: string): void {
+    for (const h of hosts) if (!this.hosts.has(h)) this.hosts.set(h, { at, callId });
   }
   readFiles(): Map<string, FileWrite> {
     return new Map([...this.files].map(([k, v]) => [k, { ...v }]));

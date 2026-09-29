@@ -3,7 +3,7 @@ import type { CallKind, Phase } from "../schema/event.ts";
 import type { RiskBudget } from "./budget.ts";
 import { type CaseFileStore, caseFileOptions, type StoreOptions } from "./casefile.ts";
 import { CaseFileEngine, type CaseFileOptions, type CaseFileStorage } from "./casefile-core.ts";
-import type { CallRecord, CaseFile, FileWrite, SecretRead, TaintEntry } from "./types.ts";
+import type { CallRecord, CaseFile, FileWrite, HostSeen, SecretRead, TaintEntry } from "./types.ts";
 
 /**
  * Case-file schema. Every row is keyed by the *root* session id; a subagent's calls are
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS secret_reads (
 CREATE INDEX IF NOT EXISTS secret_reads_at ON secret_reads (session_id, at);
 CREATE TABLE IF NOT EXISTS hosts (
   session_id TEXT NOT NULL, host TEXT NOT NULL, first_seen_at INTEGER NOT NULL,
-  PRIMARY KEY (session_id, host));
+  call_id TEXT NOT NULL, PRIMARY KEY (session_id, host));
 CREATE TABLE IF NOT EXISTS files (
   session_id TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT, taint REAL NOT NULL,
   call_id TEXT NOT NULL, at INTEGER NOT NULL, executable INTEGER NOT NULL DEFAULT 0,
@@ -67,6 +67,12 @@ interface TaintRow {
   taint: number;
 }
 
+interface HostRow {
+  host: string;
+  first_seen_at: number;
+  call_id: string;
+}
+
 interface SessionRow {
   task: string | null;
   failures: number;
@@ -103,9 +109,9 @@ const SQL = {
     WHERE session_id = $sid AND at >= $since ORDER BY at, rowid`,
   addSecret: `INSERT INTO secret_reads (session_id, path, call_id, at, reason)
     VALUES ($sid, $path, $callId, $at, $reason)`,
-  hosts: "SELECT host, first_seen_at FROM hosts WHERE session_id = $sid ORDER BY rowid",
-  addHost: `INSERT OR IGNORE INTO hosts (session_id, host, first_seen_at)
-    VALUES ($sid, $host, $at)`,
+  hosts: "SELECT host, first_seen_at, call_id FROM hosts WHERE session_id = $sid ORDER BY rowid",
+  addHost: `INSERT OR IGNORE INTO hosts (session_id, host, first_seen_at, call_id)
+    VALUES ($sid, $host, $at, $callId)`,
   files: "SELECT * FROM files WHERE session_id = $sid ORDER BY rowid",
   putFile: `INSERT INTO files (session_id, path, sha256, taint, call_id, at, executable)
     VALUES ($sid, $path, $sha256, $taint, $callId, $at, $executable)
@@ -234,12 +240,12 @@ class SqliteStorage implements CaseFileStorage {
       this.run("addSecret", { path: r.path, callId: r.callId, at: r.at, reason: r.reason }),
     );
   }
-  readHosts(): Map<string, number> {
-    const rows = this.st.hosts.all({ sid: this.sid }) as { host: string; first_seen_at: number }[];
-    return new Map(rows.map((r) => [r.host, r.first_seen_at]));
+  readHosts(): Map<string, HostSeen> {
+    const rows = this.st.hosts.all({ sid: this.sid }) as HostRow[];
+    return new Map(rows.map((r) => [r.host, { at: r.first_seen_at, callId: r.call_id }]));
   }
-  addHosts(hosts: ReadonlyArray<string>, at: number): void {
-    this.batch(hosts, (host) => this.run("addHost", { host, at }));
+  addHosts(hosts: ReadonlyArray<string>, at: number, callId: string): void {
+    this.batch(hosts, (host) => this.run("addHost", { host, at, callId }));
   }
   readFiles(): Map<string, FileWrite> {
     const rows = this.st.files.all({ sid: this.sid }) as FileRow[];

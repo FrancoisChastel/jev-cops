@@ -77,11 +77,11 @@ function commandFindings(
   ];
 }
 
-function hostsSeenByOthers(n: NormalizedEvent, cf: CaseFile): Set<string> {
-  const others = cf
-    .recentCalls(Number.POSITIVE_INFINITY)
-    .filter((c) => c.callId !== n.event.call.id);
-  return new Set(others.flatMap((c) => c.hosts));
+/** Hosts first contacted by another call; the judged call's own record never counts. */
+export function hostsSeenByOthers(n: NormalizedEvent, cf: CaseFile): Set<string> {
+  const callId = n.event.call.id;
+  const seen = [...cf.hostsFirstSeen()].filter(([, s]) => s.callId !== callId);
+  return new Set(seen.map(([host]) => host));
 }
 
 /**

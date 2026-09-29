@@ -19,6 +19,7 @@ import type {
   CallRecord,
   CaseFile,
   FileWrite,
+  HostSeen,
   RecordExtra,
   SecretRead,
   TaintEntry,
@@ -41,9 +42,9 @@ export interface CaseFileStorage {
   writeTaint(entries: ReadonlyArray<TaintEntry>): void;
   readSecretReads(sinceAt: number): SecretRead[];
   addSecretReads(reads: ReadonlyArray<SecretRead>): void;
-  readHosts(): Map<string, number>;
-  /** Records hosts first seen at `at`; hosts already known keep their first time. */
-  addHosts(hosts: ReadonlyArray<string>, at: number): void;
+  readHosts(): Map<string, HostSeen>;
+  /** Records hosts first seen by `callId` at `at`; known hosts keep their first sighting. */
+  addHosts(hosts: ReadonlyArray<string>, at: number, callId: string): void;
   readFiles(): Map<string, FileWrite>;
   /** Inserts or replaces by `path`. */
   writeFiles(files: ReadonlyArray<FileWrite>): void;
@@ -106,15 +107,15 @@ export class CaseFileEngine implements CaseFile {
     const at = this.opts.now();
     const callId = n.event.call.id;
     const existing = this.storage.readCall(callId);
-    const fresh = newCallRecord(n, at, extra?.taint ?? 0);
     if (existing === undefined) {
+      const fresh = newCallRecord(n, at, extra?.taint ?? 0);
       this.storage.writeCall(fresh);
       this.applyPreEffects(n, at, fresh.taint);
       return;
     }
+    // The committed record stands: a replayed pre must not rewrite hosts or paths (T6/T9).
     const kind = existing.phase === "post" ? "pre after post" : "pre recorded twice";
     this.storage.addAnomaly(`${kind} for ${callId}`);
-    this.storage.writeCall({ ...fresh, ...resultFields(existing), phase: existing.phase });
   }
 
   recordPost(n: NormalizedEvent, extra?: RecordExtra): void {
@@ -149,7 +150,11 @@ export class CaseFileEngine implements CaseFile {
   }
 
   hostsSeen(): ReadonlyMap<string, number> {
-    return new Map(this.storage.readHosts());
+    return new Map([...this.storage.readHosts()].map(([host, seen]) => [host, seen.at]));
+  }
+
+  hostsFirstSeen(): ReadonlyMap<string, HostSeen> {
+    return new Map([...this.storage.readHosts()].map(([host, seen]) => [host, { ...seen }]));
   }
 
   filesWritten(): ReadonlyMap<string, FileWrite> {
@@ -172,7 +177,7 @@ export class CaseFileEngine implements CaseFile {
     const files = this.storage.readFiles();
     const writes = fileWrites(n, at, taint, this.storage.readTaint(), files);
     this.storage.writeFiles(writes.map((w) => mergeFileWrite(files.get(w.path), w)));
-    this.storage.addHosts(n.hosts, at);
+    this.storage.addHosts(n.hosts, at, n.event.call.id);
     this.storage.addSecretReads(secretPathReads(n, at, this.opts.config));
   }
 
@@ -193,13 +198,6 @@ export class CaseFileEngine implements CaseFile {
       this.storage.addSecretReads(contentSecretReads(n, at));
     }
   }
-}
-
-function resultFields(call: CallRecord): Partial<CallRecord> {
-  return {
-    ...(call.ok === undefined ? {} : { ok: call.ok }),
-    ...(call.exitCode === undefined ? {} : { exitCode: call.exitCode }),
-  };
 }
 
 /** A deep copy of a call record, so callers can never reach stored arrays. */

@@ -6,6 +6,7 @@ import {
   type SequencePatternName,
 } from "./config.ts";
 import { secretPathReads } from "./record.ts";
+import { hostsSeenByOthers } from "./reversibility.ts";
 import type { CaseFile } from "./types.ts";
 
 /** One windowed sequence pattern (spec §Context model, Sequence). */
@@ -98,9 +99,7 @@ const writeThenExec: Detector = (n, cf, since) => {
 };
 
 const newHostAfterSecret: Detector = (n, cf, since, cfg) => {
-  const callId = n.event.call.id;
-  const others = cf.recentCalls(Number.POSITIVE_INFINITY).filter((c) => c.callId !== callId);
-  const seen = new Set(others.flatMap((c) => c.hosts));
+  const seen = hostsSeenByOthers(n, cf);
   if (!n.hosts.some((h) => !seen.has(h))) return [];
   return secretEvidence(n, cf, since, cfg);
 };

