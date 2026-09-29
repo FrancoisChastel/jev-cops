@@ -28,12 +28,15 @@ export { GIT_SUBCOMMAND_KINDS } from "./git.ts";
 export { canonicalJson, sha256Hex } from "./hash.ts";
 export {
   canonicalTool,
+  isInertTool,
+  mcpServer,
   type NormalizeOptions,
   normalize,
   stateHash,
   TOOL_ALIASES,
   TOOL_RULES,
   type ToolRule,
+  toolRule,
   UNRENDERABLE_INPUT,
 } from "./normalize.ts";
 export { getParser } from "./parser.ts";

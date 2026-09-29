@@ -1,18 +1,27 @@
 import type { CallKind, Event } from "../schema/event.ts";
-import { normalizeCommand } from "./command.ts";
+import { maxKind } from "./classification.ts";
+import { eventKind, normalizeCommand } from "./command.ts";
 import { canonicalJson, safeStringify, sha256Hex } from "./hash.ts";
 import { urlHost } from "./net.ts";
-import { lookup } from "./options.ts";
 import { resolvePath } from "./paths.ts";
+import { canonicalTool, mcpServer, type ToolRule, toolRule } from "./tools.ts";
 import type {
   NetMethod,
   NormalizedCommand,
   NormalizedEvent,
   NormalizedScript,
-  PathAccess,
   PathRef,
 } from "./types.ts";
 
+export {
+  canonicalTool,
+  isInertTool,
+  mcpServer,
+  TOOL_ALIASES,
+  TOOL_RULES,
+  type ToolRule,
+  toolRule,
+} from "./tools.ts";
 export type * from "./types.ts";
 
 /** What `~`/`$HOME` expand to: daemon config, never the event (D-003). */
@@ -20,96 +29,34 @@ export interface NormalizeOptions {
   home: string;
 }
 
-/**
- * How one tool's input is read. `bash` parses `input.command`; `shell` takes
- * `input.command` from a shell the bash grammar cannot read (PowerShell) as one opaque
- * `interpreter` exec; `path` reads the first string among `fields` as a file path; `url`
- * reads `input[field]` as a URL; `spawn` reads nothing (prompt and description stay in
- * `raw`).
- */
-export type ToolRule =
-  | { reader: "bash" }
-  | { reader: "shell" }
-  | { reader: "path"; fields: ReadonlyArray<string>; kind: CallKind; access: PathAccess }
-  | { reader: "url"; field: string }
-  | { reader: "spawn" };
-
-const WRITE_RULE: ToolRule = {
-  reader: "path",
-  fields: ["file_path"],
-  kind: "fs.write",
-  access: "write",
-};
-const PI_READ_RULE: ToolRule = {
-  reader: "path",
-  fields: ["path"],
-  kind: "fs.read",
-  access: "read",
-};
-const PI_WRITE_RULE: ToolRule = { ...WRITE_RULE, fields: ["path"] };
-
-/**
- * The single tool → input-field mapping, so adapters stay policy-free. Tools not listed
- * are `other` (raw = JSON of the input), except an unknown non-`mcp:` tool whose
- * adapter kind is `exec` and whose input has a string `command`: that is parsed as bash.
- * Lower-case names are Pi's built-ins (input schemas verified at Pi v0.87.1).
- */
-export const TOOL_RULES: Readonly<Record<string, ToolRule>> = {
-  Bash: { reader: "bash" },
-  Edit: WRITE_RULE,
-  Write: WRITE_RULE,
-  MultiEdit: WRITE_RULE,
-  NotebookEdit: { ...WRITE_RULE, fields: ["file_path", "notebook_path"] },
-  Read: { reader: "path", fields: ["file_path"], kind: "fs.read", access: "read" },
-  WebFetch: { reader: "url", field: "url" },
-  Task: { reader: "spawn" },
-  bash: { reader: "bash" },
-  powershell: { reader: "shell" },
-  read: PI_READ_RULE,
-  write: PI_WRITE_RULE,
-  edit: PI_WRITE_RULE,
-  grep: PI_READ_RULE,
-  find: PI_READ_RULE,
-  ls: PI_READ_RULE,
-};
-
-/**
- * Harness-specific tool names → the name the context engine's tables use (scope's
- * expected tools, the Bash/Write content rules). Names not listed are their own.
- */
-export const TOOL_ALIASES: Readonly<Record<string, string>> = {
-  bash: "Bash",
-  powershell: "Bash",
-  read: "Read",
-  write: "Write",
-  edit: "Edit",
-  grep: "Grep",
-  find: "Glob",
-  ls: "Glob",
-};
-
-/** The canonical name of `tool` per {@link TOOL_ALIASES}; unknown names map to themselves. */
-export function canonicalTool(tool: string): string {
-  return lookup(TOOL_ALIASES, tool) ?? tool;
-}
-
 function stringField(input: Record<string, unknown>, field: string): string | undefined {
   const value = Object.hasOwn(input, field) ? input[field] : undefined;
   return typeof value === "string" ? value : undefined;
 }
 
+const MCP_PREFIX = /^mcp(?::|__)/;
+
 function ruleFor(event: Event): ToolRule | null {
   const { tool, kind, input } = event.call;
-  const known = lookup(TOOL_RULES, tool);
+  const known = toolRule(tool);
   if (known !== undefined) return known;
   const shellLike = kind === "exec" && stringField(input, "command") !== undefined;
-  return shellLike && !tool.startsWith("mcp:") ? { reader: "bash" } : null;
+  return shellLike && !MCP_PREFIX.test(tool) ? { reader: "bash" } : null;
 }
+
+const SHELL_READERS: ReadonlyArray<ToolRule["reader"]> = ["bash", "shell", "monitor"];
 
 function rawOf(event: Event, rule: ToolRule | null): string {
   const command = stringField(event.call.input, "command");
-  const shell = rule?.reader === "bash" || rule?.reader === "shell";
+  const shell = rule !== null && SHELL_READERS.includes(rule.reader);
   return shell && command !== undefined ? command : safeStringify(event.call.input);
+}
+
+/** True when the input was read as a bash command, so the commands already cover it. */
+function readAsBash(event: Event, rule: ToolRule | null): boolean {
+  const reader = rule?.reader;
+  const command = stringField(event.call.input, "command");
+  return reader === "bash" || (reader === "monitor" && command !== undefined);
 }
 
 interface ToolCommandParts {
@@ -118,6 +65,7 @@ interface ToolCommandParts {
   pathRefs?: PathRef[];
   hosts?: string[];
   method?: NetMethod;
+  verbs?: string[];
 }
 
 function toolScript(event: Event, raw: string, parts: ToolCommandParts): NormalizedScript {
@@ -132,7 +80,7 @@ function toolScript(event: Event, raw: string, parts: ToolCommandParts): Normali
     kind: parts.kind,
     targets: { paths: pathRefs.map((r) => r.path), hosts },
     pathRefs,
-    verbs: [event.call.tool.toLowerCase()],
+    verbs: parts.verbs ?? [event.call.tool.toLowerCase()],
     isInterpreter: false,
     viaInterpreter: false,
     ...(parts.method === undefined ? {} : { method: parts.method }),
@@ -167,8 +115,7 @@ function readPath(
   });
 }
 
-function readUrl(field: string, event: Event, raw: string): NormalizedScript {
-  const url = stringField(event.call.input, field);
+function readUrl(url: string | undefined, event: Event, raw: string): NormalizedScript {
   const host = url === undefined ? null : urlHost(url);
   return toolScript(event, raw, {
     kind: "net",
@@ -178,30 +125,86 @@ function readUrl(field: string, event: Event, raw: string): NormalizedScript {
   });
 }
 
+/**
+ * The command runs detached (`run_in_background`, a Monitor): every local command gets
+ * the `background` verb and is at least a `spawn`, as a shell `&` makes it.
+ */
+function inBackground(script: NormalizedScript): NormalizedScript {
+  const commands = script.commands.map(
+    (c): NormalizedCommand =>
+      c.remote === true
+        ? c
+        : {
+            ...c,
+            kind: maxKind(c.kind, "spawn"),
+            verbs: c.verbs.includes("background") ? c.verbs : [...c.verbs, "background"],
+          },
+  );
+  return { ...script, commands, kind: eventKind(commands, script.opaque) };
+}
+
+function backgrounded(event: Event, script: NormalizedScript): NormalizedScript {
+  return event.call.input.run_in_background === true ? inBackground(script) : script;
+}
+
+/** A Monitor's WebSocket source: `input.ws.url`. */
+function wsUrl(input: Readonly<Record<string, unknown>>): string | undefined {
+  const ws = Object.hasOwn(input, "ws") ? input.ws : undefined;
+  if (typeof ws !== "object" || ws === null || !Object.hasOwn(ws, "url")) return undefined;
+  const url: unknown = (ws as Record<string, unknown>).url;
+  return typeof url === "string" ? url : undefined;
+}
+
+async function readBash(event: Event, raw: string, opts: NormalizeOptions) {
+  const command = stringField(event.call.input, "command");
+  if (command === undefined) return unparsed(event, raw);
+  return normalizeCommand(command, { cwd: event.call.cwd, home: opts.home });
+}
+
+async function readMonitor(event: Event, raw: string, opts: NormalizeOptions) {
+  if (stringField(event.call.input, "command") !== undefined) {
+    return inBackground(await readBash(event, raw, opts));
+  }
+  const url = wsUrl(event.call.input);
+  return url === undefined ? unparsed(event, raw) : readUrl(url, event, raw);
+}
+
+/** An MCP tool: `other`, with the server recorded as the verb `mcp:<server>`. */
+function readOther(event: Event, raw: string): NormalizedScript {
+  const server = mcpServer(event.call.tool);
+  if (server === null) return emptyScript("other");
+  const argv = [canonicalTool(event.call.tool)];
+  return toolScript(event, raw, { kind: "other", argv, verbs: ["mcp", `mcp:${server}`] });
+}
+
 async function readTool(
   rule: ToolRule | null,
   event: Event,
   raw: string,
   opts: NormalizeOptions,
 ): Promise<NormalizedScript> {
+  const tool = event.call.tool;
   switch (rule?.reader) {
-    case "bash": {
-      const command = stringField(event.call.input, "command");
-      if (command === undefined) return unparsed(event, raw);
-      return normalizeCommand(command, { cwd: event.call.cwd, home: opts.home });
-    }
+    case "bash":
+      return backgrounded(event, await readBash(event, raw, opts));
     case "shell": {
       const script = toolScript(event, raw, { kind: "exec", argv: [raw] });
-      return { ...script, opaque: [{ reason: "interpreter", span: raw }] };
+      return backgrounded(event, { ...script, opaque: [{ reason: "interpreter", span: raw }] });
     }
+    case "monitor":
+      return readMonitor(event, raw, opts);
     case "path":
       return readPath(rule, event, raw, opts);
     case "url":
-      return readUrl(rule.field, event, raw);
+      return readUrl(stringField(event.call.input, rule.field), event, raw);
     case "spawn":
-      return toolScript(event, raw, { kind: "spawn", argv: [event.call.tool] });
+      return toolScript(event, raw, { kind: "spawn", argv: [tool] });
+    case "kind":
+      return toolScript(event, raw, { kind: rule.kind, argv: [tool] });
+    case "inert":
+      return toolScript(event, raw, { kind: "other", argv: [tool], verbs: ["inert"] });
     default:
-      return emptyScript("other");
+      return readOther(event, raw);
   }
 }
 
@@ -240,7 +243,7 @@ async function normalizeUnguarded(event: Event, opts: NormalizeOptions): Promise
   const rule = ruleFor(event);
   const raw = rawOf(event, rule);
   const script = await readTool(rule, event, raw, opts);
-  return { event, ...script, stateHash: stateHash(event, script, rule?.reader === "bash"), raw };
+  return { event, ...script, stateHash: stateHash(event, script, readAsBash(event, rule)), raw };
 }
 
 /** Placeholder raw text when the input itself cannot be rendered (e.g. nested too deeply). */

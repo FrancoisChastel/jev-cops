@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 import { urlHost } from "../normalizer/net.ts";
-import { canonicalTool } from "../normalizer/normalize.ts";
+import { canonicalTool, isInertTool } from "../normalizer/normalize.ts";
 import type { NormalizedEvent } from "../normalizer/types.ts";
 import { type ContextConfig, DEFAULT_CONTEXT_CONFIG } from "./config.ts";
 import type { CaseFile } from "./types.ts";
@@ -178,12 +178,19 @@ function softContributions(
   return out;
 }
 
+const INERT_SCOPE: Readonly<ScopeScore> = Object.freeze({
+  value: 1,
+  unsure: false,
+  why: Object.freeze(["inert tool"]) as string[],
+});
+
 /**
  * Deterministic scope (the semantic layer is the judge's): paths under the repo (or cwd
  * without one) and tmp dirs → 1, elsewhere → 0; hosts in the task allowlist → 1, not →
  * 0, no allowlist → 0.5; no targets on an exec → 0.7; opaque parts → 0.7; a tool outside
  * the task's expected set → 0.5. The value is the min; `unsure` when the min comes only
- * from soft rules, which is when the spec lets the judge be asked.
+ * from soft rules, which is when the spec lets the judge be asked. An inert tool (task
+ * list, plan mode, …) has no side effect and is on task: 1.
  */
 export function scopeScore(
   n: NormalizedEvent,
@@ -191,6 +198,7 @@ export function scopeScore(
   cfg: ContextConfig = DEFAULT_CONTEXT_CONFIG,
   hints?: RepoHints,
 ): ScopeScore {
+  if (isInertTool(n.event.call.tool)) return { ...INERT_SCOPE, why: [...INERT_SCOPE.why] };
   const list = taskAllowlist(cf.task, hints, cfg);
   const targets = [...pathContributions(n, cfg), ...hostContributions(n, list, cfg)];
   const none: Contribution[] =

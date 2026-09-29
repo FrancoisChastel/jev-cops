@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type CommandFixture,
   FIXTURE_CWD,
   FIXTURE_HOME,
+  fixtureTitle,
   loadCommandFixtures,
 } from "../../../../tests/fixtures/commands/index.ts";
+import { loadEventFixture } from "../../../../tests/fixtures/events/index.ts";
+import { parseEvent } from "../schema/event.ts";
 import { normalizeCommand } from "./command.ts";
+import { normalize } from "./normalize.ts";
+import type { NormalizedScript } from "./types.ts";
 
 const FIXTURES = loadCommandFixtures();
 
@@ -12,17 +18,28 @@ function sorted(values: ReadonlyArray<string>): string[] {
   return [...values].sort();
 }
 
+/** A bash row through `normalizeCommand`; a tool row as a whole pre event through `normalize`. */
+async function normalizeRow(row: CommandFixture): Promise<NormalizedScript> {
+  const cwd = row.cwd ?? FIXTURE_CWD;
+  if (row.tool === undefined) {
+    return normalizeCommand(row.command ?? "", { cwd, home: FIXTURE_HOME });
+  }
+  const base = loadEventFixture("pre-bash") as Record<string, unknown>;
+  const input = row.input ?? { command: row.command };
+  const call = { ...(base.call as object), tool: row.tool, kind: row.kind ?? "other", input, cwd };
+  const parsed = parseEvent({ ...base, call });
+  if (!parsed.ok) throw new Error(parsed.error.message);
+  return normalize(parsed.value, { home: FIXTURE_HOME });
+}
+
 describe("tests/fixtures/commands/commands.json", () => {
   test("has at least 40 rows", () => {
     expect(FIXTURES.length).toBeGreaterThanOrEqual(40);
   });
 
-  test.each(FIXTURES.map((row) => [row.command, row] as const))("%s", async (_name, row) => {
+  test.each(FIXTURES.map((row) => [fixtureTitle(row), row] as const))("%s", async (_name, row) => {
     // Act
-    const n = await normalizeCommand(row.command, {
-      cwd: row.cwd ?? FIXTURE_CWD,
-      home: FIXTURE_HOME,
-    });
+    const n = await normalizeRow(row);
 
     // Assert
     const { kind, verbs, hosts, paths, opaque } = row.expect;
