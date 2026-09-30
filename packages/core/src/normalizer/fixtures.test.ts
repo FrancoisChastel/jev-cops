@@ -46,7 +46,8 @@ async function normalizeRow(row: CommandFixture): Promise<NormalizedScript> {
   const base = loadEventFixture("pre-bash") as Record<string, unknown>;
   const input = row.input ?? { command: row.command };
   const call = { ...(base.call as object), tool: row.tool, kind: row.kind ?? "other", input, cwd };
-  const parsed = parseEvent({ ...base, call });
+  const harness = row.harness ?? base.harness;
+  const parsed = parseEvent({ ...base, harness, call });
   if (!parsed.ok) throw new Error(parsed.error.message);
   return normalize(parsed.value, { home: FIXTURE_HOME });
 }

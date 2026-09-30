@@ -1,5 +1,6 @@
 import { type Classification, plain } from "./classification.ts";
 import { lookup, parseArgs } from "./options.ts";
+import type { NormalizedCommand } from "./types.ts";
 
 /**
  * Coding-agent harness CLIs run from a shell. Every invocation starts or drives another
@@ -24,12 +25,22 @@ interface HarnessCli {
   config: Readonly<Record<string, ConfigActions>>;
   /** Flags that load, replace or drop hooks, settings or extensions for the session. */
   flags: readonly string[];
+  /** Environment variables that relocate or drop them (with {@link RELOCATING_ENV}). */
+  env: readonly string[];
 }
+
+/** Variables that move every harness's config directory (`~`, `$XDG_CONFIG_HOME`). */
+const RELOCATING_ENV = ["HOME", "XDG_CONFIG_HOME"];
 
 /**
  * Per CLI. Claude Code from its CLI reference (v2.1.285; `config` kept for older
- * versions); Codex, OpenCode and Pi from their current CLIs. Over-inclusive on purpose:
- * a subcommand that does not exist costs nothing, a missed one hides a config change.
+ * versions); Pi from its current CLI; Codex from `codex --help`/`codex exec --help`
+ * 0.153.4 and `hooks.md` (`--dangerously-bypass-hook-trust`, `--ignore-user-config`,
+ * `--ignore-rules`, `--enable`/`--disable <FEATURE>`, `-c key=value`, `--profile`,
+ * `$CODEX_HOME`); OpenCode from `opencode --help` 1.18.33 and `flag.ts` (`--pure`,
+ * `OPENCODE_PURE`, `OPENCODE_DISABLE_PROJECT_CONFIG`, `OPENCODE_CONFIG*`). Over-inclusive
+ * on purpose: a subcommand that does not exist costs nothing, a missed one hides a
+ * config change.
  */
 const HARNESS: Readonly<Record<string, HarnessCli>> = {
   claude: {
@@ -47,25 +58,47 @@ const HARNESS: Readonly<Record<string, HarnessCli>> = {
       "--mcp-config",
       "--dangerously-load-development-channels",
     ]),
+    env: ["CLAUDE_CONFIG_DIR"],
   },
   codex: {
-    config: { mcp: "any", features: ["enable", "disable"], login: "self", logout: "self" },
-    flags: [],
+    config: {
+      mcp: "any",
+      plugin: "any",
+      features: ["enable", "disable"],
+      ...{ login: "self", logout: "self", update: "self" },
+    },
+    flags: ["--dangerously-bypass-hook-trust", "--ignore-rules", "--ignore-user-config"].concat([
+      "--disable",
+      "--enable",
+      "-c",
+      "--config",
+      "-p",
+      "--profile",
+      "--remote",
+    ]),
+    env: ["CODEX_HOME"],
   },
   opencode: {
     config: {
       mcp: "any",
       plugin: "any",
+      plug: "any",
       auth: ["login", "logout"],
+      providers: ["login", "logout"],
       agent: ["create"],
       github: ["install"],
       ...{ upgrade: "self", uninstall: "self", import: "self" },
     },
-    flags: [],
+    flags: ["--pure"],
+    env: ["OPENCODE_PURE", "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_CONFIG"].concat([
+      "OPENCODE_CONFIG_DIR",
+      "OPENCODE_CONFIG_CONTENT",
+    ]),
   },
   pi: {
     config: { install: "self", remove: "self", uninstall: "self", update: "self", config: "self" },
     flags: ["--no-extensions", "-ne", "-e", "--extension"],
+    env: ["PI_CODING_AGENT_DIR"],
   },
 };
 
@@ -103,4 +136,20 @@ export function classifyHarness(name: string, args: ReadonlyArray<string>): Clas
   const config = byAction || hasFlag(args, cli.flags);
   const verbs = [name, ...(sub === undefined ? [] : [sub])];
   return plain("spawn", config ? [...verbs, HARNESS_CONFIG_VERB] : verbs);
+}
+
+/**
+ * `command` with the {@link HARNESS_CONFIG_VERB} verb added when it runs a harness CLI with
+ * a variable in its environment that relocates or drops that harness's hooks, settings or
+ * plugins (`CODEX_HOME=/tmp/x codex exec …`, `env OPENCODE_PURE=1 opencode run …`,
+ * `HOME=/tmp/h claude -p …`): the nested agent would run unjudged (D-114 pattern). Works
+ * on a normalized command because a prefix assignment never reaches the classifier.
+ */
+export function withHarnessEnv(command: NormalizedCommand): NormalizedCommand {
+  if (command.verbs.includes(HARNESS_CONFIG_VERB)) return command;
+  const cli = command.verbs.map((v) => lookup(HARNESS, v)).find((h) => h !== undefined);
+  if (cli === undefined) return command;
+  const names = [...RELOCATING_ENV, ...cli.env];
+  const relocated = Object.keys(command.env).some((name) => names.includes(name));
+  return relocated ? { ...command, verbs: [...command.verbs, HARNESS_CONFIG_VERB] } : command;
 }

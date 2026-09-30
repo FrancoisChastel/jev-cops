@@ -24,22 +24,25 @@ export interface CommandExpectation {
 /**
  * One row of `commands.json`. Add a row to pin a behaviour; no code needed. A row with
  * only `command` is a bash command (`normalizeCommand`); a row with `tool` is a whole
- * tool call (`normalize`) with `input` (default `{ command }`) and the adapter's `kind`
- * (default `other`).
+ * tool call (`normalize`) with `input` (default `{ command }`), the adapter's `kind`
+ * (default `other`) and the event's `harness` (default `claude-code`), which decides how
+ * the tool name is read (`bash`/`read`/`write`/`edit` differ between Pi and OpenCode).
  */
 export interface CommandFixture {
   command?: string;
   tool?: string;
   input?: Record<string, unknown>;
   kind?: string;
+  harness?: string;
   cwd?: string;
   expect: CommandExpectation;
 }
 
-/** The row's test title: the command, or the tool and its input. */
+/** The row's test title: the command, or the harness, the tool and its input. */
 export function fixtureTitle(row: CommandFixture): string {
   if (row.tool === undefined) return row.command ?? "";
-  return `${row.tool} ${JSON.stringify(row.input ?? { command: row.command })}`;
+  const input = JSON.stringify(row.input ?? { command: row.command });
+  return `${row.harness === undefined ? "" : `${row.harness}: `}${row.tool} ${input}`;
 }
 
 /** Loads the command table as raw JSON; each call returns fresh objects. */

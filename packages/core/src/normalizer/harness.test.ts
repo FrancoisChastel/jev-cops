@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { loadEventFixture } from "../../../../tests/fixtures/events/index.ts";
+import { parseEvent } from "../schema/event.ts";
 import { classifyArgv } from "./classify.ts";
 import { normalizeCommand } from "./command.ts";
 import { HARNESS_CLIS, HARNESS_CONFIG_VERB } from "./harness.ts";
+import { normalize } from "./normalize.ts";
 
 const OPTS = { cwd: "/work/repo", home: "/home/dev" };
 
@@ -71,8 +74,68 @@ describe("harness CLIs that change configuration carry the harness-config verb",
     "pi --no-extensions -p hi",
     "pi -ne",
     "pi -e ./evil.ts",
+    "codex plugin install x",
+    "codex update",
+    "codex --dangerously-bypass-hook-trust exec hi",
+    "codex exec --ignore-rules hi",
+    "codex exec --ignore-user-config hi",
+    "codex --disable hooks",
+    "codex --enable x exec hi",
+    "codex -c features.hooks=false exec hi",
+    "codex --config=features.hooks=false",
+    "codex -p ci exec hi",
+    "codex --profile ci",
+    "codex --remote ws://h:1 hi",
+    "opencode --pure run hi",
+    "opencode run --pure hi",
+    "opencode providers login",
+    "opencode plug evil-plugin",
   ])("%s", async (command) => {
     expect(await verbsOf(command)).toContain(HARNESS_CONFIG_VERB);
+  });
+});
+
+describe("config-relocating environment on a harness CLI adds harness-config (D-114 pattern)", () => {
+  async function eventVerbs(command: string): Promise<string[]> {
+    const base = loadEventFixture("pre-bash") as Record<string, unknown>;
+    const call = { ...(base.call as object), tool: "Bash", kind: "exec", input: { command } };
+    const parsed = parseEvent({ ...base, call });
+    if (!parsed.ok) throw new Error(parsed.error.message);
+    const n = await normalize(parsed.value, { home: OPTS.home });
+    return n.commands.flatMap((c) => c.verbs);
+  }
+
+  test.each([
+    "CODEX_HOME=/tmp/c codex exec hi",
+    "env CODEX_HOME=/tmp/c codex exec hi",
+    "OPENCODE_PURE=1 opencode run hi",
+    "OPENCODE_DISABLE_PROJECT_CONFIG=1 opencode run hi",
+    "OPENCODE_CONFIG=/tmp/o.json opencode run hi",
+    "OPENCODE_CONFIG_DIR=/tmp/o opencode",
+    `OPENCODE_CONFIG_CONTENT='{"plugin":[]}' opencode run hi`,
+    "CLAUDE_CONFIG_DIR=/tmp/c claude -p hi",
+    "PI_CODING_AGENT_DIR=/tmp/p pi -p hi",
+    "XDG_CONFIG_HOME=/tmp/x opencode run hi",
+    "HOME=/tmp/h claude -p hi",
+    "timeout 60 env CODEX_HOME=/tmp/c codex exec hi",
+    "bash -c 'CODEX_HOME=/tmp/c codex exec hi'",
+  ])("%s", async (command) => {
+    expect(await eventVerbs(command)).toContain(HARNESS_CONFIG_VERB);
+  });
+
+  test.each([
+    "CODEX_HOME=/tmp/c claude -p hi",
+    "PI_CODING_AGENT_DIR=/tmp/p codex exec hi",
+    "RUST_LOG=debug codex exec hi",
+    "CODEX_HOME=/tmp/c ls",
+    "OPENCODE_PURE=1 git status",
+  ])("%s does not", async (command) => {
+    expect(await eventVerbs(command)).not.toContain(HARNESS_CONFIG_VERB);
+  });
+
+  test("the verb is added once, even when a flag already set it", async () => {
+    const verbs = await eventVerbs("CODEX_HOME=/tmp/c codex --disable hooks");
+    expect(verbs.filter((v) => v === HARNESS_CONFIG_VERB)).toHaveLength(1);
   });
 });
 

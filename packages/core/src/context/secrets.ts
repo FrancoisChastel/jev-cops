@@ -90,13 +90,31 @@ function compiled(glob: string, home: string): RegExp {
 }
 
 /**
- * True when absolute `path` matches a secret glob (default: the spec's list). Matching
- * is case-insensitive, since macOS and Windows filesystems are, and errs towards "secret".
+ * The coding-agent harnesses' own credential files (PLAN-M3 §5), secret whatever the
+ * configured globs: Codex `$CODEX_HOME/auth.json` ("Treat `~/.codex/auth.json` like a
+ * password", Codex auth docs), OpenCode `~/.local/share/opencode/auth.json` (providers
+ * docs), Claude Code `~/.claude/.credentials.json` (Linux; macOS uses the keychain), Pi
+ * `~/.pi/agent/auth.json` (Pi changelog). A relocated `CODEX_HOME`/`XDG_DATA_HOME` is not
+ * followed.
+ */
+export const HARNESS_CREDENTIAL_GLOBS: ReadonlyArray<string> = Object.freeze([
+  "~/.codex/auth.json",
+  "~/.local/share/opencode/auth.json",
+  "~/.claude/.credentials.json",
+  "~/.pi/agent/auth.json",
+]);
+
+/**
+ * True when absolute `path` matches a secret glob (default: the spec's list) or is a
+ * harness credential file ({@link HARNESS_CREDENTIAL_GLOBS}, always on: a config that
+ * replaces the globs cannot drop them). Matching is case-insensitive, since macOS and
+ * Windows filesystems are, and errs towards "secret".
  */
 export function isSecretPath(
   path: string,
   home: string,
   globs: ReadonlyArray<string> = DEFAULT_CONTEXT_CONFIG.secrets.pathGlobs,
 ): boolean {
-  return globs.some((glob) => compiled(glob, home).test(path));
+  const all = [...globs, ...HARNESS_CREDENTIAL_GLOBS];
+  return all.some((glob) => compiled(glob, home).test(path));
 }

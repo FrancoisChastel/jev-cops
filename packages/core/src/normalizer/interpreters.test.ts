@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   type Classification,
   classifyArgv,
+  INTERACTIVE_SHELL_VERB,
   INTERPRETER_INLINE_FLAGS,
   SHELLS,
   WRAPPERS,
@@ -211,5 +212,69 @@ describe("classifyArgv: shell-outs hidden in other tools (review findings)", () 
       ["/home/dev/.ssh/id_rsa", "write"],
       ["f", "read"],
     ]);
+  });
+});
+
+describe("classifyArgv: interactive shells and REPLs (PLAN-M3 §5, the write_stdin gap)", () => {
+  test.each([
+    [["bash"]],
+    [["sh", "-l"]],
+    [["zsh", "-i"]],
+    [["bash", "--login"]],
+    [["bash", "-s"]],
+    [["bash", "-o", "vi"]],
+    [["/bin/dash", "-"]],
+    [["python"]],
+    [["python3", "-"]],
+    [["python3.12", "-q"]],
+    [["python", "-i", "setup.py"]],
+    [["node"]],
+    [["node", "--interactive"]],
+    [["nodejs"]],
+    [["perl"]],
+    [["ruby"]],
+    [["php", "-a"]],
+    [["irb"]],
+    [["pry"]],
+    [["ipython"]],
+    [["lua"]],
+    [["ghci"]],
+    [["julia", "--quiet"]],
+    [["su"]],
+    [["su", "-", "root"]],
+    [["ssh", "prod.example"]],
+    [["ssh", "-p", "2222", "user@prod.example"]],
+    [["exec", "bash"]],
+    [["env", "TERM=xterm", "python3"]],
+  ])("%p accepts later input jev-cops cannot see", (argv) => {
+    expect(classifyArgv(argv).verbs).toContain(INTERACTIVE_SHELL_VERB);
+  });
+
+  test.each([
+    [["bash", "-c", "ls"]],
+    [["bash", "-lc", "ls"]],
+    [["bash", "./install.sh"]],
+    [["python", "x.py"]],
+    [["python", "-c", "print(1)"]],
+    [["python", "-m", "http.server"]],
+    [["node", "-e", "1"]],
+    [["node", "server.js"]],
+    [["irb", "script.rb"]],
+    [["lua", "-e", "print(1)"]],
+    [["su", "-c", "id", "root"]],
+    [["ssh", "prod.example", "uptime"]],
+    [["ssh", "-N", "-L", "8080:localhost:80", "prod.example"]],
+    [["ssh", "-V"]],
+    [["ls"]],
+  ])("%p does not", (argv) => {
+    expect(classifyArgv(argv).verbs).not.toContain(INTERACTIVE_SHELL_VERB);
+  });
+
+  test("the verb changes nothing else: a bare shell is still a stdin interpreter", () => {
+    const c = classifyArgv(["bash"]);
+    expect(c).toMatchObject({ kind: "exec", verbs: ["bash", INTERACTIVE_SHELL_VERB] });
+    expect(c.interpreter).toEqual({ shell: true, code: null, stdin: true, eval: false });
+    expect(classifyArgv(["irb"])).toMatchObject({ kind: "exec", interpreter: null });
+    expect(classifyArgv(["ssh", "h.example"]).kind).toBe("net");
   });
 });

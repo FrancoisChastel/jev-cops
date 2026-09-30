@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { loadEventFixture } from "../../../../tests/fixtures/events/index.ts";
-import { type Event, parseEvent } from "../schema/event.ts";
+import { type Event, HARNESSES, parseEvent } from "../schema/event.ts";
 import { normalize } from "./normalize.ts";
-import { canonicalTool, isInertTool, mcpServer, TOOL_RULES } from "./tools.ts";
+import {
+  canonicalTool,
+  HARNESS_TOOL_ALIASES,
+  HARNESS_TOOL_RULES,
+  isInertTool,
+  mcpServer,
+  TOOL_ALIASES,
+  TOOL_RULES,
+  toolRule,
+} from "./tools.ts";
 
 const HOME = "/home/dev";
 const OPTS = { home: HOME };
@@ -28,7 +37,7 @@ const INERT = [
 describe("tool table: Claude Code names (tools-reference, v2.1.285)", () => {
   test("canonicalTool maps Claude Code names onto the context engine's names", () => {
     const names = ["Agent", "Task", "MultiEdit", "NotebookEdit", "PowerShell", "Monitor", "Glob"];
-    expect(names.map(canonicalTool)).toEqual([
+    expect(names.map((t) => canonicalTool(t))).toEqual([
       "Task",
       "Task",
       "Edit",
@@ -49,7 +58,7 @@ describe("tool table: Claude Code names (tools-reference, v2.1.285)", () => {
   test("mcpServer reads the server from either spelling; null for other tools", () => {
     expect(mcpServer("mcp__github__create_issue")).toBe("github");
     expect(mcpServer("mcp:github:create_issue")).toBe("github");
-    expect(["Bash", "mcp__broken", "mcp:", "mcp::t"].map(mcpServer)).toEqual([
+    expect(["Bash", "mcp__broken", "mcp:", "mcp::t"].map((t) => mcpServer(t))).toEqual([
       null,
       null,
       null,
@@ -59,13 +68,13 @@ describe("tool table: Claude Code names (tools-reference, v2.1.285)", () => {
 
   test("every bookkeeping tool of the plan is inert, and nothing else is", () => {
     expect(INERT.filter((t) => !isInertTool(t))).toEqual([]);
-    expect(["Bash", "Write", "Agent", "todowrite", "mcp__x__y", "Unknown"].some(isInertTool)).toBe(
-      false,
-    );
+    expect(INERT.filter((t) => !isInertTool(t, "claude-code"))).toEqual([]);
+    const other = ["Bash", "Write", "Agent", "todowrite", "mcp__x__y", "Unknown"];
+    expect(other.some((t) => isInertTool(t))).toBe(false);
   });
 
   test("worktree tools change the disk, so they are not inert and fail closed (D-081)", () => {
-    expect(["EnterWorktree", "ExitWorktree"].some(isInertTool)).toBe(false);
+    expect(["EnterWorktree", "ExitWorktree"].some((t) => isInertTool(t))).toBe(false);
   });
 
   test("the table lists every Claude Code tool with a side effect or a read", () => {
@@ -211,5 +220,103 @@ describe("normalize: run_in_background", () => {
     );
     expect(n.kind).toBe("exec");
     expect(n.commands[0]?.verbs).toContain("background");
+  });
+});
+
+describe("tool table by harness: (harness, tool) → rule", () => {
+  test("the Pi/OpenCode collision: the same lower-case names read different fields", () => {
+    for (const tool of ["read", "write", "edit"]) {
+      expect(toolRule(tool, "pi")).toMatchObject({ reader: "path", fields: ["path"] });
+      expect(toolRule(tool, "opencode")).toMatchObject({ reader: "path", fields: ["filePath"] });
+    }
+    expect(toolRule("grep", "pi")).toEqual(toolRule("grep", "opencode"));
+    expect(toolRule("bash", "pi")).toEqual({ reader: "bash" });
+    expect(toolRule("bash", "opencode")).toEqual({ reader: "bash", workdir: "workdir" });
+  });
+
+  test("Codex and OpenCode names are read only on their own harness, and never M1 names", () => {
+    const foreign = [
+      ["apply_patch", "claude-code"],
+      ["apply_patch", "pi"],
+      ["glob", "pi"],
+      ["todowrite", "claude-code"],
+      ["update_plan", "pi"],
+      ["view_image", "opencode"],
+      ["Read", "codex"],
+      ["Write", "codex"],
+      ["read", "codex"],
+      ["TodoWrite", "codex"],
+      ["Write", "opencode"],
+      ["find", "opencode"],
+      ["ls", "opencode"],
+      ["powershell", "opencode"],
+      ["Agent", "opencode"],
+    ] as const;
+    expect(foreign.filter(([tool, harness]) => toolRule(tool, harness) !== undefined)).toEqual([]);
+  });
+
+  test("Claude Code and Pi keep the M1 table, unchanged: their names never collide", () => {
+    expect(HARNESS_TOOL_RULES["claude-code"]).toBe(TOOL_RULES);
+    expect(HARNESS_TOOL_RULES.pi).toBe(TOOL_RULES);
+    const lower = Object.keys(TOOL_RULES).filter((t) => /^[a-z]/.test(t));
+    expect(lower.sort()).toEqual(
+      ["bash", "edit", "find", "grep", "ls", "powershell", "read"].concat("write"),
+    );
+  });
+
+  test("without a harness the lookup is the M1 table", () => {
+    expect(toolRule("read")).toEqual(toolRule("read", "pi"));
+    expect(toolRule("Read")).toEqual(toolRule("Read", "claude-code"));
+    const later = ["apply_patch", "todowrite", "glob", "webfetch"].map((t) => toolRule(t));
+    expect(later).toEqual([undefined, undefined, undefined, undefined]);
+  });
+
+  test("canonicalTool maps each harness's names onto the context engine's", () => {
+    const opencode = ["bash", "read", "write", "edit", "glob", "grep", "task", "apply_patch"];
+    expect(opencode.map((t) => canonicalTool(t, "opencode"))).toEqual([
+      ...["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "Edit"],
+    ]);
+    const more = ["webfetch", "websearch", "execute", "lsp", "github_create_issue"];
+    expect(more.map((t) => canonicalTool(t, "opencode"))).toEqual([
+      ...["WebFetch", "WebSearch", "Bash", "lsp", "github_create_issue"],
+    ]);
+    const codex = ["Bash", "apply_patch", "spawn_agent", "view_image", "mcp__fs__read_file"];
+    expect(codex.map((t) => canonicalTool(t, "codex"))).toEqual([
+      ...["Bash", "Edit", "Task", "Read", "mcp:fs:read_file"],
+    ]);
+    expect(["bash", "find", "ls", "glob"].map((t) => canonicalTool(t, "pi"))).toEqual([
+      ...["Bash", "Glob", "Glob", "glob"],
+    ]);
+    expect(["Agent", "bash", "apply_patch"].map((t) => canonicalTool(t, "claude-code"))).toEqual([
+      ...["Task", "Bash", "apply_patch"],
+    ]);
+  });
+
+  test("Claude Code, Pi and a caller with no harness use the M1 aliases", () => {
+    expect(HARNESS_TOOL_ALIASES["claude-code"]).toBe(TOOL_ALIASES);
+    expect(HARNESS_TOOL_ALIASES.pi).toBe(TOOL_ALIASES);
+    expect(["apply_patch", "glob", "task"].map((t) => canonicalTool(t))).toEqual([
+      ...["apply_patch", "glob", "task"],
+    ]);
+  });
+
+  test("inert tools are inert only on their own harness", () => {
+    expect(isInertTool("todowrite", "opencode")).toBe(true);
+    expect(isInertTool("update_plan", "codex")).toBe(true);
+    expect(isInertTool("TodoWrite", "claude-code")).toBe(true);
+    expect(isInertTool("todowrite", "pi")).toBe(false);
+    expect(isInertTool("TodoWrite", "codex")).toBe(false);
+    expect(isInertTool("update_plan", "opencode")).toBe(false);
+    expect(isInertTool("update_plan")).toBe(false);
+  });
+
+  test("nothing that writes disk, spawns or runs code is inert on any harness (D-081)", () => {
+    const risky = ["bash", "Bash", "apply_patch", "write", "edit", "execute", "task"].concat([
+      ...["spawn_agent", "skill", "request_plugin_install", "request_permissions"],
+      ...["write_stdin", "EnterWorktree", "invalid", "read_mcp_resource"],
+    ]);
+    for (const harness of HARNESSES) {
+      expect(risky.filter((t) => isInertTool(t, harness))).toEqual([]);
+    }
   });
 });
