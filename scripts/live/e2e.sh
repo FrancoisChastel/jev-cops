@@ -155,6 +155,8 @@ collect() {
   live_redact "$LIVE_REPO/docs/captures/live/e2e-report.md"
 }
 
+# From here on a failing command is evidence, not a reason to stop: steps record it.
+set +e
 meta "date" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 meta "docker" "$(docker version --format '{{.Server.Version}} {{.Server.Os}}/{{.Server.Arch}}')"
 phase_setup

@@ -44,10 +44,14 @@ live_cp_out() { # service container-path host-path
   docker cp "$LIVE_PROJECT-$1-1:$2" "$3" > /dev/null
 }
 
-# Copies a host file into a container (owned by dev).
+# Copies a host file into a container, as a file `dev` owns (the containers drop every
+# capability, so root there cannot chown: the copy lands in /tmp, then dev copies it).
 live_cp_in() { # host-path service container-path
-  docker cp "$1" "$LIVE_PROJECT-$2-1:$3" > /dev/null
-  docker exec -u root "$LIVE_PROJECT-$2-1" chown -R dev:dev "$3"
+  local tmp
+  tmp=/tmp/cp-in-$(basename "$3")
+  docker cp "$1" "$LIVE_PROJECT-$2-1:$tmp" > /dev/null
+  docker exec -u root "$LIVE_PROJECT-$2-1" chmod a+r "$tmp"
+  docker exec -u dev "$LIVE_PROJECT-$2-1" cp "$tmp" "$3"
 }
 
 # Rewrites what could identify the host out of an artifact tree: the host's home and the

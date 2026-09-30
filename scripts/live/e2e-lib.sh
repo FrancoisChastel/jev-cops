@@ -25,13 +25,16 @@ begin() { # id title
 note() { printf '%s\n' "$*" >> "$EVID"; }
 
 # Runs a command, records it with its output; returns its exit code.
-run() {
+record() {
   printf '$ %s\n' "$*" >> "$EVID"
   local rc=0
   "$@" >> "$EVID" 2>&1 || rc=$?
   printf '(exit %s)\n' "$rc" >> "$EVID"
   return "$rc"
 }
+
+# Records a command whose outcome is not an expectation (never fails the suite).
+run() { record "$@" || true; }
 
 pass() { printf 'PASS %s\n' "$*" >> "$EVID"; printf '   PASS %s\n' "$*"; }
 fail() { printf 'FAIL %s\n' "$*" >> "$EVID"; printf '   FAIL %s\n' "$*"; STEP_FAILED=1; }
@@ -40,13 +43,13 @@ skip() { printf 'SKIP %s\n' "$*" >> "$EVID"; printf '   SKIP %s\n' "$*"; }
 expect() { # what cmd...
   local what=$1
   shift
-  if run "$@"; then pass "$what"; else fail "$what"; fi
+  if record "$@"; then pass "$what"; else fail "$what"; fi
 }
 
 expect_not() { # what cmd...
   local what=$1
   shift
-  if run "$@"; then fail "$what"; else pass "$what"; fi
+  if record "$@"; then fail "$what"; else pass "$what"; fi
 }
 
 end() {

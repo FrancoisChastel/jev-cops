@@ -162,40 +162,77 @@ phase_claude_block() {
   end
 }
 
+# The audit lines written since line N (a step's own), into a file.
+audit_since() { # line-count out-file
+  pull_audit claude-code
+  tail -n +"$(($1 + 1))" "$AUDIT" > "$2"
+}
+
+audit_count() {
+  pull_audit claude-code
+  wc -l < "$AUDIT" | tr -d ' '
+}
+
 phase_claude_configchange() {
-  begin 3.11 "ConfigChange: an external edit drops the PreToolUse hook → blocked, session latched"
+  local n
+  begin 3.11a "ConfigChange: an unrelated edit (theme) while a session runs is accepted"
+  n=$(audit_count)
+  tmux_cc start cfg-a --permission-mode manual
+  tmux_cc send cfg-a "SCENARIO:ls list the files here"
+  expect "the session runs ls first" cc "$BIN/tmux-claude.sh" wait cfg-a "Listed the files" 60
+  run cc "$BIN/edit-settings.sh" theme light
+  sleep 4
+  tmux_cc send cfg-a "SCENARIO:ls again please"
+  sleep 5
+  run cc "$BIN/tmux-claude.sh" capture cfg-a /home/dev/live/out/configchange-unrelated.txt
+  run ccsh 'tail -12 ~/live/out/configchange-unrelated.txt'
+  tmux_cc stop cfg-a
+  run cc "$BIN/edit-settings.sh" restore /home/dev/live/settings.post-install.json
+  audit_since "$n" "$A/audit-3.11a.jsonl"
+  run ccsh 'tail -3 ~/.jev-cops/claude-code-hook.log'
+  expect "audit: the theme change is reported intact:true" \
+    line_with "$A/audit-3.11a.jsonl" '"report":"config-change"' '"intact":true'
+  expect_not "an unrelated edit does not latch the session" \
+    line_with "$A/audit-3.11a.jsonl" '"kind":"anomaly"'
+  end
+
+  begin 3.11b "ConfigChange: an external edit drops the PreToolUse hook → blocked, latched; restore"
+  n=$(audit_count)
   tmux_cc start cfg --permission-mode manual
   tmux_cc send cfg "SCENARIO:ls list the files here"
   expect "the session runs ls first" cc "$BIN/tmux-claude.sh" wait cfg "Listed the files" 60
-  run ccsh 'bun -e "const p = process.env.HOME + \"/.claude/settings.json\"; const d = JSON.parse(await Bun.file(p).text()); delete d.hooks.PreToolUse; await Bun.write(p, JSON.stringify(d, null, 2));" && echo "PreToolUse removed by an external editor"'
+  run cc "$BIN/edit-settings.sh" drop PreToolUse
   sleep 4
   tmux_cc send cfg "SCENARIO:ls again please"
   expect "the next prompt is blocked" cc "$BIN/tmux-claude.sh" wait cfg "session terminated by jev-cops" 30
   run cc "$BIN/tmux-claude.sh" capture cfg /home/dev/live/out/configchange.txt
   run ccsh 'tail -20 ~/live/out/configchange.txt'
-  run ccsh 'cp ~/live/settings.post-install.json ~/.claude/settings.json && echo restored'
-  sleep 3
+  run cc "$BIN/edit-settings.sh" restore /home/dev/live/settings.post-install.json
+  sleep 4
   tmux_cc stop cfg
-  pull claude-code
+  audit_since "$n" "$A/audit-3.11b.jsonl"
+  run ccsh 'tail -3 ~/.jev-cops/claude-code-hook.log'
   expect "audit: an anomaly (hook block removed or altered), latched" \
-    line_with "$AUDIT" '"kind":"anomaly"' 'hook block removed or altered' '"latched":true'
+    line_with "$A/audit-3.11b.jsonl" '"kind":"anomaly"' 'hook block removed or altered' '"latched":true'
   expect "audit: config-change report intact:false, killed:true" \
-    line_with "$AUDIT" '"report":"config-change"' '"intact":false' '"killed":true'
+    line_with "$A/audit-3.11b.jsonl" '"report":"config-change"' '"intact":false' '"killed":true'
   expect "audit: the restore is reported intact:true" \
-    line_with "$AUDIT" '"report":"config-change"' '"intact":true'
+    line_with "$A/audit-3.11b.jsonl" '"report":"config-change"' '"intact":true'
   end
 }
 
 phase_claude_budget() {
   local sid
-  begin 3.12 "cops budget on the agent socket; --reset only on the admin socket"
+  begin 3.12 "cops budget on the agent socket; --reset only through the admin socket"
   sid=$(check judge "$AUDIT" Bash '"command":"ls"' allow | head -1 | awk '{print $3}')
   sid=$(grep -F "\"event_id\":\"$sid\"" "$AUDIT" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4)
   note "session: $sid"
   expect "cops budget <session> reads the budget (agent socket)" cc cops budget "$sid"
-  expect_not "--reset without the admin socket is refused" cc cops budget "$sid" --reset
+  expect_not "the agent socket refuses a reset (human-only route, H1)" \
+    ccsh "cops budget '$sid' --reset --admin-socket ~/.jev-cops/copsd.sock"
   expect "--reset through the admin socket" \
     ccsh "cops budget '$sid' --reset --admin-socket ~/.jev-cops/copsd-admin.sock"
+  expect "--reset with no socket named uses the default admin socket" cc cops budget "$sid" --reset
   end
 }
 

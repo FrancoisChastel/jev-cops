@@ -29,9 +29,13 @@ phase_audit() {
     /home/dev/live/rewrite/audit.jsonl
   end
 
-  begin 5.2 "cops replay over the whole session log: zero deltas"
-  expect "replay exits 0 and reports 0 deltas" \
-    ccsh 'cops replay ~/.jev-cops/audit.jsonl > ~/live/replay.out 2>&1; rc=$?; tail -5 ~/live/replay.out; [ $rc -eq 0 ] && tail -1 ~/live/replay.out | grep -qx "0 deltas"'
+  begin 5.2 "cops replay over the whole session log: no unexplained delta"
+  expect "replay exits 0" ccsh 'cops replay ~/.jev-cops/audit.jsonl > ~/live/replay.out 2>&1; rc=$?; cat ~/live/replay.out; exit $rc'
+  # The log keeps no tool output (spec: secrets are not copied), so a verdict that came
+  # from taint cannot be replayed; replay says so in a "history partial" note.
+  expect "every delta is an event replay notes as 'history partial' (its tool output is not in the log)" \
+    ccsh 'deltas=$(grep " → " ~/live/replay.out | cut -d" " -f1 | sort -u); noted=$(grep "note: history partial" ~/live/replay.out | cut -d" " -f1 | sort -u); echo "deltas: ${deltas:-none}"; for d in $deltas; do grep -qx "$d" <<< "$noted" || { echo "unexplained delta $d"; exit 1; }; done'
+  note "deltas: $(ccsh 'tail -1 ~/live/replay.out')"
   end
 
   begin 5.3 "signed chain + the rsyslog off-box copy: cops audit verify --remote passes"
