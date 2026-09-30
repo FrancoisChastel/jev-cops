@@ -1,0 +1,14 @@
+{
+  "skill": { "name": "safe_skill", "source": "/scan/root", "scanned_at": "2026-09-30T12:00:00Z" },
+  "risk_assessment": { "score": 0, "severity": "LOW", "recommendation": "SAFE" },
+  "components": [],
+  "issues": [],
+  "metadata": {
+    "has_executable_scripts": false,
+    "skillspector_version": "2.12.0",
+    "llm_requested": true,
+    "llm_available": false,
+    "llm_error": "NVIDIA_INFERENCE_KEY is not set",
+    "inference_usage": []
+  }
+}

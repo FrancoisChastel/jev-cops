@@ -104,6 +104,14 @@
         "zod": "^4.6.5",
       },
     },
+    "packages/scanner": {
+      "name": "@jev-cops/scanner",
+      "version": "0.1.0",
+      "dependencies": {
+        "@jev-cops/core": "workspace:*",
+        "zod": "^4.6.5",
+      },
+    },
     "packages/sdk": {
       "name": "@jev-cops/sdk",
       "version": "0.1.0",
@@ -160,6 +168,8 @@
     "@jev-cops/openshell": ["@jev-cops/openshell@workspace:packages/openshell"],
 
     "@jev-cops/policies": ["@jev-cops/policies@workspace:policies"],
+
+    "@jev-cops/scanner": ["@jev-cops/scanner@workspace:packages/scanner"],
 
     "@jev-cops/sdk": ["@jev-cops/sdk@workspace:packages/sdk"],
 

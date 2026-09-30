@@ -9,6 +9,7 @@ import { INSTALL_USAGE, runInstallCommand } from "./commands/install.ts";
 import { runKeygenCommand } from "./commands/keygen.ts";
 import { OPENSHELL_USAGE, runOpenShellCommand } from "./commands/openshell.ts";
 import { runReplayCommand } from "./commands/replay.ts";
+import { runServiceCommand, SERVICE_USAGE } from "./commands/service.ts";
 import { runTestCommand } from "./commands/test.ts";
 import { commandHelp, wantsHelp } from "./help.ts";
 import { EXIT, type Io, PROCESS_IO } from "./io.ts";
@@ -63,6 +64,7 @@ ${INSTALL_USAGE}
                                            RFC 5424/5425 syslog) agrees: a longer copy is a
                                            local truncation (no daemon needed)
 ${OPENSHELL_USAGE}
+${SERVICE_USAGE}
   help [command]                           this text, or one command's help
                                            (also: cops <command> --help | -h)
 
@@ -74,7 +76,8 @@ Exit codes:
   2  usage error; hook: the call is blocked
   install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage
   audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage
-  openshell: 0 ok, 1 refused or failed, 2 usage, 3 changes (compile or apply --dry-run)`;
+  openshell: 0 ok, 1 refused or failed, 2 usage, 3 changes (compile or apply --dry-run)
+  service: 0 done (status: running), 1 failed (status: not installed or not running), 2 usage`;
 
 type Command = (argv: readonly string[], io: Io) => Promise<number>;
 
@@ -90,6 +93,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   keygen: runKeygenCommand,
   audit: runAuditCommand,
   openshell: runOpenShellCommand,
+  service: runServiceCommand,
 };
 
 /**

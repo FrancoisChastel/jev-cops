@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.jev-cops.copsd</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/me/.bun/bin/bun</string>
+    <string>/Users/me/.bun/install/global/node_modules/@jev-cops/daemon/src/main.ts</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/me</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin:/Users/me/.local/bin:/Users/me/.bun/bin:/opt/homebrew/bin:/usr/local/bin</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>/Users/me</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ExitTimeOut</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/me/.jev-cops/copsd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/me/.jev-cops/copsd.log</string>
+</dict>
+</plist>
