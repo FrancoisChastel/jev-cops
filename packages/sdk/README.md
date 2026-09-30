@@ -20,7 +20,10 @@ returns at most 4 `jev.noul/choice/score` questions, asked only when the floor r
 [0.3, 0.8]; answers reach `decide` typed by question name. `decide` returns a verdict; the
 engine clamps it into `range`, caps it at `hold` on a 0.5–0.8 confidence answer, and without
 usable answers uses `fallback` (default: the floor band). Verdicts only rise. `reason` is shown
-to the agent; `detail` only to the human. `definePolicy` throws at import on a malformed policy.
+to the agent; `detail` only to the human, in plain language with no score: on a hold it is the
+confirm prompt's own line, and Claude Code keeps that prompt where the agent can read it (the
+engine's scored detail, for `cops explain`, already has features, taint and risk).
+`definePolicy` throws at import on a malformed policy.
 
 **`e` (PolicyEvent).** `kind` and `call.kind` are the daemon's normalized kind; `commands[]`
 (argv, verbs, paths, hosts, `viaInterpreter`, `remote` for an ssh remote command), `verbs`,
