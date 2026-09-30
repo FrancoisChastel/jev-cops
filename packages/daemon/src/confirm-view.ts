@@ -4,10 +4,14 @@ import type { Redeemed, RedeemFailure } from "./precedents.ts";
 import type { Reply } from "./service.ts";
 
 /**
- * The T8 confirm view: what an adapter shows the human for a pending `hold` (spec: "the
- * normalized raw command and the daemon's `detail`, never the agent's text"). It is the
- * only explain served on agent channels (the agent socket and loopback HTTP), and only to
- * a caller holding that hold's token; the full audit line is on the admin socket.
+ * The T8 confirm view: what an adapter shows the human for a pending `hold`: the
+ * normalized raw command and the decision's summary, never the agent's text. The spec
+ * says "the daemon's `detail`", but `detail` is scored (features and their evidence,
+ * floor, risk, judge, budget) and Claude Code keeps the prompt's text in a transcript the
+ * agent can read (T6), so the view carries the summary, which has no score; the full
+ * decision is `cops explain <event-id>` (admin socket, audit file). It is the only
+ * explain served on agent channels (the agent socket and loopback HTTP), and only to a
+ * caller holding that hold's token.
  */
 export interface ConfirmView {
   readonly event_id: string;
@@ -16,8 +20,6 @@ export interface ConfirmView {
   readonly reason: string;
   /** The daemon's normalized raw command. */
   readonly raw: string;
-  /** The human paragraph of the decision. */
-  readonly detail: string;
   /** The decision's confirm summary (`Decision.confirmLines`, one per line): no score. */
   readonly summary: string;
 }
@@ -103,7 +105,7 @@ const REFUSED: ReadonlySet<RedeemFailure> = new Set(["no-token", "mismatch"]);
  * `GET /v1/explain/:event_id` on agent channels. The caller must present the hold's token
  * as `Authorization: Bearer <token>` (a header, so it never lands in an access log).
  * Missing or wrong token → 403 plus an `anomaly` line (T8: the agent cannot read the
- * human's detail by curling the socket); a hold that is not pending (never held,
+ * human's prompt by curling the socket); a hold that is not pending (never held,
  * resolved, expired) → 404. Viewing does not spend the token; resolving does. A view with
  * its own view-only token (a Claude Code hold) is checked against that token instead.
  */

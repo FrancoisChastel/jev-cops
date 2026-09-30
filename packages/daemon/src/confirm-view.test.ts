@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { bearerToken, type ConfirmView, ConfirmViews } from "./confirm-view.ts";
 
 function view(id: string): ConfirmView {
-  return { event_id: id, verdict: "hold", reason: "r", raw: `rm ${id}`, detail: "d", summary: "s" };
+  return { event_id: id, verdict: "hold", reason: "r", raw: `rm ${id}`, summary: "s" };
 }
 
 describe("ConfirmViews", () => {

@@ -2,7 +2,7 @@
  * No precedents from Claude Code holds in M1 (D-069 proposal): Claude Code's own `ask`
  * prompt decides and the hook never learns the answer, so the daemon mints no resolvable
  * `hold_token` for a `claude-code` hold and `/v1/resolve` refuses it. The hook still needs
- * the T8 confirm view (raw + detail for the human-only `permissionDecisionReason`): it is
+ * the T8 confirm view (raw + summary for the human-only `permissionDecisionReason`): it is
  * unlocked by a view-only token sent in the `x-jev-cops-view-token` response header.
  */
 import { afterEach, describe, expect, test } from "bun:test";
@@ -77,7 +77,6 @@ describe("a Claude Code hold", () => {
         verdict: "hold",
         reason: "test policy guard",
         raw: "rm -rf /srv/data",
-        detail: expect.stringContaining("HUMAN-ONLY-DETAIL"),
         summary: "guard@1: hold\nguard@1 detail: HUMAN-ONLY-DETAIL",
       },
     });

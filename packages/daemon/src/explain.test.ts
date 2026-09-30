@@ -22,8 +22,18 @@ const GUARD = policyModule(
   "hold",
   `detail: () => 'HUMAN-ONLY-DETAIL', range: ["hold", "hold"],`,
 ).replace("when: () => true", 'when: (e) => e.kind === "fs.delete"');
-/** Structured audit keys the confirm view must never carry. */
-const STRUCTURED = ["trace", "features", "why", "jev", "precedent", "decision", "line", "related"];
+/** Structured audit keys, and the scored detail, that the confirm view must never carry. */
+const STRUCTURED = [
+  "detail",
+  "trace",
+  "features",
+  "why",
+  "jev",
+  "precedent",
+  "decision",
+  "line",
+  "related",
+];
 
 let td: TestDaemon | null = null;
 afterEach(async () => {
@@ -97,27 +107,19 @@ describe("GET /v1/explain on the agent socket needs the pending hold's token", (
     expect((await daemon().call("GET", query)).status).toBe(403);
   });
 
-  test("with the token: only { event_id, verdict, reason, raw, detail, summary }", async () => {
+  test("with the token: only { event_id, verdict, reason, raw, summary }", async () => {
     td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
     const { event, body } = await taintedHold();
     const res = await explain(event.id, bearer(body.hold_token));
     expect(res.status).toBe(200);
     const view = res.body as Record<string, string>;
-    expect(Object.keys(view).sort()).toEqual([
-      "detail",
-      "event_id",
-      "raw",
-      "reason",
-      "summary",
-      "verdict",
-    ]);
+    expect(Object.keys(view).sort()).toEqual(["event_id", "raw", "reason", "summary", "verdict"]);
     expect(view).toMatchObject({
       event_id: event.id,
       verdict: "hold",
       reason: body.reason,
       raw: `rm -rf ${TAINTED}`,
     });
-    expect(view.detail).toContain("HUMAN-ONLY-DETAIL");
     expect(view.summary?.split("\n")).toEqual(
       expect.arrayContaining(["guard@1: hold", "guard@1 detail: HUMAN-ONLY-DETAIL"]),
     );
@@ -127,17 +129,23 @@ describe("GET /v1/explain on the agent socket needs the pending hold's token", (
     expect(json).not.toContain(String(body.hold_token));
   });
 
-  test("taint evidence stays in the structured audit line (only the human paragraph summarizes it)", async () => {
+  test("taint evidence and feature values stay in the full explain, never in the view (T6)", async () => {
     td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
     const { event, body } = await taintedHold();
     const evidence = `from tool output: ${TAINTED}`;
     const full = await daemon().callAdmin("GET", `/v1/explain/${event.id}`);
-    const why = (full.body as { line: { payload: { why: { taint: string[] } } } }).line.payload.why;
-    expect(why.taint).toContain(evidence);
+    type Payload = { why: { taint: string[] }; decision: { detail: string; features: Taint } };
+    type Taint = { taint: number };
+    const payload = (full.body as { line: { payload: Payload } }).line.payload;
+    const taint = `taint ${payload.decision.features.taint.toFixed(2)}`;
+    expect(payload.why.taint).toContain(evidence);
+    expect(payload.decision.detail).toContain(`${taint}: ${evidence}`);
     const view = (await explain(event.id, bearer(body.hold_token))).body as Record<string, string>;
-    const { detail, ...rest } = view;
-    expect(JSON.stringify(rest)).not.toContain("from tool output");
-    expect(detail).toContain(evidence);
+    expect(view.summary).toContain("guard@1 detail: HUMAN-ONLY-DETAIL");
+    const shown = JSON.stringify(view);
+    expect(shown).not.toContain("from tool output");
+    expect(shown).not.toContain(taint);
+    expect(shown).not.toMatch(/\d\.\d/);
   });
 
   test("viewing does not spend the token; after resolve the view is 404", async () => {
@@ -183,7 +191,6 @@ describe("GET /v1/explain on the agent socket needs the pending hold's token", (
     const ok = await fetch(url, { headers: bearer(body.hold_token) });
     expect(ok.status).toBe(200);
     expect(Object.keys((await ok.json()) as object).sort()).toEqual([
-      "detail",
       "event_id",
       "raw",
       "reason",

@@ -1,4 +1,5 @@
 import type { CaseFile, Harness, Judgement, PreEvent, VerdictResponse } from "@jev-cops/core";
+import type { ConfirmView } from "./confirm-view.ts";
 import type { Runtime } from "./daemon.ts";
 import { HOLD_TOKEN_HASH_PREFIX, mintHoldToken } from "./hold-tokens.ts";
 import { proposeScope } from "./precedents.ts";
@@ -55,10 +56,16 @@ export function recordHold(
   const minted = mintHoldToken();
   const expiresAt = rt.now() + rt.config.daemon.holdTokenTtlMs;
   const { reason, sessionHarness } = hold;
-  const view = { event_id: event.id, verdict: "hold", reason, raw: j.normalized.raw } as const;
-  const full = { ...view, detail: j.decision.detail, summary: j.decision.confirmLines.join("\n") };
+  const summary = j.decision.confirmLines.join("\n");
+  const view: ConfirmView = {
+    event_id: event.id,
+    verdict: "hold",
+    reason,
+    raw: j.normalized.raw,
+    summary,
+  };
   if (NO_PRECEDENT.has(event.harness) || NO_PRECEDENT.has(sessionHarness ?? "")) {
-    rt.confirmViews.put(full, expiresAt, minted.hash);
+    rt.confirmViews.put(view, expiresAt, minted.hash);
     return { kind: "view", ...minted };
   }
   rt.precedents.recordHold(
@@ -70,7 +77,7 @@ export function recordHold(
     },
     { hash: minted.hash, expiresAt },
   );
-  rt.confirmViews.put(full, expiresAt);
+  rt.confirmViews.put(view, expiresAt);
   return { kind: "hold", ...minted };
 }
 
