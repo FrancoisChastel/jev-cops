@@ -11,7 +11,8 @@
   "packageManager": "bun@1.3.13",
   "workspaces": [
     "packages/*",
-    "adapters/*"
+    "adapters/*",
+    "policies"
   ],
   "scripts": {
     "test": "bun test",

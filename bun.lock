@@ -12,7 +12,7 @@
     },
     "adapters/claude-code": {
       "name": "@jev-cops/adapter-claude-code",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "cops-hook": "./src/hook-main.ts",
       },
@@ -24,11 +24,11 @@
     },
     "adapters/pi": {
       "name": "@jev-cops/adapter-pi",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/cli": {
       "name": "@jev-cops/cli",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "cops": "./src/main.ts",
       },
@@ -43,7 +43,7 @@
     },
     "packages/core": {
       "name": "@jev-cops/core",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "tree-sitter-bash": "0.25.1",
         "ulid": "^3.0.2",
@@ -53,7 +53,7 @@
     },
     "packages/daemon": {
       "name": "@jev-cops/daemon",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "copsd": "./src/main.ts",
       },
@@ -66,7 +66,7 @@
     },
     "packages/judge": {
       "name": "@jev-cops/judge",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@jev-cops/core": "workspace:*",
         "@typesafe-ai/sdk": "0.6.0",
@@ -76,10 +76,17 @@
     },
     "packages/sdk": {
       "name": "@jev-cops/sdk",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@jev-cops/core": "workspace:*",
         "zod": "^4.6.5",
+      },
+    },
+    "policies": {
+      "name": "@jev-cops/policies",
+      "version": "0.1.0",
+      "dependencies": {
+        "@jev-cops/sdk": "workspace:*",
       },
     },
   },
@@ -119,6 +126,8 @@
     "@jev-cops/daemon": ["@jev-cops/daemon@workspace:packages/daemon"],
 
     "@jev-cops/judge": ["@jev-cops/judge@workspace:packages/judge"],
+
+    "@jev-cops/policies": ["@jev-cops/policies@workspace:policies"],
 
     "@jev-cops/sdk": ["@jev-cops/sdk@workspace:packages/sdk"],
 
