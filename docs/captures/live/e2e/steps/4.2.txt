@@ -9,7 +9,7 @@ copsd
   [ok]   agent socket       copsd 0.1.0 answers on /home/dev/.jev-cops/copsd.sock
   [ok]   admin socket       answers on /home/dev/.jev-cops/copsd-admin.sock (human only: never mount it into a sandbox)
   [ok]   version            copsd 0.1.0 = cops 0.1.0
-  [ok]   policies           6 loaded: config-tamper@3, default-branch-guard@2, exfil-after-secrets@3, off-repo-write@2, opaque-exec@1, tainted-destructive@1
+  [ok]   policies           6 loaded: config-tamper@4, default-branch-guard@2, exfil-after-secrets@3, off-repo-write@2, opaque-exec@1, tainted-destructive@1
   [warn] judge              disabled: the semantic judge is off; the deterministic floor and the policies decide alone
   [ok]   enforcement        enforce
   [ok]   protected paths    13 paths config-tamper guards beyond the harness dirs (the judge's own inputs)

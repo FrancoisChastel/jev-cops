@@ -43,20 +43,19 @@ settings.json: restore /home/dev/live/settings.post-install.json (atomic rename)
 $ cc /opt/jev-cops-live/bin/tmux-claude.sh stop cfg
 (exit 0)
 $ ccsh tail -3 ~/.jev-cops/claude-code-hook.log
-2026-09-30T20:32:16.627Z ConfigChange sess_f3d16c90-1cf9-4509-bf56-0ccbddcd0125 settings change blocked: the cops hook entry is missing or altered: no cops hook on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange
-2026-09-30T20:32:20.044Z UserPromptSubmit sess_f3d16c90-1cf9-4509-bf56-0ccbddcd0125 session terminated by jev-cops; start a new session
-2026-09-30T20:32:21.812Z ConfigChange sess_f3d16c90-1cf9-4509-bf56-0ccbddcd0125 settings change blocked: the cops hook entry is missing or altered: no cops hook on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange
+2026-09-30T21:23:19.332Z UserPromptSubmit sess_42aea702-ffd7-45c3-a59b-c67b4fbde1da session terminated by jev-cops; start a new session
+2026-09-30T21:23:33.647Z ConfigChange sess_81edeac4-0b1c-41e5-ab65-2fd084f053b6 settings change blocked: the cops hook entry is missing or altered: no cops hook on PreToolUse
+2026-09-30T21:23:37.017Z UserPromptSubmit sess_81edeac4-0b1c-41e5-ab65-2fd084f053b6 session terminated by jev-cops; start a new session
 (exit 0)
-$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11b.jsonl "kind":"anomaly" hook block removed or altered "latched":true
-{"at":1790800336626,"event_id":"evt_01M3T095QDKQMR8E3WYXV9WJN5","hash":"62dd2863ef1530e049f55177bffd40240e7a5dcecc5ff56157917e45b9bab719","kind":"anomaly","payload":{"file_path":"/home/dev/.claude/settings.json","latched":true,"reason":"hook block removed or altered","source":"user_settings"},"prev":"6d14ca887db43ffe62e3caf3b1273e668bf40c1a539d16fdde0c21f30156b845","seq":62,"session_id":"sess_f3d1
-{"at":1790800341810,"event_id":"evt_01M3T09ASD1R6TWT4X6PJQB0VN","hash":"f006a3f5a4f39ae2f73629d2a93e5508ce56098e5ac407971cd7fa50369d8d09","kind":"anomaly","payload":{"file_path":"/home/dev/.claude/settings.json","latched":true,"reason":"hook block removed or altered","source":"user_settings"},"prev":"4fabd624cb730e066f6a2356754283d80633626a1001840bcbb44bb279e1bd44","seq":65,"session_id":"sess_f3d1
+$ line_with <work>/e2e-20260930T212240Z/artifacts/audit-3.11b.jsonl "kind":"anomaly" hook block removed or altered "latched":true
+{"at":1790803413645,"event_id":"evt_01M3T372M8WZKXZG0MX1BJGK6R","hash":"7870fdd7683e3ae1a6c1af2ab439f6c2b43b4ffa473deb79a565d8fbb2870f74","kind":"anomaly","payload":{"file_path":"/home/dev/.claude/settings.json","latched":true,"reason":"hook block removed or altered","source":"user_settings"},"prev":"cfe635afb4a71303d1fb8c6dd954f66482061f2f7ee64368939efcba85bdaced","seq":65,"session_id":"sess_81ed
 (exit 0)
 ==> PASS audit: an anomaly (hook block removed or altered), latched
-$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11b.jsonl "report":"config-change" "intact":false "killed":true
-{"at":1790800336626,"event_id":"evt_01M3T095QDKQMR8E3WYXV9WJN5","hash":"97d744e8d60cc3914fd52b9657039c463e1b2f04de5dca202beee609c916a07c","kind":"session","payload":{"cwd":"/home/dev/work/repo","file_path":"/home/dev/.claude/settings.json","harness":"claude-code","harness_version":"2.1.286","intact":false,"killed":true,"latched":true,"mode":"interactive","parent_id":null,"report":"config-change","
-{"at":1790800341810,"event_id":"evt_01M3T09ASD1R6TWT4X6PJQB0VN","hash":"bac0a2b2d22187bed819f50b01d9ecee8868ebdc03695da88c10367e90406c40","kind":"session","payload":{"cwd":"/home/dev/work/repo","file_path":"/home/dev/.claude/settings.json","harness":"claude-code","harness_version":"2.1.286","intact":false,"killed":true,"latched":true,"mode":"interactive","parent_id":null,"report":"config-change","
+$ line_with <work>/e2e-20260930T212240Z/artifacts/audit-3.11b.jsonl "report":"config-change" "intact":false "killed":true
+{"at":1790803413646,"event_id":"evt_01M3T372M8WZKXZG0MX1BJGK6R","hash":"b0e10899b3966fe6b2418e4e90d723a6df61c1aeffbd86cc26a920381956b925","kind":"session","payload":{"cwd":"/home/dev/work/repo","file_path":"/home/dev/.claude/settings.json","harness":"claude-code","harness_version":"2.1.286","intact":false,"killed":true,"latched":true,"mode":"interactive","parent_id":null,"report":"config-change","
 (exit 0)
 ==> PASS audit: config-change report intact:false, killed:true
-$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11b.jsonl "report":"config-change" "intact":true
-(exit 1)
-==> FAIL audit: the restore is reported intact:true
+$ line_with <work>/e2e-20260930T212240Z/artifacts/audit-3.11b.jsonl "report":"config-change" "intact":true
+{"at":1790803418790,"event_id":"evt_01M3T377N2JA3FPYCPD4H8DGJ6","hash":"7de646cccc4ab40e95ade3c01404f02fa5ccc7e39bf82a21e23d0a37493f4f5e","kind":"session","payload":{"cwd":"/home/dev/work/repo","file_path":"/home/dev/.claude/settings.json","harness":"claude-code","harness_version":"2.1.286","intact":true,"killed":true,"latched":false,"mode":"interactive","parent_id":null,"report":"config-change","
+(exit 0)
+==> PASS audit: the restore is reported intact:true

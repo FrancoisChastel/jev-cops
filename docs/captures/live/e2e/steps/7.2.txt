@@ -22,8 +22,8 @@ $ pish test ! -e ~/.pi/agent/extensions/jev-cops.ts
 $ pish cat ~/live/pi-extensions.pre-install.txt; ls -la ~/.pi/agent/extensions
 ls: cannot access '/home/dev/.pi/agent/extensions': No such file or directory
 total 8
-drwxr-xr-x 2 dev dev 4096 Sep 30 20:32 .
-drwxr-xr-x 3 dev dev 4096 Sep 30 20:32 ..
+drwxr-xr-x 2 dev dev 4096 Sep 30 21:23 .
+drwxr-xr-x 3 dev dev 4096 Sep 30 21:23 ..
 (exit 0)
 $ pish test -z "$(ls -A ~/.pi/agent/extensions 2> /dev/null)"
 (exit 0)

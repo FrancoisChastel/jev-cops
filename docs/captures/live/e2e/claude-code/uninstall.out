@@ -1,13 +1,6 @@
-jev-cops: Claude Code hooks installed in /home/dev/.claude/settings.json (user scope)
-jev-cops: previous file backed up to /home/dev/.claude/settings.json.jev-cops-20260930T212304501Z.bak
-jev-cops: hook /home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts (version 0.1.0), socket /home/dev/.jev-cops/copsd.sock, transport command
-jev-cops: recorded [daemon] hook_binary in /home/dev/.config/jev-cops/cops.toml (copsd protects it from its next start)
-jev-cops: wrote /home/dev/.jev-cops/claude-code.json (Claude Code 2.1.286)
-jev-cops: canary ok: the hook let `true` run and blocked a settings write (exit 2, continue:false), and its own ConfigChange check accepted an unchanged settings file
-jev-cops: warning: /home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts is writable by other users (Bun installs package bins mode 0777): anyone on this machine could rewrite the hook; run `chmod go-w /home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts`
-jev-cops: warning: /home/dev is not a trusted workspace: interactive sessions hold back every hook, this one included, until you accept Claude Code's workspace trust dialog (-p and SDK runs count as trusted)
-jev-cops: warning: --dangerously-skip-permissions (bypassPermissions) is out of scope for the hook: a hook deny still blocks there, but nothing asks and the agent may edit what the hook reads; only OpenShell (M2) covers that mode.
-jev-cops: warning: Without OpenShell, every deny is best-effort: the agent runs as you and can edit or delete the settings and the hook binary; config-tamper and the ConfigChange hook catch what Claude Code sees (spec §OpenShell).
+jev-cops: jev-cops hooks removed from /home/dev/.claude/settings.json
+jev-cops: previous file backed up to /home/dev/.claude/settings.json.jev-cops-20260930T212353815Z.bak
+jev-cops: removed [daemon] hook_binary from /home/dev/.config/jev-cops/cops.toml
 jev-cops: known gaps (docs/adapters.md#claude-code):
   - A hook that cannot start (binary missing, not executable, path mistyped) is a non-blocking error: Claude Code runs the tool anyway, so the gate is silently disabled; `cops doctor` checks the registered path and runs a canary through it.
   - A hook killed by the OS (SIGKILL, out of memory) or not started within the settings timeout (30 s) lets the call proceed; only OpenShell (M2) backstops it.

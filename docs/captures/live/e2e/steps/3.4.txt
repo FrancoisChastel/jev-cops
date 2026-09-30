@@ -1,19 +1,21 @@
 $ cc /opt/jev-cops-live/bin/run-harness.sh claude-code /home/dev/live/out/allow SCENARIO:ls list the files here
 claude-code exited 0
 (exit 0)
-$ check judge <work>/e2e-20260930T203132Z/artifacts/claude-code-audit.jsonl Bash "command":"ls" allow
-seq 11 evt_01M3T08AHTJ8NZH2ADM97TR157 headless Bash {"command":"ls","description":"List files"} → allow (no policy) "No policy concern with this action."
+$ check judge <work>/e2e-20260930T212240Z/artifacts/claude-code-audit.jsonl Bash "command":"ls" allow
+seq 13 evt_01M3T367EBH2635CFVA8HAYB4T headless Bash {"command":"ls","description":"List files"} → allow (no policy) "No policy concern with this action."
 (exit 0)
 ==> PASS audit: Bash ls → allow
-$ check saw <work>/e2e-20260930T203132Z/artifacts/requests.jsonl ls README.md
+$ check saw <work>/e2e-20260930T212240Z/artifacts/requests.jsonl ls README.md
 request 3 /v1/messages (ls step 1): …tool_use_id":"toolu_fake_2","type":"tool_result","content":"README.md\nauth\nbuild\nlogs","is_error":false}]},{"role":"system","c…
 (exit 0)
 ==> PASS the model got the real ls output
-$ check seen <work>/e2e-20260930T203132Z/artifacts/requests.jsonl ls
+$ check seen <work>/e2e-20260930T212240Z/artifacts/requests.jsonl ls
 request 2 (step 0) → call Bash {"command":"ls","description":"List files"}
   text: <system-reminder> As you answer the user's questions, you can use the following context: # gitStatus This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation. Current branch: main Main branch (you will usually u…
   text: <system-reminder> Attribution for git commits and pull requests you create from here on (this replaces Claude Code's own earlier attribution guidance, such as a previous copy of this reminder; the user's own instructions about these lines, such as a CLAUDE.md or memory rule, take precedence over thi…
   text: SCENARIO:ls list the files here
+  system: # Environment You have been invoked in the following environment: - Primary working directory: /home/dev/work/repo - Is a git repository: true - Platform: linux - Shell: unknown - OS Version: Linux 6.12.76-linuxkit You are powered by the model named Opus 5.5. The exact model ID is claude-opus-5-5. A…
 request 3 (step 1) → text "Listed the files."
   tool_result: README.md auth build logs
+  system: <total_tokens>14999985 tokens left</total_tokens>
 (exit 0)

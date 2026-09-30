@@ -32,14 +32,13 @@ $ cc /opt/jev-cops-live/bin/edit-settings.sh restore /home/dev/live/settings.pos
 settings.json: restore /home/dev/live/settings.post-install.json (atomic rename)
 (exit 0)
 $ ccsh tail -3 ~/.jev-cops/claude-code-hook.log
-2026-09-30T20:32:02.356Z UserPromptSubmit sess_c20b7aff-f415-48f8-9eb7-db7fb0ad5d7e session terminated by jev-cops; start a new session
-2026-09-30T20:32:05.324Z ConfigChange sess_52a20aae-488a-44a5-98ba-872954d21da3 settings change blocked: the cops hook entry is missing or altered: no cops hook on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange
-2026-09-30T20:32:08.700Z UserPromptSubmit sess_52a20aae-488a-44a5-98ba-872954d21da3 session terminated by jev-cops; start a new session
+2026-09-30T21:23:19.273Z SessionStart sess_42aea702-ffd7-45c3-a59b-c67b4fbde1da session terminated by jev-cops; start a new session: every tool call will be blocked
+2026-09-30T21:23:19.332Z UserPromptSubmit sess_42aea702-ffd7-45c3-a59b-c67b4fbde1da session terminated by jev-cops; start a new session
 (exit 0)
-$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11a.jsonl "report":"config-change" "intact":true
+$ line_with <work>/e2e-20260930T212240Z/artifacts/audit-3.11a.jsonl "report":"config-change" "intact":true
+{"at":1790803402298,"event_id":"evt_01M3T36QHPD296J24XATGWV447","hash":"75b111b87631d28fc408b3536f9e25eb4c9a111e0326b0b0fc1c06d704c57580","kind":"session","payload":{"cwd":"/home/dev/work/repo","file_path":"/home/dev/.claude/settings.json","harness":"claude-code","harness_version":"2.1.286","intact":true,"killed":false,"latched":false,"mode":"interactive","parent_id":null,"report":"config-change",
+(exit 0)
+==> PASS audit: the theme change is reported intact:true
+$ line_with <work>/e2e-20260930T212240Z/artifacts/audit-3.11a.jsonl "kind":"anomaly"
 (exit 1)
-==> FAIL audit: the theme change is reported intact:true
-$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11a.jsonl "kind":"anomaly"
-{"at":1790800325322,"event_id":"evt_01M3T08TP2GZQQPQV7P0KZN6VE","hash":"c152784be3e682c1416e5e126c2d234ef340c280a2958fee7b97cae0339a731e","kind":"anomaly","payload":{"file_path":"/home/dev/.claude/settings.json","latched":true,"reason":"hook block removed or altered","source":"user_settings"},"prev":"b8abb3345eb45c189ba7ea693bf9b6d3cb07b5f770fdfbff1031448cf1b01b3a","seq":53,"session_id":"sess_52a2
-(exit 0)
-==> FAIL an unrelated edit does not latch the session
+==> PASS an unrelated edit does not latch the session

@@ -24,7 +24,7 @@
  │ default-branch-guard@2: hold
  │ default-branch-guard@2 detail: branch main; default main/master; mode interactive
  │
- │ Full decision: cops explain evt_01M3T08DKG10ACKVZB7CZZQZQF
+ │ Full decision: cops explain evt_01M3T36AA89FE76S1YKMNMJW78
  settings.json to update hooks
 
  Do you want to proceed?

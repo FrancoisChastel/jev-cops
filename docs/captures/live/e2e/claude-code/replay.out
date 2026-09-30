@@ -1,5 +1,6 @@
-replay of /home/dev/.jev-cops/audit.jsonl against /home/dev/.bun/install/global/node_modules/@jev-cops/policies (6 policies): 15 judged event(s)
-evt_01M3T08PWJFY8S2EKS891P5PXD  deny → allow  (risk 0.51 → 0.16)
-evt_01M3T08PWJFY8S2EKS891P5PXD  note: history partial: output of 1 earlier call(s) is not in the audit log (by design); taint and secret content from it are not replayed
-evt_01M3T09EY1NYYSEKNY0FEJ0HQA  note: history partial: output of 1 earlier call(s) is not in the audit log (by design); taint and secret content from it are not replayed
+replay of /home/dev/.jev-cops/audit.jsonl against /home/dev/.bun/install/global/node_modules/@jev-cops/policies (6 policies): 16 judged event(s)
+evt_01M3T36KQRKW70T6XA72FP8GWX  deny → allow  (risk 0.51 → 0.16)
+evt_01M3T36KQRKW70T6XA72FP8GWX  note: history partial: output of 1 earlier call(s) is not in the audit log (by design); taint and secret content from it are not replayed
+evt_01M3T36TWRJCR8KXH75X1CGJCA  note: history partial: output of 1 earlier call(s) is not in the audit log (by design); taint and secret content from it are not replayed
+evt_01M3T37BQB3CMVMYJ23PS4ZCRZ  note: history partial: output of 1 earlier call(s) is not in the audit log (by design); taint and secret content from it are not replayed
 1 delta

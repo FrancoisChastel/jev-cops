@@ -6,17 +6,15 @@ $ ccsh cp ~/.claude/settings.json ~/live/settings.pre-install.json; cat ~/.claud
   }
 }
 (exit 0)
+$ ccsh cp ~/.config/jev-cops/cops.toml ~/live/cops.pre-install.toml
+(exit 0)
 $ cc cops install claude-code --dry-run
 jev-cops: dry run, nothing written; /home/dev/.claude/settings.json would change:
 --- /home/dev/.claude/settings.json
 +++ /home/dev/.claude/settings.json
  …
-   "theme": "dark",
    "permissions": {
--    "allow": ["Bash(ls:*)"]
-+    "allow": [
-+      "Bash(ls:*)"
-+    ]
+     "allow": ["Bash(ls:*)"]
 +  },
 +  "hooks": {
 +    "PreToolUse": [

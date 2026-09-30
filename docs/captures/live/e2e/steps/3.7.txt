@@ -34,7 +34,7 @@ $ ccsh cat ~/live/out/ask-dialog.txt
  │ default-branch-guard@2: hold
  │ default-branch-guard@2 detail: branch main; default main/master; mode interactive
  │
- │ Full decision: cops explain evt_01M3T08DKG10ACKVZB7CZZQZQF
+ │ Full decision: cops explain evt_01M3T36AA89FE76S1YKMNMJW78
  settings.json to update hooks
 
  Do you want to proceed?
@@ -65,7 +65,7 @@ $ ccsh grep -F "jev-cops hold: Irreversible git operation on the default branch.
 ==> PASS the human sees the reason
 $ ccsh grep -F "Command, as jev-cops normalized it:" ~/live/out/ask-dialog.txt && grep -F "cops explain evt_" ~/live/out/ask-dialog.txt
  │ Command, as jev-cops normalized it:
- │ Full decision: cops explain evt_01M3T08DKG10ACKVZB7CZZQZQF
+ │ Full decision: cops explain evt_01M3T36AA89FE76S1YKMNMJW78
 (exit 0)
 ==> PASS the human sees the normalized command and the explain pointer
 $ ccsh grep -E "risk [0-9]\.[0-9]|budget [0-9]+/" ~/live/out/ask-dialog.txt
@@ -106,14 +106,14 @@ $ ccsh tail -25 ~/live/out/ask-declined.txt
 (exit 0)
 $ cc /opt/jev-cops-live/bin/tmux-claude.sh stop ask
 (exit 0)
-$ line_with <work>/e2e-20260930T203132Z/artifacts/claude-code-audit.jsonl "kind":"judge" git push --force origin main "mode":"interactive" "verdict":"hold"
-{"at":1790800311926,"event_id":"evt_01M3T08DKG10ACKVZB7CZZQZQF","hash":"2df7a7095288d8073db49be1c4eee3b9b3194f7391fd8c00eb6edf44ce279cde","kind":"judge","payload":{"answers":null,"decision":{"budget":{"limit":100,"spent":4},"confirmLines":["default-branch-guard@2: hold","default-branch-guard@2 detail: branch main; default main/master; mode interactive"],"context_note":null,"detail":"verdict hold ·
+$ line_with <work>/e2e-20260930T212240Z/artifacts/claude-code-audit.jsonl "kind":"judge" git push --force origin main "mode":"interactive" "verdict":"hold"
+{"at":1790803388751,"event_id":"evt_01M3T36AA89FE76S1YKMNMJW78","hash":"27fca91ac888de162ad12127a78eaa17e8aec4b9d4d21ba5cc7b93a2359ea9d0","kind":"judge","payload":{"answers":null,"decision":{"budget":{"limit":100,"spent":4},"confirmLines":["default-branch-guard@2: hold","default-branch-guard@2 detail: branch main; default main/master; mode interactive"],"context_note":null,"detail":"verdict hold ·
 (exit 0)
 ==> PASS audit: the push → hold (default-branch-guard), mode interactive
-$ check saw <work>/e2e-20260930T203132Z/artifacts/requests.jsonl * The user doesn't want to proceed with this tool use
+$ check saw <work>/e2e-20260930T212240Z/artifacts/requests.jsonl * The user doesn't want to proceed with this tool use
 request 14 /v1/messages (push-main step 1): …,{"role":"user","content":[{"type":"tool_result","content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the …
 (exit 0)
 ==> PASS the next request carries only Claude Code's generic rejection
-$ ccsh test "$(git -C ~/work/remote.git rev-parse main)" = '96c07d7056fb66e4ff50841fefc8e8fd17fa1b7d'
+$ ccsh test "$(git -C ~/work/remote.git rev-parse main)" = 'f6a5618907077fc3184a3049534af4eb9a7d7ae3'
 (exit 0)
 ==> PASS origin/main did not move

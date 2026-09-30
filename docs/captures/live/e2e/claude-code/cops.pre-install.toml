@@ -1,0 +1,8 @@
+[enforcement]
+mode = "enforce"
+
+[audit.forward]
+kind = "syslog"
+target = "syslog.live.internal:6514"
+ca_file = "/certs/ca.pem"
+app_name = "copsd"

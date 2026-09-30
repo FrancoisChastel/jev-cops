@@ -10,15 +10,15 @@
 
 ● Listed the files.
 
-✻ Worked for 0s · done 8:32 PM
+✻ Cogitated for 0s · done 9:23 PM
 
-● UserPromptSubmit operation blocked by hook:
-  jev-cops: session terminated by jev-cops; start a new session
+❯ SCENARIO:ls again please
 
-  Original prompt: SCENARIO:ls again please
+  Listed 1 directory
 
+● Listed the files.
 
-
+✻ Worked for 0s · done 9:23 PM
 
 
 

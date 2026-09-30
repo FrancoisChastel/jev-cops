@@ -1,8 +1,8 @@
-inputs: sha256:bd77c3468f0dca6cef051f4a450dadd10cff1f81b35a695c82de2836bb0c5c87
+inputs: sha256:1836a6f4cffcf3a40913e53d3bfeafc5d4fefb25e716136d3090fda86460e438
 result: policy emitted
 judge hosts kept out (T13): api.typesafe.ai, openrouter.ai
 fragments:
-  - protection (filesystem) backs config-tamper@3
+  - protection (filesystem) backs config-tamper@4
   - judge-route (network) backs judge route (D-105)
   - task-allowlist (network) backs exfil-after-secrets@3
 updates at the first prompt: none

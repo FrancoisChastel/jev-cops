@@ -3,7 +3,7 @@ prep-world: claude-code ready in /home/dev/work/repo
 (exit 0)
 ==> PASS prep the Claude Code world
 $ cc cops keygen
-audit signing key 2a06a037b92ce141 written
+audit signing key 79af7c46db568e4b written
   private key  /home/dev/.jev-cops/keys/audit-ed25519.key (0600; never share it, never copy it into a sandbox)
   public key   /home/dev/.config/jev-cops/audit-ed25519.pub (hand it to the cyber team; cops doctor verifies with it)
 copsd signs audit checkpoints with it from its next start.

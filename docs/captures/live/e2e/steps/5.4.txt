@@ -1,21 +1,21 @@
 $ ccsh head -n -3 ~/.jev-cops/audit.jsonl > ~/live/audit-truncated.jsonl; wc -l ~/live/audit-truncated.jsonl
-76 /home/dev/live/audit-truncated.jsonl
+78 /home/dev/live/audit-truncated.jsonl
 (exit 0)
 $ ccsh cops audit verify ~/live/audit-truncated.jsonl --pubkey ~/.config/jev-cops/audit-ed25519.pub --remote ~/live/remote-copy.log
 cops audit verify /home/dev/live/audit-truncated.jsonl
-  lines          76 (head seq 76)
+  lines          78 (head seq 78)
   chain          ok
   checkpoints    10 found
-  keys           2a06a037b92ce141
-  unsigned tail  seq 69..76 (8 lines)
-  off-box copy   /home/dev/live/remote-copy.log (syslog-lines): 79 lines, last seq 79
-FAIL  local tail truncated after seq 76: the off-box copy continues to seq 79 under a signed checkpoint
-warn  unsigned tail: seq 69..76 (8 lines) after the last checkpoint; a cut there shows only against the off-box copy
+  keys           79af7c46db568e4b
+  unsigned tail  seq 71..78 (8 lines)
+  off-box copy   /home/dev/live/remote-copy.log (syslog-lines): 81 lines, last seq 81
+FAIL  local tail truncated after seq 78: the off-box copy continues to seq 81 under a signed checkpoint
+warn  unsigned tail: seq 71..78 (8 lines) after the last checkpoint; a cut there shows only against the off-box copy
 result: FAILED (1 failure)
 (exit 1)
 ==> PASS audit verify fails on the truncated log
 $ ccsh cops audit verify ~/live/audit-truncated.jsonl --pubkey ~/.config/jev-cops/audit-ed25519.pub --remote ~/live/remote-copy.log | grep -Ei "truncat|past the local|longer"
 cops audit verify /home/dev/live/audit-truncated.jsonl
-FAIL  local tail truncated after seq 76: the off-box copy continues to seq 79 under a signed checkpoint
+FAIL  local tail truncated after seq 78: the off-box copy continues to seq 81 under a signed checkpoint
 (exit 0)
 ==> PASS it says the copy goes past the local log

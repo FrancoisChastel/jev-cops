@@ -26,4 +26,4 @@ jev-cops 0.1.0
 @jev-cops/policies 0.1.0
 @jev-cops/sdk 0.1.0
 (exit 0)
-@jev-cops/scanner is packed but not installed: no installed package depends on it yet.
+@jev-cops/scanner is packed but not installed: nothing installed imports it until the daemon wires it in (PLAN-SETUP S2; pack-lib NOT_IN_META).

@@ -3,9 +3,11 @@
 Captured 2026-09-30 with `JEV_COPS_LIVE=1 scripts/live/e2e.sh` and `scripts/live/run.sh`
 ([docs/live-testing.md](../live-testing.md)). Everything ran inside containers on an
 internal Docker network; the host's own `claude` was never run, read or configured. The
-full report is [live/e2e-report.md](./live/e2e-report.md) (41 of 44 steps pass; the three
-failures are jev-cops findings, below); per-scenario captures are under
-[live/](./live/).
+full report is [live/e2e-report.md](./live/e2e-report.md); per-scenario captures are under
+[live/](./live/). The first run passed 41 of 44 steps; the three failures were jev-cops
+findings (F1–F3, below). They were fixed and the suite re-run the same evening from freshly
+packed tarballs: **44 of 44 pass** (the two SKIP notes, scripted judge and OpenShell gateway,
+remain); the report and the `live/e2e/` artifacts are that re-run.
 
 | | |
 |---|---|
@@ -80,6 +82,16 @@ checkpoint`) or with a middle line edited (`chain broken at seq 29`).
 | F6 | `cops replay` over the session log shows one delta, the T10 deny (`deny → allow`), with the note `history partial: output of 1 earlier call(s) is not in the audit log (by design)`: a verdict that came from tool output cannot be replayed from a log that never stores tool output. | step [5.2](./live/e2e/steps/5.2.txt) | By design (the e2e accepts noted deltas only) |
 | F7 | `[judge] provider = "mock"` answers nothing usable and no provider endpoint can be set from `cops.toml`, so `exfil-after-secrets` cannot be driven to `kill` without a real judge. | step 3.13 (SKIP) | Test gap |
 | F8 | `@jev-cops/scanner` is packed (11 tarballs) but nothing installed by `bun add -g jev-cops` depends on it yet. | step 1.1 | Info |
+
+### After the fixes (re-run, 44 of 44)
+
+| # | Fix | Evidence in the re-run |
+|---|---|---|
+| F1 | One hook identity (`adapters/claude-code/src/hook-identity.ts`): a hook is its program (the compiled binary, or the script Bun runs), started directly or by the very Bun running it, then its leading arguments. The hook (`selfOf`), the intact check (`selfFlags`), the installer and `cops doctor` (`entrySelf`) all use it; the canary gains a ConfigChange probe, so install and doctor run the hook's own check through the registered entry. | 3.11a: the `theme` edit is reported `intact: true`, no anomaly; 3.11b: dropping `PreToolUse` is blocked and latched (the hook log now names only `PreToolUse`), the restore is `intact: true`; 3.3: `[ok] settings change is accepted` |
+| F2 | Uninstall ownership reads the program an entry names (`cops-hook.ts` included) and the recorded hook binaries. | 7.1: a plain `--uninstall` removes every entry; a second one finds none |
+| F3 | The settings writer edits only what changes (`src/json-edit.ts`); uninstall takes `[daemon] hook_binary` back out of cops.toml. | 7.1: `settings.json` and `cops.toml` are byte-identical to their pre-install snapshots; after install the user's `"allow": ["Bash(ls:*)"]` is still one line (`live/e2e/claude-code/settings.post-install.json`) |
+| F4, F5 | No hook change: `-p` is headless from the parent argv whatever the permission mode (tests pin auto mode). | docs/adapters.md rows 57–59 |
+| F8 | `@jev-cops/scanner` stays out of the meta package until something installed imports it; `scripts/pack-lib.ts` `NOT_IN_META` says so and the pack refuses any other published package `jev-cops` does not install. | step 1.1 note |
 
 Not done here: the OpenShell sandbox steps (Docker Desktop host networking is off; only
 `cops openshell compile --dry-run` ran, step 6.1), and accepting an ask (`1. Yes`) in the

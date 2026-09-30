@@ -1,9 +1,7 @@
 {
   "theme": "dark",
   "permissions": {
-    "allow": [
-      "Bash(ls:*)"
-    ]
+    "allow": ["Bash(ls:*)"]
   },
   "hooks": {
     "PreToolUse": [

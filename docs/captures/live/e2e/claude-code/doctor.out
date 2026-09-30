@@ -2,51 +2,52 @@ cops doctor (jev-cops 0.1.0)
 writes no configuration; the canary leaves audit lines and latches a throw-away session in copsd
 
 config
-  [ok]   cops.toml               loaded /home/dev/.config/jev-cops/cops.toml
+  [ok]   cops.toml                    loaded /home/dev/.config/jev-cops/cops.toml
 
 copsd
-  [ok]   agent socket            copsd 0.1.0 answers on /home/dev/.jev-cops/copsd.sock
-  [ok]   admin socket            answers on /home/dev/.jev-cops/copsd-admin.sock (human only: never mount it into a sandbox)
-  [ok]   version                 copsd 0.1.0 = cops 0.1.0
-  [ok]   policies                6 loaded: config-tamper@3, default-branch-guard@2, exfil-after-secrets@3, off-repo-write@2, opaque-exec@1, tainted-destructive@1
-  [warn] judge                   disabled: the semantic judge is off; the deterministic floor and the policies decide alone
-  [ok]   enforcement             enforce
-  [ok]   protected paths         15 paths config-tamper guards beyond the harness dirs (the judge's own inputs)
-  [ok]   latched sessions        1 root session(s) latched killed (cleared only through the admin socket)
+  [ok]   agent socket                 copsd 0.1.0 answers on /home/dev/.jev-cops/copsd.sock
+  [ok]   admin socket                 answers on /home/dev/.jev-cops/copsd-admin.sock (human only: never mount it into a sandbox)
+  [ok]   version                      copsd 0.1.0 = cops 0.1.0
+  [ok]   policies                     6 loaded: config-tamper@4, default-branch-guard@2, exfil-after-secrets@3, off-repo-write@2, opaque-exec@1, tainted-destructive@1
+  [warn] judge                        disabled: the semantic judge is off; the deterministic floor and the policies decide alone
+  [ok]   enforcement                  enforce
+  [ok]   protected paths              15 paths config-tamper guards beyond the harness dirs (the judge's own inputs)
+  [ok]   latched sessions             1 root session(s) latched killed (cleared only through the admin socket)
 
 audit
-  [ok]   chain                   5 lines verify at /home/dev/.jev-cops/audit.jsonl
-  [ok]   signatures              1 checkpoint(s) verify with key 2a06a037b92ce141, signed through seq 1; 3 line(s) after it not signed yet. Signed checkpoints (Ed25519, private key outside the sandbox) make every line up to the last checkpoint impossible to edit, drop or recompute without that key; the lines after it, and a tail cut exactly at a checkpoint, show only against the off-box copy (--audit-remote).
-  [ok]   signing key             key 2a06a037b92ce141 at /home/dev/.jev-cops/keys/audit-ed25519.key (0600, outside any sandbox)
-  [ok]   forwarding              syslog, connected, sent through seq 5 of 5
+  [ok]   chain                        6 lines verify at /home/dev/.jev-cops/audit.jsonl
+  [ok]   signatures                   1 checkpoint(s) verify with key 79af7c46db568e4b, signed through seq 1; 4 line(s) after it not signed yet. Signed checkpoints (Ed25519, private key outside the sandbox) make every line up to the last checkpoint impossible to edit, drop or recompute without that key; the lines after it, and a tail cut exactly at a checkpoint, show only against the off-box copy (--audit-remote).
+  [ok]   signing key                  key 79af7c46db568e4b at /home/dev/.jev-cops/keys/audit-ed25519.key (0600, outside any sandbox)
+  [ok]   forwarding                   syslog, connected, sent through seq 6 of 6
 
 claude-code
-  [ok]   claude on PATH          /home/dev/.npm-global/bin/claude
-  [warn] claude version          2.1.286; the adapter was verified against 2.1.285: check the changelog for hook changes (docs/adapters.md#claude-code)
-  [ok]   recorded version        2.1.286 in /home/dev/.jev-cops/claude-code.json
-  [warn] workspace trust         /home/dev is the home directory: Claude Code keeps its trust for one session only, so each interactive session here asks again; until then no hook runs
-  [ok]   hook log                no /home/dev/.jev-cops/claude-code-hook.log: the hook never had to decide alone
+  [ok]   claude on PATH               /home/dev/.npm-global/bin/claude
+  [warn] claude version               2.1.286; the adapter was verified against 2.1.285: check the changelog for hook changes (docs/adapters.md#claude-code)
+  [ok]   recorded version             2.1.286 in /home/dev/.jev-cops/claude-code.json
+  [warn] workspace trust              /home/dev is the home directory: Claude Code keeps its trust for one session only, so each interactive session here asks again; until then no hook runs
+  [ok]   hook log                     no /home/dev/.jev-cops/claude-code-hook.log: the hook never had to decide alone
 
 claude-code hook
-  [ok]   registered              in force on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange (exec form, every tool, D-087)
-  [ok]   exec form               every jev-cops command entry passes `args` (no shell)
-  [ok]   hook binary             /home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts is an executable file
-  [ok]   hook version            0.1.0 = cops 0.1.0
-  [ok]   socket                  --socket /home/dev/.jev-cops/copsd.sock is copsd's agent socket
-  [ok]   duplicates              no mismatched jev-cops entries (Claude Code runs identical handlers once)
-  [ok]   other PreToolUse hooks  none
+  [ok]   registered                   in force on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange (exec form, every tool, D-087)
+  [ok]   exec form                    every jev-cops command entry passes `args` (no shell)
+  [ok]   hook binary                  /home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts is an executable file
+  [ok]   hook version                 0.1.0 = cops 0.1.0
+  [ok]   socket                       --socket /home/dev/.jev-cops/copsd.sock is copsd's agent socket
+  [ok]   duplicates                   no mismatched jev-cops entries (Claude Code runs identical handlers once)
+  [ok]   other PreToolUse hooks       none
 
 claude-code settings
-  [ok]   settings files          read: /home/dev/.claude/settings.json, /home/dev/.claude/settings.json
-  [ok]   disableAllHooks         not set
-  [ok]   allowManagedHooksOnly   not set
-  [ok]   permissions.allow       no bare Bash or PowerShell allow rule
-  [ok]   defaultMode             not set (interactive sessions start in auto mode from Claude Code 2.1.283, in default before; -p in default)
-  [ok]   allowedHttpHookUrls     not set
+  [ok]   settings files               read: /home/dev/.claude/settings.json, /home/dev/.claude/settings.json
+  [ok]   disableAllHooks              not set
+  [ok]   allowManagedHooksOnly        not set
+  [ok]   permissions.allow            no bare Bash or PowerShell allow rule
+  [ok]   defaultMode                  not set (interactive sessions start in auto mode from Claude Code 2.1.283, in default before; -p in default)
+  [ok]   allowedHttpHookUrls          not set
 
 canary
-  [ok]   benign call proceeds    via cops-hook.ts: expected exit 0, no output; observed exit 0, no output. A benign call proceeds with no output
-  [ok]   config write is killed  via cops-hook.ts: expected exit 2, deny, continue:false (observe mode: exit 0, additionalContext); observed exit 2, deny, continue:false. The hook ran, copsd answered, config-tamper killed the write, and the kill ends the turn
+  [ok]   benign call proceeds         via cops-hook.ts: expected exit 0, no output; observed exit 0, no output. A benign call proceeds with no output
+  [ok]   config write is killed       via cops-hook.ts: expected exit 2, deny, continue:false (observe mode: exit 0, additionalContext); observed exit 2, deny, continue:false. The hook ran, copsd answered, config-tamper killed the write, and the kill ends the turn
+  [ok]   settings change is accepted  via cops-hook.ts: expected exit 0, no output (the hook finds itself intact); observed exit 0, no output. The hook's own ConfigChange check finds itself registered on every required event (D-087): a settings change keeps the session
 
 claude-code gaps
   [gap]  A hook that cannot start (binary missing, not executable, path mistyped) is a non-blocking error: Claude Code runs the tool anyway, so the gate is silently disabled; `cops doctor` checks the registered path and runs a canary through it.
@@ -73,5 +74,5 @@ claude-code gaps
   [gap]  A managed install (`managed-settings.d/50-jev-cops.json`) is skipped without a warning when server-managed settings or an MDM profile supply the managed policy (default `managedSourcesBehavior` first-wins); `/status` names the source Claude Code applies.
   [gap]  With `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` (v2.1.251+) hooks do not see `CLAUDE_CONFIG_DIR`, so the ConfigChange check looks for user settings in ~/.claude: a user install under `CLAUDE_CONFIG_DIR` then fails closed on every settings change (blocked, session latched).
 
-30 ok · 3 warn · 0 fail · 23 gap → exit 0
+31 ok · 3 warn · 0 fail · 23 gap → exit 0
 doctor exit 0

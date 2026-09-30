@@ -1,7 +1,7 @@
-$ check leaks <work>/e2e-20260930T203132Z/artifacts/bodies
-no human-only text in 57 request bodies
+$ check leaks <work>/e2e-20260930T212240Z/artifacts/bodies
+no human-only text in 60 request bodies
 (exit 0)
 ==> PASS no score, confirm view or explain id in any of the run's request bodies
-$ bash -c wc -l < '<work>/e2e-20260930T203132Z/artifacts/requests.jsonl'
-      57
+$ bash -c wc -l < '<work>/e2e-20260930T212240Z/artifacts/requests.jsonl'
+      60
 (exit 0)
