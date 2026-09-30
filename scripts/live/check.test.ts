@@ -139,10 +139,11 @@ describe("request checks", () => {
     expect(sawIn(requests, "ls", "Irreversible")).toEqual([]);
   });
 
-  test("lastTurn: what follows the model's last turn, system messages left out", () => {
+  test("lastTurn: what follows the model's last turn, system messages included", () => {
     expect(lastTurn(anthropicBody)).toEqual([
       "tool_result (is_error): jev-cops: Irreversible git operation.",
       "text: <system-reminder>note</system-reminder>",
+      "system: env",
     ]);
     expect(
       lastTurn({
@@ -180,6 +181,7 @@ describe("request checks", () => {
       model_read: [
         "tool_result (is_error): jev-cops: Irreversible git operation.",
         expect.any(String),
+        "system: env",
       ],
     });
     expect(digest[2]).toMatchObject({ user_agent: "curl", model: null, tools: 0, reply: null });

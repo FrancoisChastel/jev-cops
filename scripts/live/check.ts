@@ -116,10 +116,15 @@ function contentText(content: unknown): string {
   return content.map((c) => (typeof c === "string" ? c : str(obj(c).text ?? c))).join("\n");
 }
 
-/** One message or input item of the model's last turn, as a short line (system: none). */
+/**
+ * One message or input item of the model's last turn, as a short line. System messages
+ * count: Claude Code 2.1.286 puts a hook's additional context in a `system` message.
+ */
 function itemLines(item: unknown): string[] {
   const it = obj(item);
-  if (it.role === "system" || it.role === "developer") return [];
+  if (it.role === "system" || it.role === "developer") {
+    return [`${str(it.role)}: ${clip(contentText(it.content), 300)}`];
+  }
   if (it.type === "function_call_output")
     return [`function_call_output: ${clip(str(it.output), 400)}`];
   if (it.role === "tool") return [`tool result: ${clip(contentText(it.content), 400)}`];
