@@ -77,7 +77,7 @@ phase_install() {
   expect "cops-hook --version prints $version" ccsh "cops-hook --version | grep -qx '$version'"
   expect "cops, copsd and cops-hook are on PATH (bun add -g)" ccsh 'command -v cops copsd cops-hook'
   run ccsh 'cd ~/.bun/install/global/node_modules && for p in jev-cops @jev-cops/*; do printf "%s %s\n" "$p" "$(grep -m1 "\"version\"" "$p/package.json" | tr -d " ,\"" | cut -d: -f2)"; done'
-  note "@jev-cops/scanner is packed but not installed: no installed package depends on it yet."
+  note "@jev-cops/scanner is packed but not installed: nothing installed imports it until the daemon wires it in (PLAN-SETUP S2; pack-lib NOT_IN_META)."
   end
 
   begin 1.2 "cops --help, cops help, and every command's --help"
@@ -133,7 +133,7 @@ collect() {
     mkdir -p "$A/$h"
     live_cp_out "$h" /home/dev/live/out "$A/$h/out" || true
   done
-  for f in install.out doctor.out settings.pre-install.json settings.post-install.json replay.out openshell-dry-run.out openshell-policy.yaml; do
+  for f in install.out doctor.out uninstall.out settings.pre-install.json settings.post-install.json cops.pre-install.toml replay.out openshell-dry-run.out openshell-policy.yaml; do
     live_cp_out claude-code "/home/dev/live/$f" "$A/claude-code/$f" 2> /dev/null || true
   done
   live_cp_out pi /home/dev/live/doctor-pi.out "$A/pi/doctor-pi.out" 2> /dev/null || true

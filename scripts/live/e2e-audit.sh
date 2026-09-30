@@ -78,17 +78,20 @@ phase_openshell() {
 
 phase_uninstall() {
   begin 7.1 "cops install claude-code --uninstall restores the user's settings"
-  expect "uninstall exits 0" cc cops install claude-code --uninstall
-  expect_not "it removed every jev-cops hook" ccsh 'grep -c cops-hook ~/.claude/settings.json'
-  note "workaround: name the registered hook file with --hook-binary"
-  run ccsh 'cops install claude-code --uninstall --hook-binary ~/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts | head -2'
-  expect_not "with --hook-binary, no jev-cops hook is left" ccsh 'grep -c cops-hook ~/.claude/settings.json'
+  expect "uninstall exits 0" ccsh 'cops install claude-code --uninstall > ~/live/uninstall.out 2>&1; rc=$?; head -3 ~/live/uninstall.out; exit $rc'
+  expect_not "it removed every jev-cops hook (no --hook-binary needed)" ccsh 'grep -c cops-hook ~/.claude/settings.json'
   run ccsh 'diff -u ~/live/settings.pre-install.json ~/.claude/settings.json && echo "byte-identical"'
   expect "settings.json equals the pre-install snapshot (as JSON)" \
     ccsh 'bun -e "const a = await Bun.file(process.argv[1]).json(); const b = await Bun.file(process.argv[2]).json(); process.exit(Bun.deepEquals(a, b) ? 0 : 1)" ~/live/settings.pre-install.json ~/.claude/settings.json'
   expect "settings.json is byte-identical to the pre-install snapshot" \
     ccsh 'cmp ~/live/settings.pre-install.json ~/.claude/settings.json'
-  run ccsh 'cat ~/.config/jev-cops/cops.toml'
+  expect "it took [daemon] hook_binary back out of cops.toml" \
+    ccsh 'grep -F "removed [daemon] hook_binary from" ~/live/uninstall.out'
+  run ccsh 'diff -u ~/live/cops.pre-install.toml ~/.config/jev-cops/cops.toml && echo "byte-identical"'
+  expect "cops.toml is byte-identical to the pre-install snapshot" \
+    ccsh 'cmp ~/live/cops.pre-install.toml ~/.config/jev-cops/cops.toml'
+  expect "a second uninstall finds nothing left" \
+    ccsh 'cops install claude-code --uninstall | grep -F "no jev-cops hooks in"'
   end
 
   begin 7.2 "cops install pi --uninstall removes the extension"

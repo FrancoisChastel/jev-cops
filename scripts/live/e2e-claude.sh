@@ -20,6 +20,7 @@ tmux_cc() { run cc "$BIN/tmux-claude.sh" "$@"; }
 phase_claude_install() {
   begin 3.1 "cops install claude-code --dry-run writes nothing"
   run ccsh 'cp ~/.claude/settings.json ~/live/settings.pre-install.json; cat ~/.claude/settings.json'
+  run ccsh 'cp ~/.config/jev-cops/cops.toml ~/live/cops.pre-install.toml'
   expect "the dry run exits 0" cc cops install claude-code --dry-run
   expect "settings.json is byte-identical after the dry run" \
     ccsh 'cmp ~/.claude/settings.json ~/live/settings.pre-install.json'
@@ -41,6 +42,8 @@ phase_claude_install() {
   expect "canary: a benign call proceeds through the registered hook" ccsh 'grep -E "\[ok\] +benign call proceeds" ~/live/doctor.out'
   expect "canary: a config write is killed" ccsh 'grep -E "\[ok\] +config write is killed" ~/live/doctor.out'
   expect "the hook is in force on every event" ccsh 'grep -E "\[ok\] +registered" ~/live/doctor.out'
+  expect "canary: the hook's own ConfigChange check accepts an unchanged settings file" \
+    ccsh 'grep -E "\[ok\] +settings change is accepted" ~/live/doctor.out'
   end
 }
 

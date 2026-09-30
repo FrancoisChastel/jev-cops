@@ -269,7 +269,7 @@ and `SessionEnd`, with no matcher:
 | `UserPromptSubmit` | `POST /v1/session` `prompt` | `prompt` | blocked (`decision: "block"` + exit 2) when the reply says `killed: true`; the first prompt pins the task (T11) |
 | `SessionStart` | `POST /v1/session` `start` | `source`, `model` | exit 0; `systemMessage` warns the user when the daemon is down or the session is latched |
 | `SessionEnd` | `POST /v1/session` `end` | `reason` | exit 0, best effort |
-| `ConfigChange` | `POST /v1/session` `config-change` | `source`, `file_path` | blocked unless the cops hook is [intact](#intact) and the daemon was told; `policy_settings` report only |
+| `ConfigChange` | `POST /v1/session` `config-change` | `source`, `file_path` | blocked unless the cops hook is [intact](#intact-configchange) and the daemon was told; `policy_settings` report only |
 
 Every report carries the session mode, the cwd and the permission mode (a mode that is not
 an identifier is reported as `unknown`, which the daemon reads as "no human", D-078).
