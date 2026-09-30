@@ -12,6 +12,6 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 COPY files/syslog/rsyslog.conf /etc/rsyslog.conf
 COPY files/syslog/entrypoint.sh /usr/local/bin/syslog-entrypoint
-RUN chmod 0755 /usr/local/bin/syslog-entrypoint && mkdir -p /var/log/remote /etc/rsyslog-tls /certs
+RUN chmod 0755 /usr/local/bin/syslog-entrypoint && mkdir -p /var/log/remote /etc/rsyslog-tls /certs /var/lib/rsyslog
 EXPOSE 6514
 ENTRYPOINT ["/usr/local/bin/syslog-entrypoint"]

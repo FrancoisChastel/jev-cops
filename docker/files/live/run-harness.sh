@@ -18,7 +18,10 @@ case "$harness" in
     argv=(claude -p "$prompt" --output-format stream-json --verbose "$@")
     ;;
   pi)
-    argv=(pi -p --no-session --mode json --provider fake --model fake-model "$@" "$prompt")
+    # LIVE_PI_SESSION=<file>: keep the session there (a later run continues it).
+    session=(--no-session)
+    [ -n "${LIVE_PI_SESSION:-}" ] && session=(--session "$LIVE_PI_SESSION")
+    argv=(pi -p "${session[@]}" --mode json --provider fake --model fake-model "$@" "$prompt")
     ;;
   codex)
     argv=(codex exec --json --skip-git-repo-check -C "$HOME/work/repo" "$@" "$prompt")
