@@ -135,18 +135,19 @@ export function register(pi: PiApi, opts: JevCopsOptions): void {
   };
 
   /**
-   * Interactive hold: ask with the daemon's normalized raw command and detail (T8), read
-   * from the confirm view that only the verdict's `hold_token` unlocks; the answer
+   * Interactive hold: ask with the daemon's normalized raw command and its summary (T8),
+   * read from the confirm view that only the verdict's `hold_token` unlocks; the answer
    * carries the same token, which never reaches the model (T7). No token, no view: block.
+   * The summary is the policies' own lines: no score, as in Claude Code's ask (T6).
    */
   const hold = async (v: Judged, id: string, ctx: PiContext) => {
     if (!ctx.hasUI || v.token === null) return blocked(v.reason); // D-008: headless → deny
     const shown = await call("GET", `/v1/explain/${id}`, null, judgeMs, v.token).catch(() => null);
     const view = shown?.status === 200 ? shown.body : null;
-    const raw = pick(view, "raw");
+    const [raw, summary] = [pick(view, "raw"), pick(view, "summary")];
     if (typeof raw !== "string") return blocked(v.reason);
-    const detail = pick(view, "detail");
-    const message = typeof detail === "string" ? `${raw}\n\n${detail}` : raw;
+    const said = typeof summary === "string" ? `${summary}\n\n` : "";
+    const message = `Command, as jev-cops normalized it:\n${raw}\n\n${said}Full decision: cops explain ${id}`;
     const yes = await ctx.ui.confirm(`jev-cops hold: ${v.reason}`, message);
     const decision = yes ? "allow" : "deny";
     const answer = { event_id: id, decision, by: "pi-user", hold_token: v.token };

@@ -14,6 +14,10 @@ import { FakePi, fakeContext } from "./testing/fake-pi.ts";
 
 const REPO_POLICIES = join(import.meta.dir, "..", "..", "policies");
 const TASK = "Fix the flaky test in auth/";
+/** A confirm view's summary, and the scored detail the prompt must never show (T6). */
+const SUMMARY = "guard@1: hold\nguard@1 detail: HUMAN SUMMARY";
+const SCORED =
+  "verdict hold · risk 0.61 · floor 0.61\ntaint 0.87: from tool output: CANARY-EVIDENCE";
 
 let work = "";
 beforeAll(() => {
@@ -103,8 +107,16 @@ describe("Pi adapter end to end: repo policies, enforce", () => {
     expect(run.blocked).toBeUndefined();
     const [shown] = ctx.log.confirms;
     expect(shown?.title).toContain("Irreversible git operation on the default branch.");
-    expect(shown?.message).toContain("git push --force origin main");
+    expect(shown?.message).toContain("Command, as jev-cops normalized it:\ngit push --force");
+    expect(shown?.message).toContain(
+      "default-branch-guard@2: hold\ndefault-branch-guard@2 detail:",
+    );
+    const held = linesFor(td, ctx, "judge").at(-1);
+    expect(shown?.message).toContain(`Full decision: cops explain ${held?.event_id}`);
     expect(`${shown?.title}${shown?.message}`).not.toContain("trust me");
+    // No score in the prompt (T6); the audit line's detail keeps them for cops explain.
+    expect(shown?.message).not.toMatch(/\d\.\d/);
+    expect(JSON.stringify(payload(held).decision)).toContain("floor");
     const grants = linesFor(td, ctx, "precedent").map((l) => payload(l));
     expect(grants).toEqual([expect.objectContaining({ action: "grant", by: "pi-user" })]);
   });
@@ -304,31 +316,50 @@ describe("Pi adapter failure modes (T2, T3)", () => {
       const token = "T".repeat(43);
       const resolves: unknown[] = [];
       const views: (string | null)[] = [];
+      let id = "";
       const socket = serve(async (req) => {
         const path = new URL(req.url).pathname;
         if (req.method === "GET") {
           views.push(req.headers.get("authorization"));
-          return Response.json({ raw: "rm -rf x", detail: "HUMAN DETAIL" });
+          return Response.json({ raw: "rm -rf x", summary: SUMMARY, detail: SCORED });
         }
         const body = (await req.json()) as { id: string };
         if (path === "/v1/resolve") {
           resolves.push(body);
           return Response.json({ ok: true });
         }
+        if (path === "/v1/judge") id = body.id;
         const held = { event_id: body.id, verdict: "hold", reason: "Needs a human." };
         return Response.json({ ...held, hold_token: token });
       });
       const { pi, ctx } = await session(socket, { hasUI: true, confirm });
       const run = await pi.run(ctx, "bash", { command: "rm -rf x" }, "done");
       expect(views).toEqual([`Bearer ${token}`]);
-      expect(ctx.log.confirms).toEqual([
-        { title: "jev-cops hold: Needs a human.", message: "rm -rf x\n\nHUMAN DETAIL" },
-      ]);
+      const message = `Command, as jev-cops normalized it:\nrm -rf x\n\n${SUMMARY}\n\nFull decision: cops explain ${id}`;
+      expect(ctx.log.confirms).toEqual([{ title: "jev-cops hold: Needs a human.", message }]);
+      expect(JSON.stringify(ctx.log.confirms)).not.toContain("CANARY-EVIDENCE");
       expect(resolves).toEqual([expect.objectContaining({ decision, hold_token: token })]);
       const seen = JSON.stringify([run.blocked ?? null, run.content, ctx.log.confirms]);
       expect(seen).not.toContain(token);
     },
   );
+
+  test("a view without a summary still asks with the command and the explain pointer", async () => {
+    let id = "";
+    const socket = serve(async (req) => {
+      if (req.method === "GET") return Response.json({ raw: "rm -rf x", detail: SCORED });
+      const body = (await req.json()) as { id: string };
+      if (new URL(req.url).pathname === "/v1/resolve") return Response.json({ ok: true });
+      id = body.id;
+      const held = { event_id: body.id, verdict: "hold", reason: "Needs a human." };
+      return Response.json({ ...held, hold_token: "T".repeat(43) });
+    });
+    const { pi, ctx } = await session(socket, { hasUI: true, confirm: false });
+    await pi.run(ctx, "bash", { command: "rm -rf x" });
+    expect(ctx.log.confirms.map((c) => c.message)).toEqual([
+      `Command, as jev-cops normalized it:\nrm -rf x\n\nFull decision: cops explain ${id}`,
+    ]);
+  });
 
   test.each([
     ["the view is 404", "T".repeat(43)],
