@@ -1,25 +1,17 @@
 /**
  * `cops doctor`, daemon side (PLAN-M1 §4.4): `GET /v1/health` on the agent socket and on
  * the admin socket (version, policies and their degraded flags, judge, enforcement,
- * protected paths), and the audit log's hash chain through the daemon's own verifier
- * (T12), with the L6 caveat printed every time.
+ * protected paths, the audit block the audit checks read: `doctor-audit.ts`).
  */
-import { existsSync } from "node:fs";
-import { verifyChain } from "@jev-cops/daemon";
+
 import { z } from "zod";
 import { CLI_VERSION } from "../version.ts";
+import { auditHealthSchema } from "./doctor-audit.ts";
 import { samePath } from "./doctor-settings.ts";
 import { type Check, check } from "./doctor-types.ts";
 
 const GROUP = "copsd";
 const HEALTH_TIMEOUT_MS = 2_000;
-
-/**
- * What local verification of the audit chain cannot see (gate review L6): the chain is
- * unkeyed SHA-256, so a cut tail or a recomputed file still verifies.
- */
-export const AUDIT_CAVEAT =
-  "Local verification detects mid-file edits and deletions, not tail truncation or a full recompute (L6); only the off-box copy (M2) catches those.";
 
 const healthSchema = z.object({
   version: z.string(),
@@ -31,6 +23,8 @@ const healthSchema = z.object({
   sockets: z.object({ agent: z.string(), admin: z.string() }),
   protected_paths: z.number(),
   latched_sessions: z.number(),
+  /** Absent from a copsd older than M2. */
+  audit: auditHealthSchema.optional(),
 });
 
 /** The daemon's `/v1/health` body, as far as the doctor reads it. */
@@ -78,7 +72,7 @@ export async function probeDaemon(socket: string, adminSocket: string): Promise<
 }
 
 /** The health of whichever socket answered (the agent's first), or null. */
-function healthOf(p: DaemonProbe): Health | null {
+export function healthOf(p: DaemonProbe): Health | null {
   if (p.agent.ok) return p.agent.health;
   return p.admin.ok ? p.admin.health : null;
 }
@@ -204,37 +198,4 @@ function factChecks(h: Health): Check[] {
 export function daemonChecks(p: DaemonProbe): Check[] {
   const health = healthOf(p);
   return [agentCheck(p), adminCheck(p), ...(health === null ? [] : factChecks(health))];
-}
-
-/** The audit chain check for the log at `path` (T12), the L6 caveat included. */
-export function auditChecks(path: string): Check[] {
-  if (!existsSync(path)) {
-    return [
-      check(
-        "audit",
-        "chain",
-        "warn",
-        `no audit log at ${path} (copsd not started with this config?). ${AUDIT_CAVEAT}`,
-      ),
-    ];
-  }
-  const report = verifyChain(path);
-  if (report.ok) {
-    return [
-      check(
-        "audit",
-        "chain",
-        "ok",
-        `${report.lines === 1 ? "1 line verifies" : `${report.lines} lines verify`} at ${path}. ${AUDIT_CAVEAT}`,
-      ),
-    ];
-  }
-  return [
-    check(
-      "audit",
-      "chain",
-      "fail",
-      `broken at seq ${report.brokenAt} of ${path} (${report.reason}): the log was edited or lines were deleted (T12); keep the file for review. ${AUDIT_CAVEAT}`,
-    ),
-  ];
 }

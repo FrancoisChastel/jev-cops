@@ -9,14 +9,10 @@ import {
   withFreshId,
 } from "../../../daemon/src/testing/daemon.ts";
 import { policyModule } from "../../../daemon/src/testing/policies.ts";
+import { testKey } from "../../../daemon/src/testing/signed-log.ts";
 import { REPO_POLICIES } from "../testing/doctor.ts";
-import {
-  AUDIT_CAVEAT,
-  auditChecks,
-  daemonChecks,
-  fetchHealth,
-  probeDaemon,
-} from "./doctor-daemon.ts";
+import { auditChecks } from "./doctor-audit.ts";
+import { daemonChecks, fetchHealth, probeDaemon } from "./doctor-daemon.ts";
 import type { Check } from "./doctor-types.ts";
 
 const byName = (checks: readonly Check[], name: string): Check | undefined =>
@@ -152,10 +148,14 @@ describe("doctor: copsd health on both sockets", () => {
   });
 });
 
-describe("doctor: audit chain (T12)", () => {
+describe("doctor: audit checks on a real copsd's signed log (T12)", () => {
   let td: TestDaemon;
+  const key = testKey();
   beforeAll(async () => {
-    td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    td = await startTestDaemon({
+      policies: { "ok.ts": policyModule("ok") },
+      signingKey: key.privatePem,
+    });
     for (const command of ["ls", "cat README.md"]) {
       const e = withFreshId(buildEvent({ tool: "Bash", kind: "exec", input: { command } }));
       await td.call("POST", "/v1/judge", e);
@@ -165,28 +165,30 @@ describe("doctor: audit chain (T12)", () => {
     await td.stop();
   });
 
-  test("an intact log verifies, with the L6 caveat printed", () => {
-    const [chain] = auditChecks(td.config.audit.path);
-    expect(chain).toMatchObject({ group: "audit", name: "chain", status: "ok" });
-    expect(chain?.detail).toContain("3 lines");
-    expect(chain?.detail).toContain(AUDIT_CAVEAT);
-    expect(AUDIT_CAVEAT).toContain("not tail truncation or a full recompute");
+  async function checks(path: string) {
+    const pub = join(scratch, "team.pub");
+    writeFileSync(pub, key.publicPem);
+    const reply = await fetchHealth(td.config.daemon.socket);
+    const health = reply.ok ? (reply.health.audit ?? null) : null;
+    const input = { path, keyPath: td.config.audit.key, publicKey: pub, requireSigning: false };
+    return auditChecks({ ...input, remote: null, health });
+  }
+
+  test("an intact log verifies: chain, signatures, the key copsd runs with", async () => {
+    const c = await checks(td.config.audit.path);
+    expect(byName(c, "chain")).toMatchObject({ group: "audit", status: "ok" });
+    expect(byName(c, "signatures")?.status).toBe("ok");
+    expect(byName(c, "signing key")?.detail).toContain(key.pub.keyId);
+    expect(byName(c, "forwarding")?.status).toBe("warn");
   });
 
-  test("a tampered log is a failure naming the broken seq", () => {
+  test("a tampered log is a failure naming the broken seq", async () => {
     const copy = join(scratch, "tampered.jsonl");
     const lines = readFileSync(td.config.audit.path, "utf8").split("\n");
-    lines[1] = (lines[1] ?? "").replace('"verdict":"allow"', '"verdict":"deny"');
+    lines[2] = (lines[2] ?? "").replace('"verdict":"allow"', '"verdict":"deny"');
     writeFileSync(copy, lines.join("\n"));
-    const [chain] = auditChecks(copy);
-    expect(chain?.status).toBe("fail");
-    expect(chain?.detail).toContain("broken at seq 2");
-    expect(chain?.detail).toContain(AUDIT_CAVEAT);
-  });
-
-  test("no log yet is a warning", () => {
-    const [chain] = auditChecks(join(scratch, "missing.jsonl"));
-    expect(chain?.status).toBe("warn");
-    expect(chain?.detail).toContain("no audit log");
+    const c = await checks(copy);
+    expect(byName(c, "chain")?.status).toBe("fail");
+    expect(byName(c, "chain")?.detail).toContain("broken at seq 3");
   });
 });

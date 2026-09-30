@@ -1,6 +1,7 @@
 import { AuditLog } from "./audit.ts";
 import { FileTransport } from "./audit-forward/file.ts";
 import { CursorForwarder, type ForwarderOptions } from "./audit-forward/forwarder.ts";
+import { forwardingBehind } from "./audit-forward/gate.ts";
 import { SyslogTransport } from "./audit-forward/syslog.ts";
 import type { AuditForwarder, ForwarderStatus } from "./audit-forward/types.ts";
 import { applyRotation, keyMismatch, loadSigning } from "./audit-sign/boot.ts";
@@ -104,6 +105,7 @@ export function auditHealth(audit: AuditLog, forwarder: AuditForwarder | null, c
             last_error: status.lastError,
             down_since: status.downSince,
             required: forward.required,
+            refusing: forwardingBehind(forward, status) !== null,
           },
   };
 }

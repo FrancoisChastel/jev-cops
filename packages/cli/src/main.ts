@@ -35,7 +35,10 @@ Commands:
                                            payload on stdin, exits 0 or 2 (fail closed)
   doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path]
          [--admin-socket path] [--config path] [--home path]
-                                           check copsd, the audit chain and each harness's
+         [--audit-pubkey path] [--audit-remote copy]
+                                           check copsd, the audit log (chain, signed
+                                           checkpoints, signing key, forwarding, and the
+                                           off-box copy with --audit-remote), each harness's
                                            install, run a canary through the registered
                                            hook, print every known gap; --live also runs
                                            a real claude -p (JEV_COPS_LIVE_CANARY=1).

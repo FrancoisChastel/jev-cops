@@ -1,7 +1,9 @@
 /**
  * `cops doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path]
- * [--admin-socket path] [--config path] [--home path]` (PLAN-M1 §4.3–4.4): checks copsd on
- * both sockets, the audit chain, each harness's install, runs the offline canary through
+ * [--admin-socket path] [--config path] [--home path] [--audit-pubkey path] [--audit-remote
+ * path]` (PLAN-M1 §4.3–4.4, PLAN-M2 §6): checks copsd on
+ * both sockets, the audit log (chain, signed checkpoints, signing key, forwarding, the
+ * off-box copy), each harness's install, runs the offline canary through
  * the registered hook, optionally the live canary, and prints every known gap (spec:
  * "Every bypass we know we cannot close is printed by `doctor` … never silent").
  * It writes no configuration (a harness's or its own); the offline canary leaves its calls
@@ -37,6 +39,8 @@ export function parseDoctorArgs(argv: readonly string[]): DoctorArgs {
     "admin-socket": { type: "string" },
     config: { type: "string" },
     home: { type: "string" },
+    "audit-pubkey": { type: "string" },
+    "audit-remote": { type: "string" },
   } as const;
   let values: {
     harness?: string;
@@ -46,6 +50,8 @@ export function parseDoctorArgs(argv: readonly string[]): DoctorArgs {
     "admin-socket"?: string;
     config?: string;
     home?: string;
+    "audit-pubkey"?: string;
+    "audit-remote"?: string;
   };
   try {
     ({ values } = parseArgs({ args: [...argv], options, strict: true, allowPositionals: false }));
@@ -65,6 +71,8 @@ export function parseDoctorArgs(argv: readonly string[]): DoctorArgs {
       ...opt("socket", values.socket),
       ...opt("adminSocket", values["admin-socket"]),
       ...opt("config", values.config),
+      ...opt("auditPubkey", values["audit-pubkey"]),
+      ...opt("auditRemote", values["audit-remote"]),
     },
     json: values.json === true,
     home: values.home ?? null,
