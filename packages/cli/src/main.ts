@@ -5,6 +5,7 @@ import { runDoctorCommand } from "./commands/doctor.ts";
 import { runExplainCommand } from "./commands/explain.ts";
 import { runHookCommand } from "./commands/hook.ts";
 import { INSTALL_USAGE, runInstallCommand } from "./commands/install.ts";
+import { OPENSHELL_USAGE, runOpenShellCommand } from "./commands/openshell.ts";
 import { runReplayCommand } from "./commands/replay.ts";
 import { runTestCommand } from "./commands/test.ts";
 import { EXIT, type Io, PROCESS_IO } from "./io.ts";
@@ -41,7 +42,8 @@ Commands:
                                            audit lines and latches a throw-away session
                                            in copsd
 ${INSTALL_USAGE}
-  help                                     this text
+${OPENSHELL_USAGE}
+  help                                    this text
 
 Exit codes:
   0  success (test: every fixture passed; replay: ran, whatever the delta count;
@@ -62,6 +64,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   hook: runHookCommand,
   install: runInstallCommand,
   doctor: runDoctorCommand,
+  openshell: runOpenShellCommand,
 };
 
 /** Runs `jev-cops` with `argv` (without the binary name); resolves with the exit code. */

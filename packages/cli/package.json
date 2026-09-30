@@ -20,6 +20,7 @@
     "@jev-cops/adapter-pi": "workspace:*",
     "@jev-cops/core": "workspace:*",
     "@jev-cops/daemon": "workspace:*",
+    "@jev-cops/openshell": "workspace:*",
     "@jev-cops/sdk": "workspace:*",
     "zod": "^4.6.5"
   }
