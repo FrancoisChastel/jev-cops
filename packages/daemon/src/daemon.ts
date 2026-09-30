@@ -12,6 +12,7 @@ import {
   resolvePolicyConfig,
 } from "@jev-cops/core";
 import { createJudge, type ProviderConfig } from "@jev-cops/judge";
+import manifest from "../package.json" with { type: "json" };
 import { AuditLog } from "./audit.ts";
 import type { DaemonConfig } from "./config.ts";
 import { ConfirmViews } from "./confirm-view.ts";
@@ -27,8 +28,8 @@ import { RepoHintsCache } from "./repo-hints.ts";
 import { SessionFactsStore } from "./session-facts.ts";
 import { SessionStore } from "./sessions.ts";
 
-/** Reported by `/v1/health` and the boot line. */
-export const DAEMON_VERSION = "0.0.0";
+/** Reported by `/v1/health` and the boot line: the package version. */
+export const DAEMON_VERSION: string = manifest.version;
 /** How often idle sessions are closed. */
 export const GC_INTERVAL_MS = 10 * 60_000;
 

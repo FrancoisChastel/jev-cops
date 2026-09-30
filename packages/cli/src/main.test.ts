@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { captureIo } from "./io.ts";
-import { CLI_USAGE, main } from "./main.ts";
+import { CLI_USAGE, CLI_VERSION, main } from "./main.ts";
 
 describe("jev-cops", () => {
   test("--help prints the usage with the exit codes", async () => {
@@ -44,6 +44,6 @@ describe("jev-cops", () => {
       stdout: "pipe",
     });
     expect(await proc.exited).toBe(0);
-    expect((await new Response(proc.stdout).text()).trim()).toBe("0.0.0");
+    expect((await new Response(proc.stdout).text()).trim()).toBe(CLI_VERSION);
   });
 });

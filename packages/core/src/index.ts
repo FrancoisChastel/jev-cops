@@ -3,7 +3,10 @@
  * policy engine and verdict ladder. Adapters and the daemon build on this;
  * nothing here knows about any harness.
  */
-export const CORE_VERSION = "0.0.0";
+import manifest from "../package.json" with { type: "json" };
+
+/** The package version (every jev-cops package moves in lockstep). */
+export const CORE_VERSION: string = manifest.version;
 
 export * from "./context/index.ts";
 export * from "./judge/index.ts";

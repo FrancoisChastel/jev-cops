@@ -1,18 +1,50 @@
 {
   "name": "@jev-cops/adapter-pi",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "jev-cops extension for the Pi coding agent: forwards tool calls to copsd and maps verdicts back",
+  "keywords": [
+    "jev-cops",
+    "coding-agents",
+    "ai-agents",
+    "agent-security",
+    "guardrails",
+    "bun",
+    "pi",
+    "pi-extension",
+    "adapter"
+  ],
+  "homepage": "https://github.com/FrancoisChastel/jev-cops#readme",
+  "bugs": {
+    "url": "https://github.com/FrancoisChastel/jev-cops/issues"
+  },
   "license": "Apache-2.0",
+  "author": "François Chastel (https://github.com/FrancoisChastel)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FrancoisChastel/jev-cops.git",
+    "directory": "adapters/pi"
+  },
   "type": "module",
   "main": "./jev-cops.ts",
   "types": "./jev-cops.ts",
   "exports": {
     ".": "./jev-cops.ts",
-    "./install": "./install.ts"
+    "./install": "./install.ts",
+    "./package.json": "./package.json"
   },
   "files": [
     "jev-cops.ts",
     "install.ts",
-    "README.md"
-  ]
+    "pi-types.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
 }
