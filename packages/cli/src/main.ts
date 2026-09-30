@@ -6,9 +6,9 @@ import { runHookCommand } from "./commands/hook.ts";
 import { runReplayCommand } from "./commands/replay.ts";
 import { runTestCommand } from "./commands/test.ts";
 import { EXIT, type Io, PROCESS_IO } from "./io.ts";
+import { CLI_VERSION } from "./version.ts";
 
-/** CLI version; follows the workspace. */
-export const CLI_VERSION = "0.0.0";
+export { CLI_VERSION };
 
 export const CLI_USAGE = `cops ${CLI_VERSION} — the jev-cops command line
 
