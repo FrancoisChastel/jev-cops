@@ -144,7 +144,7 @@ function defaultModeCheck(reads: readonly SettingsReadOf[]): Check {
       GROUP,
       "defaultMode",
       "ok",
-      "not set (interactive sessions start in auto mode, -p in default)",
+      "not set (interactive sessions start in auto mode from Claude Code 2.1.283, in default before; -p in default)",
     );
   }
   const mode = String(permissions(first).defaultMode);

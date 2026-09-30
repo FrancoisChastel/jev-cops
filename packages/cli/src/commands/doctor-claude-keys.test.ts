@@ -42,6 +42,10 @@ describe("doctor: Claude Code settings keys", () => {
       ["allowedHttpHookUrls", "ok"],
     ]);
     expect(all.every((c) => c.group === "claude-code settings")).toBe(true);
+    // Auto mode is the starting mode only from 2.1.283; 2.1.280 started in default (live run).
+    expect(all.find((c) => c.name === "defaultMode")?.detail).toBe(
+      "not set (interactive sessions start in auto mode from Claude Code 2.1.283, in default before; -p in default)",
+    );
   });
 
   test("a settings file that is not JSON warns", () => {
