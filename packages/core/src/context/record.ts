@@ -87,7 +87,14 @@ function newStringOf(edit: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function toolContent(n: NormalizedEvent): { text: string; full: boolean } {
+/** What a write puts in a file: text to scan for taint, and the whole file when known. */
+interface WrittenContent {
+  text: string;
+  /** The file's full new content (a `Write`, a heredoc truncating the file). */
+  full: string | null;
+}
+
+function toolContent(n: NormalizedEvent): WrittenContent {
   const input = n.event.call.input;
   const str = (key: string): string => {
     const v = Object.hasOwn(input, key) ? input[key] : undefined;
@@ -98,17 +105,17 @@ function toolContent(n: NormalizedEvent): { text: string; full: boolean } {
   const replacements = [str("new_string"), str("newString"), str("new_source")];
   const text = [str("content"), ...replacements, editText].join("\n");
   const write = canonicalTool(n.event.call.tool, n.event.harness) === "Write";
-  return { text, full: write && str("content") !== "" };
+  return { text, full: write && str("content") !== "" ? str("content") : null };
 }
 
 /**
  * The text a command writes: its arguments and heredoc bodies. A patch command (an
  * `apply_patch` tool's file operation, patch.ts) carries the lines it adds as its body.
  */
-function commandContent(c: NormalizedCommand): { text: string; full: boolean } {
+function commandContent(c: NormalizedCommand): WrittenContent {
   const truncates = c.redirects.some((r) => r.op === ">" || r.op === ">|");
-  const full = c.heredocs.length > 0 && truncates;
-  return { text: [...c.argv.slice(1), ...c.heredocs].join("\n"), full };
+  const text = [...c.argv.slice(1), ...c.heredocs].join("\n");
+  return { text, full: c.heredocs.length > 0 && truncates ? text : null };
 }
 
 /** Readers whose commands come from the input's own text (a shell command, a script). */
@@ -147,7 +154,7 @@ function commandWrites(
   const executable = makesExecutable(c);
   return writes.map((r) => ({
     path: r.path,
-    ...(content.full ? { sha256: sha256(content.text) } : {}),
+    ...(content.full === null ? {} : { sha256: sha256(content.full) }),
     taint: clamp01(taint),
     callId: n.event.call.id,
     at,

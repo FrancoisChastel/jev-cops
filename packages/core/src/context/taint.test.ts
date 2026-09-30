@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   bashPost,
   bashPre,
@@ -271,13 +272,16 @@ describe("tokenTaint: one token under the taintFraction rules", () => {
     expect(cf.filesWritten().get("/work/repo/s.txt")?.taint).toBe(1);
   });
 
-  test("an OpenCode write records its content's hash, as a Claude Code Write does", async () => {
+  test.each([
+    ["claude-code", "Write", { file_path: "run.sh", content: "echo ok\n" }],
+    ["pi", "write", { path: "run.sh", content: "echo ok\n" }],
+    ["opencode", "write", { filePath: "run.sh", content: "echo ok\n" }],
+  ] as const)("a %s %s records the sha256 of exactly its content", async (harness, tool, input) => {
     const cf = await poisoned();
-    const input = { filePath: "run.sh", content: "echo ok\n" };
-    cf.recordPre(await toolEvent("write", "fs.write", input, { harness: "opencode" }));
+    cf.recordPre(await toolEvent(tool, "fs.write", input, { harness }));
     expect(cf.filesWritten().get("/work/repo/run.sh")).toMatchObject({
       taint: 0,
-      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      sha256: createHash("sha256").update("echo ok\n").digest("hex"),
     });
   });
 
