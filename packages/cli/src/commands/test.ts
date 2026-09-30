@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { loadPolicies, type PolicyDefinition } from "@jev-cops/core";
+import { isPolicyHelper, loadPolicies, type PolicyDefinition } from "@jev-cops/core";
 import { type CaseResult, type FixtureFile, loadFixtures, runFixtures } from "@jev-cops/sdk";
 import { EXIT, type Io } from "../io.ts";
 import { renderTable } from "../table.ts";
@@ -51,7 +51,7 @@ async function runFile(
 
 async function fixtureFiles(dir: string): Promise<string[]> {
   try {
-    return (await readdir(dir)).filter((f) => FIXTURE_FILE.test(f)).sort();
+    return (await readdir(dir)).filter((f) => FIXTURE_FILE.test(f) && !isPolicyHelper(f)).sort();
   } catch {
     return [];
   }
@@ -60,8 +60,9 @@ async function fixtureFiles(dir: string): Promise<string[]> {
 /**
  * The M0 gate (spec: "`cops test` fails the build on any mismatch"): loads `dir` the
  * way the daemon does, runs every `*.fixtures.json` through the SDK runner against its
- * policy alone and against the whole set. Loader problems, fixtures for unknown policies
- * and policies without fixtures are failures too.
+ * policy alone and against the whole set (`_`-prefixed helpers and their fixture files are
+ * not part of it). Loader problems, fixtures for unknown policies and policies without
+ * fixtures are failures too.
  */
 export async function testPolicies(dir: string): Promise<TestReport> {
   const loaded = await loadPolicies(dir);

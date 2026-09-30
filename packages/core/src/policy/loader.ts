@@ -14,7 +14,18 @@ export interface LoadedPolicies {
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CODE_FILE = /\.(?:ts|js|mjs)$/;
 const SKIPPED_FILE = /(?:\.test\.(?:ts|js|mjs)|\.d\.ts)$/;
+/** Names starting with this are helpers next to the policies (`_lib/`, `_shared.ts`). */
+const HELPER_PREFIX = "_";
 const OPTIONAL_FUNCTIONS = ["ask", "detail", "rewrite", "contextNote"] as const;
+
+/**
+ * Whether an entry of a policy directory is a helper, not a policy or a policy's fixtures:
+ * any `_`-prefixed name (`_lib/`, `_shared.ts`, `_x.fixtures.json`). Policies import
+ * helpers relatively (`./_lib/config-trees.ts`); the loader and `cops test` skip them.
+ */
+export function isPolicyHelper(entry: string): boolean {
+  return entry.startsWith(HELPER_PREFIX);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -134,6 +145,10 @@ function dedupe(candidates: ReadonlyArray<Candidate>): LoadedPolicies {
   return { policies: [...kept.values()].map((c) => c.policy), problems };
 }
 
+function isPolicyModule(entry: string): boolean {
+  return CODE_FILE.test(entry) && !SKIPPED_FILE.test(entry) && !isPolicyHelper(entry);
+}
+
 /** Loader options. */
 export interface LoadPoliciesOptions {
   /** Re-import files changed since the last load (the daemon's hot reload). */
@@ -141,8 +156,8 @@ export interface LoadPoliciesOptions {
 }
 
 /**
- * Imports every `*.ts`/`*.js`/`*.mjs` module in `dir` (not recursive; `*.test.*`, `*.d.ts`
- * and fixtures skipped) in file-name order and keeps each default export that passes
+ * Imports every `*.ts`/`*.js`/`*.mjs` module in `dir` (not recursive; `*.test.*`, `*.d.ts`,
+ * fixtures and `_`-prefixed helpers, see {@link isPolicyHelper}, skipped) in file-name order and keeps each default export that passes
  * {@link validatePolicy}. A module that throws on import or fails validation is reported,
  * never fatal. Duplicate names keep the higher version (the earlier file on a tie).
  */
@@ -152,7 +167,7 @@ export async function loadPolicies(
 ): Promise<LoadedPolicies> {
   let files: string[];
   try {
-    files = (await readdir(dir)).filter((f) => CODE_FILE.test(f) && !SKIPPED_FILE.test(f)).sort();
+    files = (await readdir(dir)).filter(isPolicyModule).sort();
   } catch (cause) {
     return { policies: [], problems: [`cannot read policy directory ${dir}: ${message(cause)}`] };
   }

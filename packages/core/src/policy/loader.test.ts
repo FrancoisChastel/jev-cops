@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadPolicies, validatePolicy } from "./loader.ts";
+import { isPolicyHelper, loadPolicies, validatePolicy } from "./loader.ts";
 
 function policySource(name: string, version: number, extra = ""): string {
   return `export default {
@@ -123,6 +123,47 @@ describe("validatePolicy", () => {
 
   test("rejects a non-object", () => {
     expect(validatePolicy(null)).toEqual({ ok: false, error: ["policy must be an object"] });
+  });
+});
+
+describe("loadPolicies and _-prefixed helpers (policies/_lib/)", () => {
+  test("a _lib/ dir and a _shared.ts are helpers: imported by a policy, never loaded as one", async () => {
+    // Arrange: a policy importing a helper module from each place, and both helpers
+    // shaped so that loading either as a policy would be a problem.
+    const own = await mkdtemp(join(tmpdir(), "jev-cops-helpers-"));
+    try {
+      await mkdir(join(own, "_lib"));
+      await writeFile(join(own, "_lib", "trees.ts"), 'export const OWNER = "cyber-team";\n');
+      await writeFile(join(own, "_shared.ts"), 'export const REASON = "Needs a look.";\n');
+      await writeFile(join(own, "_draft.js"), 'throw new Error("a helper is never imported");\n');
+      await writeFile(
+        join(own, "delta.ts"),
+        `import { OWNER } from "./_lib/trees.ts";
+import { REASON } from "./_shared.ts";
+export default { name: "delta", version: 1, owner: OWNER, when: () => true,
+  decide: () => "hold", reason: REASON };
+`,
+      );
+      // Act
+      const { policies, problems } = await loadPolicies(own);
+      // Assert
+      expect(problems).toEqual([]);
+      expect(policies.map((p) => `${p.name}@${p.version}`)).toEqual(["delta@1"]);
+      expect(policies[0]?.owner).toBe("cyber-team");
+    } finally {
+      await rm(own, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["_lib", true],
+    ["_shared.ts", true],
+    ["_x.fixtures.json", true],
+    ["config-tamper.ts", false],
+    ["config-tamper.fixtures.json", false],
+    ["lib_helper.ts", false],
+  ])("isPolicyHelper(%p) is %p", (entry, helper) => {
+    expect(isPolicyHelper(entry)).toBe(helper);
   });
 });
 

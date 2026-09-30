@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   createCaseFile,
   createDisabledJudge,
   createPolicyEngine,
   type Decision,
+  isPolicyHelper,
   loadPolicies,
   type PostEvent,
   type PreEvent,
@@ -21,15 +22,33 @@ import { buildEvent, CTX_HOME, CTX_SESSION, testClock } from "../tests/fixtures/
  * `*.fixtures.json`; `cops test` fails the build on any mismatch"). Every policy is
  * loaded the way the daemon loads it, then each fixture file runs twice: against its own
  * policy alone, and against the whole starter set, so no other policy may change the
- * outcome a fixture pins.
+ * outcome a fixture pins. Helpers (`_lib/`, any `_`-prefixed entry) are not policies.
  */
 
 const DIR = import.meta.dir;
-const POLICY_FILE = /^[a-z0-9-]+\.ts$/;
+const LIB = join(DIR, "_lib");
+/** A policy or helper module (a test or fixture file has an inner dot). */
+const MODULE_FILE = /^[a-z0-9-]+\.ts$/;
+/** A policy imports the SDK and helpers from `./_lib/`, nothing else (no `..`, no core). */
+const POLICY_IMPORT = /^(?:@jev-cops\/sdk|\.\/_lib\/[a-z0-9-]+\.ts)$/;
+/** A helper imports the SDK and its `_lib/` siblings, nothing else. */
+const HELPER_IMPORT = /^(?:@jev-cops\/sdk|\.\/[a-z0-9-]+\.ts)$/;
 const files = readdirSync(DIR)
-  .filter((f) => POLICY_FILE.test(f))
+  .filter((f) => MODULE_FILE.test(f) && !isPolicyHelper(f))
   .sort();
+const helpers = existsSync(LIB)
+  ? readdirSync(LIB)
+      .filter((f) => MODULE_FILE.test(f))
+      .sort()
+  : [];
 const loaded = await loadPolicies(DIR);
+
+/** Every module specifier in `source`: static and side-effect imports, re-exports, `import()`. */
+function importsOf(source: string): string[] {
+  return [...source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g)].map(
+    (m) => m[1] ?? "",
+  );
+}
 
 function rank(v: Verdict): number {
   return VERDICTS.indexOf(v);
@@ -69,14 +88,19 @@ describe("starter policy set", () => {
     }
   });
 
-  test("policies import nothing but @jev-cops/sdk", () => {
+  test("policies import nothing but @jev-cops/sdk and ./_lib/ helpers", () => {
     for (const file of files) {
-      const source = readFileSync(join(DIR, file), "utf8");
-      const imports = [...source.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
-      expect({ file, imports: imports.filter((i) => i !== "@jev-cops/sdk") }).toEqual({
-        file,
-        imports: [],
-      });
+      const imports = importsOf(readFileSync(join(DIR, file), "utf8"));
+      const foreign = imports.filter((i) => !POLICY_IMPORT.test(i));
+      expect({ file, foreign }).toEqual({ file, foreign: [] });
+    }
+  });
+
+  test("_lib/ helpers import nothing but @jev-cops/sdk and each other", () => {
+    for (const file of helpers) {
+      const imports = importsOf(readFileSync(join(LIB, file), "utf8"));
+      const foreign = imports.filter((i) => !HELPER_IMPORT.test(i));
+      expect({ file: `_lib/${file}`, foreign }).toEqual({ file: `_lib/${file}`, foreign: [] });
     }
   });
 });

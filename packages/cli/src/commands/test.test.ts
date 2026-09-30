@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { captureIo } from "../io.ts";
@@ -84,6 +84,27 @@ describe("cops test", () => {
     const io = captureIo();
     expect(await runTestCommand([dir], io)).toBe(1);
     expect(io.stdout.join("\n")).toContain("ghost");
+  });
+
+  test("_-prefixed helpers (_lib/, _shared.ts) and their fixtures are not part of the set", async () => {
+    // Arrange: a helper module and a helper dir next to the policy, and a stray fixture
+    // file for a helper (which would be "fixtures for an unknown policy" if read).
+    writeFileSync(join(dir, "plain.ts"), plainPolicy("hold"));
+    writeFileSync(join(dir, "plain.fixtures.json"), fixtures("hold"));
+    writeFileSync(join(dir, "_shared.ts"), "export const x = 1;\n");
+    mkdirSync(join(dir, "_lib"));
+    writeFileSync(join(dir, "_lib", "trees.ts"), "export const y = 2;\n");
+    writeFileSync(join(dir, "_shared.fixtures.json"), fixtures("hold").replace('"plain"', '"x"'));
+    const io = captureIo();
+    // Act
+    const code = await runTestCommand([dir, "--json"], io);
+    // Assert
+    const report = JSON.parse(io.stdout.join("\n")) as { policies: number; problems: string[] };
+    expect({ code, policies: report.policies, problems: report.problems }).toEqual({
+      code: 0,
+      policies: 1,
+      problems: [],
+    });
   });
 
   test("--json prints a machine-readable report", async () => {
