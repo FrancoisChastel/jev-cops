@@ -21,7 +21,8 @@ beforeEach(() => {
   writeFileSync(bin, "#!/bin/sh\n");
   chmodSync(bin, 0o755);
   id = {
-    command: bin,
+    program: bin,
+    runtime: null,
     leading: [],
     socket: "/run/j.sock",
     home: "/home/dev",
@@ -95,16 +96,42 @@ describe("isJevCopsHandler: this hook, on every call of the event", () => {
     expect(isJevCopsHandler("PreToolUse", {}, entry, id)).toBe(true);
   });
 
-  test("from source: bun, the same script, then the flags", () => {
+  test("from source, through Bun: the Bun running the hook, the same script, then the flags", () => {
     const script = join(dir, "hook-main.ts");
     writeFileSync(script, "");
-    const src = { ...id, leading: [script] };
+    const src = { ...id, program: script, runtime: bin };
     expect(isJevCopsHandler("PreToolUse", {}, handler({ args: [script, ...ARGS] }), src)).toBe(
       true,
     );
     const other = join(dir, "other.ts");
     writeFileSync(other, "");
     expect(isJevCopsHandler("PreToolUse", {}, handler({ args: [other, ...ARGS] }), src)).toBe(
+      false,
+    );
+  });
+
+  test("from source, started directly (the npm install: the script through its #! line)", () => {
+    const script = join(dir, "cops-hook.ts");
+    writeFileSync(script, "#!/usr/bin/env bun\n");
+    chmodSync(script, 0o755);
+    const src = { ...id, program: script, runtime: bin };
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ command: script }), src)).toBe(true);
+    const link = join(dir, "bin-link");
+    symlinkSync(script, link);
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ command: link }), src)).toBe(true);
+  });
+
+  test("another Bun running the same script is not this hook", () => {
+    const script = join(dir, "hook-main.ts");
+    writeFileSync(script, "");
+    const otherBun = join(dir, "bun");
+    writeFileSync(otherBun, "#!/bin/sh\n");
+    chmodSync(otherBun, 0o755);
+    const src = { ...id, program: script, runtime: bin };
+    const entry = handler({ command: otherBun, args: [script, ...ARGS] });
+    expect(isJevCopsHandler("PreToolUse", {}, entry, src)).toBe(false);
+    const compiled = { ...id, program: script, runtime: null };
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ args: [script, ...ARGS] }), compiled)).toBe(
       false,
     );
   });

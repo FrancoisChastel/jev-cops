@@ -8,6 +8,7 @@
  */
 import { CLAUDE_CODE_GAPS } from "./gaps.ts";
 import { jevCopsHookEntries, type Transport } from "./hook-entries.ts";
+import { entrySelf, type HookSelf } from "./hook-identity.ts";
 import { checkIntact } from "./intact.ts";
 import { lineDiff } from "./line-diff.ts";
 import { type InstallCheck, installWarnings, refusals, type SettingsView } from "./refusals.ts";
@@ -153,9 +154,12 @@ function intactWarning(
 ) {
   const planned = { file: { scope: o.scope, path }, read: { kind: "ok" as const, value: merged } };
   const reads = [...view.files.filter((f) => f.file.path !== path), planned];
+  const ctx = { projectDir: o.projectDir, path: o.pathEnv ?? "" };
+  // The identity the registered hook will compute for itself (hook-identity.ts): the same
+  // function the hook's own ConfigChange check matches entries with.
+  const unresolved: HookSelf = { program: o.hookBinary, runtime: null, leading: [] };
   const id = {
-    command: o.hookBinary,
-    leading: [],
+    ...(entrySelf(o.hookBinary, [], ctx)?.self ?? unresolved),
     socket: o.socket,
     home: o.home,
     projectDir: o.projectDir,

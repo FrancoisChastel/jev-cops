@@ -13,6 +13,7 @@ export * from "./gaps.ts";
 export * from "./hook.ts";
 export * from "./hook-binary.ts";
 export * from "./hook-entries.ts";
+export * from "./hook-identity.ts";
 export * from "./install.ts";
 export * from "./install-state.ts";
 export * from "./intact.ts";

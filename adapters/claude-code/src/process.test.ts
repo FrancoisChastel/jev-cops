@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Server } from "bun";
 import { claudeCodePayloadText } from "../../../tests/fixtures/claude-code/index.ts";
-import { type HookPort, processPort, runHookProcess, selfOf, writeAll } from "./process.ts";
+import { selfOf } from "./hook-identity.ts";
+import { type HookPort, processPort, runHookProcess, writeAll } from "./process.ts";
 import { HOOK_VERSION } from "./version.ts";
 
 const dirs: string[] = [];
@@ -158,11 +159,19 @@ describe("runHookProcess: the fail-closed shell", () => {
 
 describe("runHookProcess: ConfigChange reads the settings files on disk", () => {
   function settingsWith(socket: string, entry: boolean): string {
+    // This process as a hook: this Bun running this file (`bun <script>` form).
     const self = selfOf([]);
     const handler = {
       type: "command",
-      command: self.command,
-      args: [...self.leading, "--harness", "claude-code", "--socket", socket],
+      command: self.runtime ?? self.program,
+      args: [
+        ...(self.runtime === null ? [] : [self.program]),
+        ...self.leading,
+        "--harness",
+        "claude-code",
+        "--socket",
+        socket,
+      ],
     };
     const events = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit"];
     const hooks = Object.fromEntries(
@@ -226,21 +235,5 @@ describe("writeAll", () => {
     const text = `${"x".repeat(200_000)}é`;
     writeAll(fd, text);
     expect(readFileSync(path, "utf8")).toBe(text);
-  });
-});
-
-describe("selfOf: how this process was started, for the ConfigChange identity check", () => {
-  test("from source: bun plus the entry script", () => {
-    expect(selfOf(["hook"], { execPath: "/usr/bin/bun", main: "/repo/cli/main.ts" })).toEqual({
-      command: "/usr/bin/bun",
-      leading: ["/repo/cli/main.ts", "hook"],
-    });
-  });
-
-  test("compiled: the binary alone", () => {
-    expect(selfOf([], { execPath: "/opt/cops-hook", main: "/$bunfs/root/cops-hook" })).toEqual({
-      command: "/opt/cops-hook",
-      leading: [],
-    });
   });
 });

@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { type GuardedFs, guardedFs, isUnder } from "../testing/fs-guard.ts";
 import { CLAUDE_CODE_GAPS } from "./gaps.ts";
 import { INSTALLED_EVENTS } from "./hook-entries.ts";
+import { selfOf } from "./hook-identity.ts";
 import {
   InstallError,
   type InstallOptions,
@@ -166,9 +167,9 @@ describe("installClaudeCodeHooks: merge, backup, idempotence", () => {
   test("the installed entries pass the ConfigChange intact check (D-087 is the contract)", () => {
     const r = installClaudeCodeHooks(opts());
     const view = readView(opts(), fs);
+    // The identity the registered binary computes for itself when it runs (compiled).
     const id = {
-      command: bin,
-      leading: [],
+      ...selfOf([], { execPath: bin, main: "/$bunfs/root/cops-hook" }),
       socket: join(root, "d.sock"),
       home,
       projectDir: project,
@@ -186,8 +187,7 @@ describe("installClaudeCodeHooks: merge, backup, idempotence", () => {
       hooks: [{ type: "http", url: `${httpUrl}/v1/hooks/claude-code`, timeout: 15 }],
     });
     const id = {
-      command: bin,
-      leading: [],
+      ...selfOf([], { execPath: bin, main: "/$bunfs/root/cops-hook" }),
       socket: join(root, "d.sock"),
       home,
       projectDir: project,

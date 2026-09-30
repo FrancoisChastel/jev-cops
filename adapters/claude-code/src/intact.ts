@@ -3,17 +3,19 @@
  * force on every event it guards. Precisely: for each of {@link REQUIRED_EVENTS}, some
  * settings file Claude Code loads registers, in a group whose matcher selects every call
  * (absent, `""` or `"*"`; `UserPromptSubmit` has no matcher), a handler that is this very
- * hook: exec form, the same executable (after `${CLAUDE_PROJECT_DIR}`, PATH and symlinks),
- * the same leading arguments, `--harness claude-code`, the same socket, no `if`, not async,
- * and a timeout above the hook's own deadline (with `--transport http`, the post events may
- * instead be an HTTP hook to the daemon URL this hook carries as `--http-url`); and nothing disables it (`disableAllHooks` anywhere for a
- * non-managed install, or in managed settings; `allowManagedHooksOnly` in managed settings
- * over a non-managed install). A changed file that is not valid JSON is not intact.
+ * hook (hook-identity.ts: the same program, started directly or by the same Bun, after
+ * `${CLAUDE_PROJECT_DIR}`, PATH and symlinks; the same leading arguments), `--harness
+ * claude-code`, the same socket, no `if`, not async, and a timeout above the hook's own
+ * deadline (with `--transport http`, the post events may instead be an HTTP hook to the
+ * daemon URL this hook carries as `--http-url`); and nothing disables it (`disableAllHooks`
+ * anywhere for a non-managed install, or in managed settings; `allowManagedHooksOnly` in
+ * managed settings over a non-managed install). A changed file that is not valid JSON is not
+ * intact.
  */
-import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseHookArgs } from "./args.ts";
 import { CLAUDE_CODE_HOOK_PATH } from "./hook-entries.ts";
+import { type HookSelf, selfFlags } from "./hook-identity.ts";
 import type { SettingsFile, SettingsRead } from "./settings.ts";
 
 /** The events jev-cops must stay registered on: the gate, its taint feed, its prompt and config guards. */
@@ -37,10 +39,11 @@ export const MIN_TIMEOUT_S: Readonly<Record<RequiredEvent, number>> = {
   ConfigChange: 6,
 };
 
-/** This hook: how it was started, which socket it talks to, and where names resolve. */
-export interface HookIdentity {
-  readonly command: string;
-  readonly leading: readonly string[];
+/**
+ * This hook: how it runs ({@link HookSelf}: program, Bun, leading arguments), which socket
+ * it talks to, and where an entry's names resolve.
+ */
+export interface HookIdentity extends HookSelf {
   readonly socket: string;
   readonly home: string;
   readonly projectDir: string;
@@ -68,28 +71,6 @@ function isRecord(value: unknown): value is Json {
   return Object.prototype.toString.call(value) === "[object Object]";
 }
 
-function realpath(path: string | null): string | null {
-  try {
-    return path === null ? null : realpathSync(path);
-  } catch {
-    return null; // missing or unreadable: never the same file as this hook
-  }
-}
-
-/** The file an exec-form `command` spawns: placeholders substituted, bare names on PATH. */
-function commandFile(command: string, id: HookIdentity): string | null {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: Claude Code's literal placeholder
-  const expanded = command.replaceAll("${CLAUDE_PROJECT_DIR}", id.projectDir);
-  if (expanded.includes("/")) return realpath(resolve(id.projectDir, expanded));
-  return realpath(Bun.which(expanded, { PATH: id.path }));
-}
-
-function sameArg(entry: string, mine: string, id: HookIdentity): boolean {
-  if (entry === mine) return true;
-  const a = realpath(resolve(id.projectDir, entry));
-  return a !== null && a === realpath(mine);
-}
-
 function settled(event: RequiredEvent, h: Json): boolean {
   if ("if" in h || h.async === true || h.asyncRewake === true) return false;
   return (
@@ -101,10 +82,9 @@ function isOurCommand(h: Json, id: HookIdentity): boolean {
   const args = h.args;
   if (h.type !== "command" || typeof h.command !== "string" || !Array.isArray(args)) return false;
   if (!args.every((a): a is string => typeof a === "string")) return false;
-  const self = realpath(id.command);
-  if (self === null || commandFile(h.command, id) !== self) return false;
-  if (!id.leading.every((mine, k) => sameArg(args[k] ?? "", mine, id))) return false;
-  const flags = parseHookArgs(args.slice(id.leading.length), id.home);
+  const rest = selfFlags(h.command, args, id, id);
+  if (rest === null) return false;
+  const flags = parseHookArgs(rest, id.home);
   if (!flags.ok || flags.httpUrl !== (id.httpUrl ?? null)) return false;
   return resolve(flags.socket) === resolve(id.socket);
 }

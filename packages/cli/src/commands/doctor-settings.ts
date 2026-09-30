@@ -6,7 +6,9 @@
 import { accessSync, constants, realpathSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
+  entrySelf,
   type HookIdentity,
+  type HookSelf,
   parseHookArgs,
   readSettingsFile,
   type SettingsFile,
@@ -46,6 +48,11 @@ export interface CopsIdentity {
   readonly args: readonly string[];
   /** The arguments before `--harness` (the script under `bun`, `hook` under `cops`). */
   readonly leading: readonly string[];
+  /**
+   * The identity the hook this entry starts will compute for itself (the adapter's
+   * `entrySelf`, the prediction the installer also uses), or null when nothing resolves.
+   */
+  readonly self: HookSelf | null;
   /** The `--socket` it passes (default under the home), or null when its flags do not parse. */
   readonly socket: string | null;
   /** The file `command` resolves to (placeholders, PATH), or null when it resolves to nothing. */
@@ -151,17 +158,26 @@ export function identityOf(h: Json, projectDir: string, e: DoctorEnv): CopsIdent
   const flags = at < 0 ? null : parseHookArgs(args.slice(at), e.home);
   const socket = flags?.ok === true ? resolve(flags.socket) : null;
   const commandFile = commandFileOf(command, projectDir, e);
-  const key = [commandFile ?? command, ...leading, socket ?? "?"]
+  const self = entrySelf(command, args, { projectDir, path: e.env.PATH ?? "" })?.self ?? null;
+  const program = self === null ? [commandFile ?? command] : [self.program, ...self.leading];
+  const key = [...program, socket ?? "?"]
     .map((part) => (isAbsolute(part) ? realpathOr(part) : part))
     .join("\u0000");
-  return { command, args, leading, socket, commandFile, key };
+  return { command, args, leading, self, socket, commandFile, key };
 }
 
-/** The adapter's {@link HookIdentity} for `id`, to reuse the ConfigChange "intact" check (D-087). */
+/**
+ * The adapter's {@link HookIdentity} for `id`: the identity its hook computes for itself
+ * (hook-identity.ts), so the doctor's "intact" is the hook's own ConfigChange check (D-087).
+ */
 export function hookIdentityOf(id: CopsIdentity, view: SettingsView, e: DoctorEnv): HookIdentity {
+  const unresolved: HookSelf = {
+    program: id.commandFile ?? id.command,
+    runtime: null,
+    leading: [],
+  };
   return {
-    command: id.commandFile ?? id.command,
-    leading: id.leading,
+    ...(id.self ?? unresolved),
     socket: id.socket ?? "",
     home: e.home,
     projectDir: view.projectDir,

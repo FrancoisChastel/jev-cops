@@ -11,6 +11,7 @@ import { parseHookArgs } from "./args.ts";
 import { createClient } from "./client.ts";
 import { deadlinesFrom, type HookDeps, spend } from "./deps.ts";
 import { runHook, withDeadline } from "./hook.ts";
+import { type HookSelf, selfOf } from "./hook-identity.ts";
 import { checkIntact, type IntactCheck } from "./intact.ts";
 import { appendHookLog, type HookLogLine, hookLogPath } from "./log.ts";
 import { detectMode, readProc } from "./mode.ts";
@@ -34,12 +35,6 @@ export interface HookPort {
   /** Registers the handler for uncaught exceptions and unhandled rejections. */
   onFatal(handler: (why: string) => void): void;
   setExitCode(code: number): void;
-}
-
-/** How this process was started: the executable and the argv before the hook's flags. */
-export interface HookSelf {
-  readonly command: string;
-  readonly leading: readonly string[];
 }
 
 const EAGAIN_PAUSE_MS = 1;
@@ -91,20 +86,6 @@ export function processPort(): HookPort {
       process.exitCode = code;
     },
   };
-}
-
-/**
- * The identity of this hook process: from source, `bun` plus the entry script; compiled,
- * the binary alone (`Bun.main` is then under `/$bunfs/`). `subcommand` is what precedes the
- * flags (`["hook"]` for `cops hook`).
- */
-export function selfOf(
-  subcommand: readonly string[],
-  runtime: { execPath: string; main: string } = { execPath: process.execPath, main: Bun.main },
-): HookSelf {
-  const compiled = runtime.main.startsWith("/$bunfs/") || runtime.main.startsWith("B:/~BUN/");
-  const leading = compiled ? [...subcommand] : [runtime.main, ...subcommand];
-  return { command: runtime.execPath, leading };
 }
 
 function once<T>(read: () => T): () => T {
@@ -186,8 +167,10 @@ async function outcome(argv: readonly string[], self: HookSelf, port: HookPort) 
 /**
  * Runs the hook as this process: exit code 2 first, fatal handlers, arguments, stdin, the
  * run, the output, the exit. `--version` alone prints {@link HOOK_VERSION} and exits 0
- * (never as a hook: the ConfigChange check refuses an entry with it, like any unknown flag). `subcommand` precedes the hook's flags in its argv (`["hook"]` for
- * `cops hook`), for the ConfigChange identity check (see {@link selfOf}).
+ * (never as a hook: the ConfigChange check refuses an entry with it, like any unknown flag).
+ * `subcommand` precedes the hook's flags in its argv (`["hook"]` for `cops hook`), for the
+ * ConfigChange identity check (hook-identity.ts `selfOf`, the one the installer and doctor
+ * predict).
  * Resolves with the exit code (the real port has exited by then).
  */
 export async function runHookProcess(
