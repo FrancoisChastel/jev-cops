@@ -5,6 +5,7 @@
 export * from "./commands/budget.ts";
 export * from "./commands/explain.ts";
 export * from "./commands/hook.ts";
+export * from "./commands/install.ts";
 export * from "./commands/replay.ts";
 export * from "./commands/test.ts";
 export * from "./io.ts";

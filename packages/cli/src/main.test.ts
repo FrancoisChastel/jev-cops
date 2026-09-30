@@ -25,7 +25,7 @@ describe("jev-cops", () => {
     expect(CLI_USAGE).toContain("hook --harness claude-code");
   });
 
-  test.each(["install", "doctor"])("%s is not yet available (M1) and exits 2", async (name) => {
+  test.each(["doctor"])("%s is not yet available (M1) and exits 2", async (name) => {
     const io = captureIo();
     expect(await main([name], io)).toBe(2);
     expect(io.stderr).toEqual([`jev-cops ${name}: not yet available (M1)`]);

@@ -7,6 +7,7 @@ import {
   defaultHookBinary,
   hookBinaryProblem,
   hookBinaryVersion,
+  isRootLocked,
   isWritableByMe,
 } from "./hook-binary.ts";
 import { type SpawnRequest, spawnProcess } from "./spawn.ts";
@@ -68,6 +69,12 @@ describe("hookBinaryProblem (PLAN-M1 §5 row 1: a missing binary silently disabl
   test("isWritableByMe", () => {
     expect(isWritableByMe(script("w", "exit 0"))).toBe(true);
     expect(isWritableByMe(join(dir, "missing"))).toBe(false);
+  });
+
+  test("isRootLocked: root-owned and not group/world writable", () => {
+    expect(isRootLocked("/bin/sh")).toBe(true);
+    expect(isRootLocked(script("mine", "exit 0"))).toBe(false);
+    expect(isRootLocked(join(dir, "missing"))).toBe(false);
   });
 });
 

@@ -62,6 +62,19 @@ export function isWritableByMe(path: string): boolean {
   }
 }
 
+/**
+ * True when `path` is owned by root and writable by nobody else: what a managed install
+ * needs, since a user-writable binary lets the agent replace the hook it runs under.
+ */
+export function isRootLocked(path: string): boolean {
+  try {
+    const st = statSync(path);
+    return st.uid === 0 && (st.mode & 0o022) === 0;
+  } catch {
+    return false; // unreadable: not known to be locked
+  }
+}
+
 /** `<path> --version`: the version it prints, or why there is none. */
 export async function hookBinaryVersion(
   path: string,
