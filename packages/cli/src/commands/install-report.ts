@@ -130,6 +130,13 @@ function installLines(r: ClaudeReport): string[] {
   return lines;
 }
 
+function uninstallLines(r: ClaudeReport): string[] {
+  if (r.action !== "uninstall" || !r.configChanged || r.configPath === null) return [];
+  return [
+    `${TAG} ${r.dryRun ? "would remove" : "removed"} [daemon] hook_binary from ${r.configPath}`,
+  ];
+}
+
 function canaryLines(r: ClaudeReport): string[] {
   const c = r.canary;
   if (c === null) return [];
@@ -165,6 +172,7 @@ export function printClaudeReport(r: ClaudeReport, io: Io, json: boolean): void 
   const lines = [
     ...(r.settings === null ? [] : settingsLines(r.settings)),
     ...installLines(r),
+    ...uninstallLines(r),
     ...canaryLines(r),
     ...[...r.warnings, ...(r.settings?.warnings ?? [])].map((w) => `${TAG} warning: ${w}`),
   ];

@@ -4,6 +4,7 @@
  * the `[daemon]` header, or a `[daemon]` table is appended. The result is parsed back and
  * must equal the old document plus that one key, or nothing is returned (a dotted
  * `daemon.hook_binary`, an inline `daemon = {…}` table or invalid TOML are left to a human).
+ * {@link unsetDaemonHookBinary} is its inverse, for `cops install claude-code --uninstall`.
  */
 
 const HEADER = /^\s*\[\s*daemon\s*\]\s*(#.*)?$/;
@@ -76,5 +77,53 @@ export function readDaemonHookBinary(text: string | null): string | null {
     return typeof value === "string" ? value : null;
   } catch {
     return null; // a cops.toml that does not parse names no binary
+  }
+}
+
+/** The document without `[daemon] hook_binary`, and without a `[daemon]` table it leaves empty. */
+function without(doc: Record<string, unknown>): Record<string, unknown> {
+  const { daemon, ...rest } = doc;
+  if (typeof daemon !== "object" || daemon === null) return doc;
+  const { hook_binary: _gone, ...keys } = daemon as Record<string, unknown>;
+  return Object.keys(keys).length === 0 ? rest : { ...rest, daemon: keys };
+}
+
+/** `lines` without the `[daemon]` header at `start` when nothing but blank lines follow it. */
+function dropEmptyHeader(lines: readonly string[], start: number): string[] {
+  const next = lines.findIndex((l, k) => k > start && ANY_HEADER.test(l));
+  const end = next === -1 ? lines.length : next;
+  if (lines.slice(start + 1, end).some((l) => l.trim() !== "")) return [...lines];
+  // The blank line `setDaemonHookBinary` put before an appended table goes with it.
+  const from = start > 0 && lines[start - 1]?.trim() === "" && next === -1 ? start - 1 : start;
+  return [...lines.slice(0, from), ...lines.slice(start + 1)];
+}
+
+/**
+ * `before` without the `[daemon] hook_binary = value` line (and the `[daemon]` table when
+ * that empties it), so that setting then unsetting gives the file back byte for byte; a
+ * file created by the set comes back as "". Returns `before` unchanged when it has no such
+ * line, names another value, or cannot be edited safely (the result is parsed back and must
+ * equal the old document minus that key).
+ */
+export function unsetDaemonHookBinary(before: string | null, value: string): string | null {
+  if (before === null) return null;
+  const lines = before.split("\n");
+  const start = lines.findIndex((l) => HEADER.test(l));
+  const next = lines.findIndex((l, k) => k > start && ANY_HEADER.test(l));
+  const end = next === -1 ? lines.length : next;
+  const at = start === -1 ? -1 : lines.findIndex((l, k) => k > start && k < end && KEY.test(l));
+  if (at === -1 || readDaemonHookBinary(before) !== value) return before;
+  const kept = dropEmptyHeader(
+    lines.filter((_, k) => k !== at),
+    start,
+  );
+  const after = kept.join("\n");
+  const text = after.trim() === "" ? "" : after;
+  try {
+    const out = parse(text);
+    const same = Bun.deepEquals(without(out), without(parse(before)));
+    return same && readDaemonHookBinary(text) === null ? text : before;
+  } catch {
+    return before; // never write a config that does not parse
   }
 }

@@ -206,6 +206,60 @@ describe("cops install claude-code --uninstall: every form the installer registe
   }, 30_000);
 });
 
+describe("cops install claude-code --uninstall: cops.toml too (F3)", () => {
+  async function uninstall(extra: string[] = []) {
+    const io = captureIo();
+    const argv = ["claude-code", "--home", w.home, "--uninstall", ...extra];
+    const code = await runInstallCommand(argv, io, w.ctx());
+    return { code, out: io.stdout.join("\n"), err: io.stderr.join("\n") };
+  }
+
+  test("[daemon] hook_binary goes: the cops.toml is byte-identical to before the install", async () => {
+    mkdirSync(join(w.home, ".config", "jev-cops"), { recursive: true });
+    const toml = '[enforcement]\nmode = "enforce"\n\n[judge]\nprovider = "off"\n';
+    writeFileSync(tomlPath(), toml);
+    expect((await install([])).code).toBe(0);
+    expect(readFileSync(tomlPath(), "utf8")).toContain("hook_binary");
+    const r = await uninstall();
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`removed [daemon] hook_binary from ${tomlPath()}`);
+    expect(readFileSync(tomlPath(), "utf8")).toBe(toml);
+  }, 30_000);
+
+  test("a cops.toml the install created is removed with it", async () => {
+    expect((await install([])).code).toBe(0);
+    expect(existsSync(tomlPath())).toBe(true);
+    await uninstall();
+    expect(existsSync(tomlPath())).toBe(false);
+  }, 30_000);
+
+  test("--dry-run says so and writes nothing", async () => {
+    expect((await install([])).code).toBe(0);
+    const before = readFileSync(tomlPath(), "utf8");
+    const r = await uninstall(["--dry-run"]);
+    expect(r.out).toContain(`would remove [daemon] hook_binary from ${tomlPath()}`);
+    expect(readFileSync(tomlPath(), "utf8")).toBe(before);
+  }, 30_000);
+
+  test("kept while another settings file still registers that hook", async () => {
+    expect((await install(["--project"])).code).toBe(0);
+    expect((await install([])).code).toBe(0);
+    const r = await uninstall();
+    expect(r.out).toContain("jev-cops hooks removed");
+    expect(readFileSync(tomlPath(), "utf8")).toContain("hook_binary");
+    expect(r.out).toContain("kept [daemon] hook_binary");
+  }, 60_000);
+
+  test("another hook_binary (not the removed hook's) is left alone", async () => {
+    expect((await install([])).code).toBe(0);
+    writeFileSync(tomlPath(), '[daemon]\nhook_binary = "/opt/elsewhere/cops-hook"\n');
+    await uninstall();
+    expect(readFileSync(tomlPath(), "utf8")).toBe(
+      '[daemon]\nhook_binary = "/opt/elsewhere/cops-hook"\n',
+    );
+  }, 30_000);
+});
+
 describe("cops install claude-code: the canary's other answers", () => {
   test("daemon not reachable: installed, with the fail-closed warning (exit 0)", async () => {
     const r = await install([], join(w.root, "none.sock"));

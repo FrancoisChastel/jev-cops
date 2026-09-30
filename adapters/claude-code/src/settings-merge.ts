@@ -10,6 +10,7 @@ import {
   isJevCopsEntry,
   type KnownHooks,
 } from "./hook-entries.ts";
+import { namedProgram } from "./hook-identity.ts";
 
 type Json = Record<string, unknown>;
 
@@ -108,4 +109,27 @@ export function mergeHooks(
   const kept = Object.entries(hooks).map(([k, v]): [string, unknown] => [k, addedMap.get(k) ?? v]);
   const fresh = added.filter(([event]) => !Object.hasOwn(hooks, event));
   return withKey(base, "hooks", Object.fromEntries([...kept, ...fresh]));
+}
+
+/**
+ * The programs of the jev-cops command handlers in `settings` (the command, or the script
+ * under `bun`), as written: what an uninstall removes, and what cops.toml's
+ * `[daemon] hook_binary` may name.
+ */
+export function jevCopsPrograms(settings: Readonly<Json>, known?: KnownHooks): string[] {
+  const hooks = settings.hooks;
+  if (!isRecord(hooks)) return [];
+  const handlers = Object.values(hooks).flatMap((groups) =>
+    (Array.isArray(groups) ? groups : []).flatMap((g) =>
+      isRecord(g) && Array.isArray(g.hooks) ? g.hooks : [],
+    ),
+  );
+  const programs = handlers.flatMap((h) => {
+    if (!isJevCopsEntry(h, known) || !isRecord(h) || typeof h.command !== "string") return [];
+    const args = Array.isArray(h.args)
+      ? h.args.filter((a): a is string => typeof a === "string")
+      : [];
+    return [namedProgram(h.command, args)];
+  });
+  return [...new Set(programs)];
 }

@@ -14,6 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { patchJsonText } from "./json-edit.ts";
 
 /** The file operations the installer uses. */
 export interface InstallFs {
@@ -64,9 +65,15 @@ export function detectIndent(text: string): string {
   return /^([ \t]+)\S/m.exec(text)?.[1] ?? "  ";
 }
 
-/** `value` as the file text: the previous file's indentation, a trailing newline. */
+/**
+ * `value` as the file text. With a previous text, only what changed is rewritten
+ * (json-edit.ts: every other byte stays as the user wrote it, so an uninstall gives back the
+ * file an install found); otherwise, or when that takes more than local edits, the whole
+ * value in the previous file's indentation, with a trailing newline.
+ */
 export function serializeSettings(value: unknown, previous: string | null): string {
-  return `${JSON.stringify(value, null, detectIndent(previous ?? ""))}\n`;
+  const patched = previous === null ? null : patchJsonText(previous, value);
+  return patched ?? `${JSON.stringify(value, null, detectIndent(previous ?? ""))}\n`;
 }
 
 /** `<path>.jev-cops-<UTC stamp>.bak`, suffixed `-2`, `-3`… when taken. */

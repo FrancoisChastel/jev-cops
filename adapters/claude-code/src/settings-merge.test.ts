@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { INSTALLED_EVENTS, jevCopsHookEntries } from "./hook-entries.ts";
-import { hooksShapeError, mergeHooks, stripJevCops } from "./settings-merge.ts";
+import { hooksShapeError, jevCopsPrograms, mergeHooks, stripJevCops } from "./settings-merge.ts";
 
 type Json = Record<string, unknown>;
 const BIN = "/opt/jev-cops/dist/cops-hook";
@@ -131,5 +131,29 @@ describe("hooksShapeError: shapes the installer will not merge into", () => {
   test("absent or well-formed hooks are fine", () => {
     expect(hooksShapeError({})).toBeNull();
     expect(hooksShapeError(foreign())).toBeNull();
+  });
+});
+
+describe("jevCopsPrograms", () => {
+  test("the programs of jev-cops's command handlers, the script under bun, once each", () => {
+    const flags = ["--harness", "claude-code"];
+    const settings = {
+      hooks: {
+        PreToolUse: [
+          { hooks: [{ type: "command", command: "/g/jev-cops/bin/cops-hook.ts", args: flags }] },
+          { hooks: [{ type: "command", command: "/usr/bin/lint", args: [] }] },
+        ],
+        PostToolUse: [
+          { hooks: [{ type: "command", command: "/g/jev-cops/bin/cops-hook.ts", args: flags }] },
+          { hooks: [{ type: "command", command: "/b/bun", args: ["/r/hook-main.ts", ...flags] }] },
+          { hooks: [{ type: "http", url: "http://127.0.0.1:1/v1/hooks/claude-code" }] },
+          "junk",
+        ],
+        Stop: "junk",
+      },
+    };
+    expect(jevCopsPrograms(settings)).toEqual(["/g/jev-cops/bin/cops-hook.ts", "/r/hook-main.ts"]);
+    expect(jevCopsPrograms({})).toEqual([]);
+    expect(jevCopsPrograms({ hooks: [] })).toEqual([]);
   });
 });

@@ -290,6 +290,60 @@ describe("uninstallClaudeCodeHooks", () => {
   });
 });
 
+describe("install then uninstall gives the user's file back byte for byte (F3, D-089)", () => {
+  const FOREIGN = '{ "type": "command", "command": "/usr/bin/lint" }';
+  test.each([
+    [
+      "the e2e's file: two spaces, an inline array",
+      '{\n  "theme": "dark",\n  "permissions": {\n    "allow": ["Bash(ls:*)"]\n  }\n}\n',
+    ],
+    ["four spaces", '{\n    "theme": "dark",\n    "model": "opus"\n}\n'],
+    ["tabs", '{\n\t"theme": "dark",\n\t"env": {\n\t\t"A": "1"\n\t}\n}\n'],
+    ["one line, no newline at the end", '{"theme":"dark","permissions":{"allow":["Read"]}}'],
+    ["one line with spaces", '{ "theme": "dark", "model": "opus" }\n'],
+    ["CRLF line endings", '{\r\n  "theme": "dark",\r\n  "model": "opus"\r\n}\r\n'],
+    [
+      "foreign hooks, compact, on an event jev-cops also uses",
+      `{\n  "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [${FOREIGN}]}], "Stop": [{"hooks": [${FOREIGN}]}]},\n  "theme": "dark"\n}\n`,
+    ],
+    [
+      "foreign hooks, pretty, on events jev-cops also uses",
+      `{\n  "hooks": {\n    "PostToolUse": [\n      { "matcher": "Write", "hooks": [${FOREIGN}] }\n    ],\n    "SessionStart": [\n      { "hooks": [${FOREIGN}] }\n    ]\n  }\n}\n`,
+    ],
+    ["unicode and escapes kept as written", '{\n  "name": "Fran\\u00e7ois",\n  "note": "é ✓"\n}\n'],
+  ])("%s", (_name, original) => {
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    writeFileSync(userFile(), original);
+    const installed = installClaudeCodeHooks(opts());
+    expect(installed.status).toBe("installed");
+    const after = readFileSync(userFile(), "utf8");
+    expect(read(userFile()).hooks).toMatchObject({ PreToolUse: expect.any(Array) });
+    // The user's own members are still there exactly as written (install edits only hooks).
+    const own = original.match(
+      /"(theme|model|name|note|allow)"\s*:\s*("(?:[^"\\]|\\.)*"|\[[^\]]*\])/g,
+    );
+    for (const member of own ?? []) expect(after).toContain(member);
+    const r = uninstallClaudeCodeHooks(opts());
+    expect(r.status).toBe("uninstalled");
+    expect(readFileSync(userFile(), "utf8")).toBe(original);
+  });
+
+  test("install on a pretty file keeps the user's lines and writes the hooks in its style", () => {
+    const original =
+      '{\n  "theme": "dark",\n  "permissions": {\n    "allow": ["Bash(ls:*)"]\n  }\n}\n';
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    writeFileSync(userFile(), original);
+    installClaudeCodeHooks(opts());
+    const after = readFileSync(userFile(), "utf8");
+    expect(
+      after.startsWith(
+        '{\n  "theme": "dark",\n  "permissions": {\n    "allow": ["Bash(ls:*)"]\n  },\n  "hooks": {\n    "PreToolUse": [\n',
+      ),
+    ).toBe(true);
+    expect(after.endsWith("  }\n}\n")).toBe(true);
+  });
+});
+
 describe("restoreSettings (canary rollback)", () => {
   test("puts the previous file back", () => {
     const original = writeJson(userFile(), { x: 1 });

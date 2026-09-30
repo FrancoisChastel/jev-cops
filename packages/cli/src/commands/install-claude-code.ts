@@ -20,8 +20,12 @@ import {
   installClaudeCodeHooks,
   isRootLocked,
   isSharedWritable,
+  jevCopsPrograms,
   managedDirFor,
+  parseSettingsText,
   readSettingsFile,
+  readView,
+  realpathOrNull,
   registeredPreToolUse,
   restoreSettings,
   restoreText,
@@ -30,7 +34,7 @@ import {
   uninstallClaudeCodeHooks,
   writeClaudeCodeState,
 } from "@jev-cops/adapter-claude-code";
-import { readDaemonHookBinary } from "../toml-key.ts";
+import { readDaemonHookBinary, unsetDaemonHookBinary } from "../toml-key.ts";
 import { CLI_VERSION } from "../version.ts";
 import type { ClaudeInstallArgs } from "./install-args.ts";
 import type { InstallContext } from "./install-context.ts";
@@ -305,7 +309,78 @@ function knownHooks(s: Setup, ctx: InstallContext, given: string | null): string
   return [...new Set(found.filter((p): p is string => p !== null && p !== ""))];
 }
 
-/** `--uninstall`: only jev-cops's entries go; the state file too when it names that file. */
+function samePath(a: string, b: string): boolean {
+  const real = realpathOrNull(a);
+  return a === b || (real !== null && real === realpathOrNull(b));
+}
+
+/** The settings files Claude Code loads, with the uninstalled one as it is (or will be) after. */
+function afterUninstall(settings: InstallResult, s: Setup, ctx: InstallContext) {
+  const after = settings.after === null ? null : parseSettingsText(settings.after);
+  return readView(s, ctx.fs).files.map((f) =>
+    f.file.path === settings.path
+      ? { file: f.file, read: after ?? { kind: "missing" as const } }
+      : f,
+  );
+}
+
+/** What an uninstall did (or would do) to cops.toml's `[daemon] hook_binary`. */
+interface TomlForget {
+  readonly changed: boolean;
+  readonly warnings: readonly string[];
+}
+
+const TOML_UNCHANGED: TomlForget = { changed: false, warnings: [] };
+
+/**
+ * Takes `[daemon] hook_binary` out of cops.toml when it names a hook this uninstall removed
+ * and no settings file Claude Code loads still registers it (copsd protects that binary,
+ * D-082): the inverse of install's line edit, so install then uninstall leaves cops.toml as
+ * it was, and a cops.toml the install created goes. Another value is left alone.
+ */
+function forgetHookBinary(
+  settings: InstallResult,
+  s: Setup,
+  ctx: InstallContext,
+  known: readonly string[],
+): TomlForget {
+  const before = settings.before === null ? null : parseSettingsText(settings.before);
+  const text = ctx.fs.readFile(s.configPath);
+  const value = readDaemonHookBinary(text);
+  if (before?.kind !== "ok" || value === null) return TOML_UNCHANGED;
+  const names = (v: Readonly<Record<string, unknown>>) =>
+    jevCopsPrograms(v, known).some((p) => samePath(p, value));
+  if (!names(before.value)) return TOML_UNCHANGED;
+  const still = afterUninstall(settings, s, ctx).find(
+    (f) => f.read.kind === "ok" && names(f.read.value),
+  );
+  if (still !== undefined) {
+    return {
+      changed: false,
+      warnings: [
+        `kept [daemon] hook_binary in ${s.configPath}: ${still.file.path} still registers ${value}`,
+      ],
+    };
+  }
+  const next = unsetDaemonHookBinary(text, value);
+  if (next === text || next === null) {
+    return {
+      changed: false,
+      warnings: [
+        `[daemon] hook_binary = ${JSON.stringify(value)} is still in ${s.configPath}: remove it by hand`,
+      ],
+    };
+  }
+  if (settings.status !== "dry-run") {
+    restoreText(s.configPath, next === "" ? null : next, 0o600, { fs: ctx.fs, now: ctx.now() });
+  }
+  return { changed: true, warnings: [] };
+}
+
+/**
+ * `--uninstall`: only jev-cops's entries go; the state file too when it names that file,
+ * and cops.toml's `[daemon] hook_binary` when it names the hook removed.
+ */
 export function uninstallClaudeCode(
   a: ClaudeInstallArgs,
   s: Setup,
@@ -314,11 +389,19 @@ export function uninstallClaudeCode(
 ): ClaudeReport {
   const base = emptyReport("uninstall", a, s);
   const { hookBinary: _unused, ...where } = settingsOptions(a, s, ctx, "");
-  const settings = uninstallClaudeCodeHooks({
-    ...where,
-    knownHooks: knownHooks(s, ctx, hookBinary),
-  });
+  const known = knownHooks(s, ctx, hookBinary);
+  const settings = uninstallClaudeCodeHooks({ ...where, knownHooks: known });
   if (settings.status === "printed") return { ...base, settings };
   const statePath = settings.written ? forgetState(settings.path, s, ctx) : null;
-  return { ...base, ok: true, settings, statePath };
+  const touched = settings.status === "uninstalled" || settings.status === "dry-run";
+  const toml = touched ? forgetHookBinary(settings, s, ctx, known) : TOML_UNCHANGED;
+  return {
+    ...base,
+    ok: true,
+    settings,
+    statePath,
+    configPath: toml.changed ? s.configPath : null,
+    configChanged: toml.changed,
+    warnings: [...base.warnings, ...toml.warnings],
+  };
 }
