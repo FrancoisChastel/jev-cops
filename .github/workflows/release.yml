@@ -1,0 +1,53 @@
+name: Release
+
+# Manual only: a push, a tag or a pull request never publishes. Run it from the Actions tab
+# on the release commit (see RELEASING.md). With dry_run left on, it checks and packs
+# everything and runs every `npm publish --dry-run`.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "npm dist-tag (latest, next, beta, ...)"
+        required: true
+        default: latest
+        type: string
+      dry_run:
+        description: "Pack and check everything, publish nothing"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write # npm provenance: the GitHub OIDC token signs each package's build origin
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run gate
+      - run: bun run pack:smoke
+      - name: Publish in order (core → sdk → judge → policies → daemon → adapters → cli → jev-cops)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then mode=--dry-run; else mode=--publish; fi
+          bun scripts/release.ts "$mode" --tag "$DIST_TAG"
