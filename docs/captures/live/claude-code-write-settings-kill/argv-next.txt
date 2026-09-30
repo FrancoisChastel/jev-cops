@@ -1,2 +1,2 @@
-claude -p SCENARIO:echo\ are\ you\ still\ there\? --output-format stream-json --verbose --resume c39d0213-5f5c-47d3-a674-795fa279175c 
+claude -p SCENARIO:echo\ are\ you\ still\ there\? --output-format stream-json --verbose --resume 505fa034-ad1e-4814-a8cb-f8e7be3c5a11 
 exit 0

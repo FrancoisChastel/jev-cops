@@ -1,5 +1,5 @@
 jev-cops: Claude Code hooks installed in /home/dev/.claude/settings.json (user scope)
-jev-cops: previous file backed up to /home/dev/.claude/settings.json.jev-cops-20260930T203334535Z.bak
+jev-cops: previous file backed up to /home/dev/.claude/settings.json.jev-cops-20260930T203813990Z.bak
 jev-cops: hook /home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts (version 0.1.0), socket /home/dev/.jev-cops/copsd.sock, transport command
 jev-cops: recorded [daemon] hook_binary in /home/dev/.config/jev-cops/cops.toml (copsd protects it from its next start)
 jev-cops: wrote /home/dev/.jev-cops/claude-code.json (Claude Code 2.1.286)
