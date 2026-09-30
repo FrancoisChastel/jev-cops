@@ -122,24 +122,25 @@ async function recordInstall(
 ): Promise<Written> {
   const now = ctx.now();
   const toml = writeHookBinaryToml(s, hookBinary, ctx); // throws before writing, or wrote it
-  const claudeEnv = {
-    PATH: s.env.PATH ?? "",
-    HOME: s.home,
-    ...(s.configDir === null ? {} : { CLAUDE_CONFIG_DIR: s.configDir }),
-  };
-  const version = await claudeVersion(ctx.spawn, claudeEnv);
-  const record = {
-    claude_version: version,
-    installed_at: now.toISOString(),
-    scope: settings.scope,
-    settings_path: settings.path,
-    hook_binary: hookBinary,
-    socket: s.socket,
-  };
   try {
+    const claudeEnv = {
+      PATH: s.env.PATH ?? "",
+      HOME: s.home,
+      ...(s.configDir === null ? {} : { CLAUDE_CONFIG_DIR: s.configDir }),
+    };
+    const version = await claudeVersion(ctx.spawn, claudeEnv);
+    const record = {
+      claude_version: version,
+      installed_at: now.toISOString(),
+      scope: settings.scope,
+      settings_path: settings.path,
+      hook_binary: hookBinary,
+      socket: s.socket,
+    };
     const state = writeClaudeCodeState(s.home, record, { fs: ctx.fs, now });
     return { toml, state, claudeVersion: version };
   } catch (cause) {
+    // Every step after the cops.toml write undoes it, so a failure never leaves it behind.
     if (toml.changed) restoreText(toml.path, toml.previous, 0o600, { fs: ctx.fs, now });
     throw cause;
   }

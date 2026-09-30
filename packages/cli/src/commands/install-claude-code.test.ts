@@ -268,6 +268,28 @@ describe("cops install claude-code: refusals", () => {
     expect((await install([])).err).toContain("invalid config");
   });
 
+  test("a failure after the cops.toml write rolls it back with the settings", async () => {
+    const original = writeJson(settingsPath(), { model: "opus" });
+    mkdirSync(join(w.home, ".config", "jev-cops"), { recursive: true });
+    writeFileSync(tomlPath(), '[judge]\nprovider = "off"\n');
+    const spawn = w.ctx().spawn;
+    const failing = w.ctx({
+      spawn: async (r) => {
+        if (r.argv[0] === "claude") throw new Error("claude --version exploded");
+        return spawn(r);
+      },
+    });
+    const io = captureIo();
+    const argv = ["claude-code", "--home", w.home, "--hook-binary", w.hook];
+    expect(
+      await runInstallCommand([...argv, "--socket", enforce.config.daemon.socket], io, failing),
+    ).toBe(1);
+    expect(io.stderr.join("\n")).toContain("claude --version exploded");
+    expect(readFileSync(settingsPath(), "utf8")).toBe(original);
+    expect(readFileSync(tomlPath(), "utf8")).toBe('[judge]\nprovider = "off"\n');
+    expect(existsSync(statePath())).toBe(false);
+  }, 30_000);
+
   test("a cops.toml that cannot be edited safely: settings rolled back", async () => {
     mkdirSync(join(w.home, ".config", "jev-cops"), { recursive: true });
     writeFileSync(tomlPath(), "daemon.judge_deadline_ms = 12000\n");
