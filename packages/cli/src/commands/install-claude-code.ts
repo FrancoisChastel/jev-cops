@@ -92,14 +92,26 @@ async function canaryOf(
   });
 }
 
+/** The per-user records an install wrote (null: not written, a managed install). */
 interface Written {
   readonly toml: {
     readonly path: string;
     readonly previous: string | null;
     readonly changed: boolean;
-  };
-  readonly state: { readonly path: string; readonly previous: string | null };
+  } | null;
+  readonly state: { readonly path: string; readonly previous: string | null } | null;
   readonly claudeVersion: string | null;
+}
+
+/**
+ * A managed install is an administrator's (often root's): it writes no cops.toml or state
+ * file into a home directory, where root-owned files would lock the user's copsd out of its
+ * own config. It says which line each user's cops.toml needs instead.
+ */
+const NOTHING_WRITTEN: Written = { toml: null, state: null, claudeVersion: null };
+
+function managedNote(hookBinary: string): string {
+  return `managed install: cops.toml and ~/.jev-cops/claude-code.json were not written; add [daemon] hook_binary = ${JSON.stringify(hookBinary)} to the cops.toml each copsd reads so it protects the binary`;
 }
 
 async function recordInstall(
@@ -136,8 +148,8 @@ async function recordInstall(
 function rollback(settings: InstallResult, w: Written, ctx: InstallContext): void {
   const c = { fs: ctx.fs, now: ctx.now() };
   restoreSettings(settings, { fs: ctx.fs, now: ctx.now });
-  if (w.toml.changed) restoreText(w.toml.path, w.toml.previous, 0o600, c);
-  restoreText(w.state.path, w.state.previous, 0o600, c);
+  if (w.toml?.changed === true) restoreText(w.toml.path, w.toml.previous, 0o600, c);
+  if (w.state !== null) restoreText(w.state.path, w.state.previous, 0o600, c);
 }
 
 /** Hooks may not see `CLAUDE_CONFIG_DIR` (hooks#common-input-fields, env-vars, v2.1.251+). */
@@ -163,22 +175,24 @@ async function finish(
   s: Setup,
   ctx: InstallContext,
 ): Promise<ClaudeReport> {
-  let written: Written;
+  let written: Written = NOTHING_WRITTEN;
   try {
-    written = await recordInstall(settings, hookBinary, s, ctx);
+    if (settings.scope !== "managed") written = await recordInstall(settings, hookBinary, s, ctx);
   } catch (cause) {
     restoreSettings(settings, { fs: ctx.fs, now: ctx.now });
     const why = cause instanceof Error ? cause.message : String(cause);
     return { ...base, ok: false, rolledBack: settings.written, errors: [...base.errors, why] };
   }
   const canary = await canaryOf(settings, hookBinary, s, ctx);
+  const note = settings.scope === "managed" ? [managedNote(hookBinary)] : [];
   const common = {
     ...base,
-    configPath: written.toml.path,
-    configChanged: written.toml.changed,
-    statePath: written.state.path,
+    configPath: written.toml?.path ?? null,
+    configChanged: written.toml?.changed ?? false,
+    statePath: written.state?.path ?? null,
     claudeVersion: written.claudeVersion,
     canary,
+    warnings: [...base.warnings, ...note],
   };
   if (canary.status !== "failed") return { ...common, ok: true };
   rollback(settings, written, ctx);

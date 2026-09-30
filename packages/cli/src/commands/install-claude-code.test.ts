@@ -293,6 +293,9 @@ describe("cops install claude-code: other scopes and transports", () => {
     expect(existsSync(join(w.managed, "managed-settings.d", "50-jev-cops.json"))).toBe(true);
     expect(r.out).toContain("is not root-owned");
     expect(r.out).toContain("first-wins");
+    expect(r.out).toContain("add [daemon] hook_binary");
+    expect(existsSync(tomlPath())).toBe(false);
+    expect(existsSync(statePath())).toBe(false);
   }, 30_000);
 
   test("--project and --local", async () => {
