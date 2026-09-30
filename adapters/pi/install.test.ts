@@ -1,8 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { INSTALLED_FILE, installPiExtension, PI_GAPS } from "./install.ts";
+import {
+  extensionCandidates,
+  extensionSource,
+  INSTALLED_FILE,
+  installPiExtension,
+  PI_GAPS,
+  piExtensionPath,
+  uninstallPiExtension,
+} from "./install.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -80,5 +88,72 @@ describe("installPiExtension", () => {
     expect(r.gaps).toEqual(PI_GAPS);
     for (const gap of PI_GAPS) expect(out.join("\n")).toContain(gap);
     expect(PI_GAPS.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe("dry run and uninstall (cops install pi)", () => {
+  const quiet = { print: () => undefined };
+
+  test("piExtensionPath names the file an install would write", () => {
+    const project = temp();
+    expect(piExtensionPath({ projectDir: project })).toBe(
+      join(project, ".pi", "extensions", INSTALLED_FILE),
+    );
+  });
+
+  test("dry run prints the target and writes nothing", () => {
+    const project = temp();
+    const out: string[] = [];
+    const r = installPiExtension({ projectDir: project, dryRun: true, print: (l) => out.push(l) });
+    expect(r.written).toBe(false);
+    expect(existsSync(r.path)).toBe(false);
+    expect(out.join("\n")).toContain("dry run");
+    expect(out.join("\n")).toContain(PI_GAPS[0] ?? "");
+  });
+
+  test("uninstall removes the installed extension only", () => {
+    const project = temp();
+    const r = installPiExtension({ projectDir: project, ...quiet });
+    expect(r.written).toBe(true);
+    const dry = uninstallPiExtension({ projectDir: project, dryRun: true, ...quiet });
+    expect(dry).toEqual({ path: r.path, removed: false, present: true });
+    expect(existsSync(r.path)).toBe(true);
+    expect(uninstallPiExtension({ projectDir: project, ...quiet })).toEqual({
+      path: r.path,
+      removed: true,
+      present: true,
+    });
+    expect(existsSync(r.path)).toBe(false);
+    expect(uninstallPiExtension({ projectDir: project, ...quiet }).present).toBe(false);
+  });
+
+  test("uninstall refuses a file that is not the jev-cops extension", () => {
+    const project = temp();
+    const path = piExtensionPath({ projectDir: project });
+    installPiExtension({ projectDir: project, ...quiet });
+    writeFileSync(path, "export default function () {}\n");
+    expect(() => uninstallPiExtension({ projectDir: project, ...quiet })).toThrow(
+      "not the jev-cops",
+    );
+    expect(existsSync(path)).toBe(true);
+  });
+});
+
+describe("extensionSource: where the extension text comes from", () => {
+  test("next to the installer, then the repository of a compiled cops", () => {
+    const [here, repo] = extensionCandidates("/checkout/dist/cops");
+    expect(here).toBe(join(import.meta.dir, "jev-cops.ts"));
+    expect(repo).toBe("/checkout/adapters/pi/jev-cops.ts");
+    expect(extensionSource(null, ["/nonexistent/jev-cops.ts", here ?? ""])).toBe(SOURCE);
+  });
+
+  test("nowhere: a clear error", () => {
+    expect(() => extensionSource(null, ["/nonexistent/a.ts"])).toThrow("was not found");
+  });
+
+  test("a file without the socket line is refused", () => {
+    const dir = temp();
+    writeFileSync(join(dir, "x.ts"), "export default () => {};\n");
+    expect(() => extensionSource(null, [join(dir, "x.ts")])).toThrow("INSTALLED_SOCKET");
   });
 });

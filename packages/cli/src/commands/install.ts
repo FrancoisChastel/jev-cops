@@ -10,6 +10,7 @@ import { EXIT, type Io } from "../io.ts";
 import { type ClaudeInstallArgs, parseInstallArgs } from "./install-args.ts";
 import { installClaudeCode, uninstallClaudeCode } from "./install-claude-code.ts";
 import { type InstallContext, processContext } from "./install-context.ts";
+import { runPiInstall } from "./install-pi.ts";
 import { type ClaudeReport, emptyReport, exitCodeOf, printClaudeReport } from "./install-report.ts";
 import { resolveSetup } from "./install-setup.ts";
 
@@ -55,10 +56,7 @@ export async function runInstallCommand(
     return EXIT.usage;
   }
   const a = parsed.args;
-  if (a.harness === "pi") {
-    io.err("jev-cops install pi: not yet available");
-    return EXIT.usage;
-  }
+  if (a.harness === "pi") return runPiInstall(a, ctx, io);
   const report = await claudeCode(a, ctx);
   printClaudeReport(report, io, a.json);
   return exitCodeOf(report);

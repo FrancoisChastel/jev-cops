@@ -1,6 +1,7 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** File name of the installed extension (Pi loads every direct `.ts` file in the directory). */
 export const INSTALLED_FILE = "jev-cops.ts";
@@ -39,13 +40,16 @@ export interface InstallOptions {
   home?: string;
   /** Where the summary and gaps are printed; default stdout. */
   print?: (line: string) => void;
+  /** Report where the extension would go and write nothing (`cops install pi --dry-run`). */
+  dryRun?: boolean;
 }
 
-/** What was installed, with which socket, and the gaps that were printed. */
+/** What was installed (or would be, on a dry run), with which socket, and the printed gaps. */
 export interface InstallResult {
   readonly path: string;
   readonly socket: string | null;
   readonly gaps: readonly string[];
+  readonly written: boolean;
 }
 
 function assertSocket(socket: string): void {
@@ -57,6 +61,8 @@ function assertSocket(socket: string): void {
   }
 }
 
+const MARKER = "const INSTALLED_SOCKET: string | null =";
+
 function targetDir(opts: InstallOptions): string {
   if (opts.global !== true) return join(opts.projectDir ?? process.cwd(), ".pi", "extensions");
   const env = opts.env ?? process.env;
@@ -64,9 +70,38 @@ function targetDir(opts: InstallOptions): string {
   return join(agentDir, "extensions");
 }
 
+/**
+ * Where the extension source can be: next to this module (source checkout), or, for the
+ * compiled `dist/cops`, in the repository the binary was built in (`dist/../adapters/pi`).
+ * It is not embedded: Bun keys its module cache by path, so a text import of `jev-cops.ts`
+ * collides with the module import of the same file.
+ */
+export function extensionCandidates(execPath: string = process.execPath): string[] {
+  return [
+    fileURLToPath(new URL("./jev-cops.ts", import.meta.url)),
+    join(dirname(execPath), "..", "adapters", "pi", "jev-cops.ts"),
+  ];
+}
+
+function readExtension(candidates: readonly string[]): string {
+  for (const path of candidates) {
+    try {
+      return readFileSync(path, "utf8");
+    } catch {
+      // not there: try the next place
+    }
+  }
+  throw new Error(
+    `the Pi extension source was not found (${candidates.join(", ")}); run cops from the jev-cops checkout`,
+  );
+}
+
 /** The extension source with `socket` baked in (or unchanged when there is none). */
-export function extensionSource(socket: string | null): string {
-  const source = readFileSync(new URL("./jev-cops.ts", import.meta.url), "utf8");
+export function extensionSource(
+  socket: string | null,
+  candidates: readonly string[] = extensionCandidates(),
+): string {
+  const source = readExtension(candidates);
   if (!source.includes(SOCKET_LINE)) throw new Error("jev-cops.ts has no INSTALLED_SOCKET line");
   if (socket === null) return source;
   // A replacer function: a replacement *string* would expand `$&`/`$1` inside the path.
@@ -74,24 +109,69 @@ export function extensionSource(socket: string | null): string {
   return source.replace(SOCKET_LINE, () => baked);
 }
 
+/** Where {@link installPiExtension} puts the extension for these options. */
+export function piExtensionPath(opts: InstallOptions = {}): string {
+  return join(targetDir(opts), INSTALLED_FILE);
+}
+
+function printerOf(opts: InstallOptions): (line: string) => void {
+  return opts.print ?? ((line: string) => process.stdout.write(`${line}\n`));
+}
+
 /**
  * Copies the jev-cops extension into Pi's user or project extensions directory
  * (overwriting any previous copy), optionally with the daemon socket baked in, and prints
- * where it went plus {@link PI_GAPS}. Throws on an invalid socket path. Used by the CLI's
- * `cops install pi` (M1).
+ * where it went plus {@link PI_GAPS}. With `dryRun` it only prints. Throws on an invalid
+ * socket path. Used by the CLI's `cops install pi`.
  */
 export function installPiExtension(opts: InstallOptions = {}): InstallResult {
   const socket = opts.socket ?? null;
   if (socket !== null) assertSocket(socket);
-  const dir = targetDir(opts);
-  const path = join(dir, INSTALLED_FILE);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path, extensionSource(socket));
-  chmodSync(path, 0o644);
-  const print = opts.print ?? ((line: string) => process.stdout.write(`${line}\n`));
-  print(`jev-cops: Pi extension installed at ${path}`);
+  const path = piExtensionPath(opts);
+  const print = printerOf(opts);
+  if (opts.dryRun === true) {
+    print(`jev-cops: dry run, nothing written; the Pi extension would be installed at ${path}`);
+  } else {
+    mkdirSync(targetDir(opts), { recursive: true });
+    writeFileSync(path, extensionSource(socket));
+    chmodSync(path, 0o644);
+    print(`jev-cops: Pi extension installed at ${path}`);
+  }
   print(`jev-cops: socket ${socket ?? "$JEV_COPS_SOCKET or ~/.jev-cops/copsd.sock (at run time)"}`);
   print("jev-cops: known gaps (see docs/adapters.md#pi):");
   for (const gap of PI_GAPS) print(`  - ${gap}`);
-  return { path, socket, gaps: PI_GAPS };
+  return { path, socket, gaps: PI_GAPS, written: opts.dryRun !== true };
+}
+
+/** What an uninstall found and did. */
+export interface UninstallResult {
+  readonly path: string;
+  /** The jev-cops extension was there. */
+  readonly present: boolean;
+  readonly removed: boolean;
+}
+
+/**
+ * Removes the installed jev-cops extension (`cops install pi --uninstall`); with `dryRun`,
+ * only reports. Throws when the file there is not the jev-cops extension (never deletes
+ * someone else's file).
+ */
+export function uninstallPiExtension(opts: InstallOptions = {}): UninstallResult {
+  const path = piExtensionPath(opts);
+  const print = printerOf(opts);
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    print(`jev-cops: no Pi extension at ${path}`);
+    return { path, present: false, removed: false };
+  }
+  if (!text.includes(MARKER)) throw new Error(`${path} is not the jev-cops extension; left alone`);
+  if (opts.dryRun === true) {
+    print(`jev-cops: dry run, nothing removed; would remove ${path}`);
+    return { path, present: true, removed: false };
+  }
+  unlinkSync(path);
+  print(`jev-cops: Pi extension removed from ${path}`);
+  return { path, present: true, removed: true };
 }

@@ -38,6 +38,7 @@ describe("processContext: the only place the real home is read", () => {
         "install",
         "install-args",
         "install-claude-code",
+        "install-pi",
         "install-report",
         "install-setup",
       ].map((f) => join(REPO, "packages", "cli", "src", "commands", `${f}.ts`)),

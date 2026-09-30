@@ -34,6 +34,7 @@
       },
       "dependencies": {
         "@jev-cops/adapter-claude-code": "workspace:*",
+        "@jev-cops/adapter-pi": "workspace:*",
         "@jev-cops/core": "workspace:*",
         "@jev-cops/daemon": "workspace:*",
         "@jev-cops/sdk": "workspace:*",
