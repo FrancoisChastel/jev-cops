@@ -1,39 +1,47 @@
 import {
   closeSync,
   existsSync,
-  fstatSync,
   fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
-  readSync,
   writeSync,
 } from "node:fs";
 import { dirname } from "node:path";
 import { canonicalJson, sha256Hex } from "@jev-cops/core";
+import type { AuditForwarder } from "./audit-forward/types.ts";
+import {
+  AUDIT_GENESIS,
+  type AuditEntry,
+  type AuditLine,
+  type ChainHead,
+  lineHash,
+  parseLine,
+} from "./audit-line.ts";
+import { findLastLine, readTailLine } from "./audit-read.ts";
+import type { CheckpointReason } from "./audit-sign/checkpoint.ts";
+import {
+  Checkpointer,
+  type SigningOptions,
+  type SigningStatus,
+} from "./audit-sign/checkpointer.ts";
+import type { CheckpointSigner } from "./audit-sign/keys.ts";
 
-/** `prev` of the first line of a chain. */
-export const AUDIT_GENESIS = "0".repeat(64);
+export {
+  AUDIT_GENESIS,
+  AUDIT_KINDS,
+  type AuditEntry,
+  type AuditKind,
+  type AuditLine,
+  type ChainHead,
+  hashMatches,
+  lineHash,
+  lineText,
+  parseLine,
+} from "./audit-line.ts";
 
-/** What an audit line records. */
-export const AUDIT_KINDS = ["judge", "observe", "anomaly", "precedent", "boot", "session"] as const;
-export type AuditKind = (typeof AUDIT_KINDS)[number];
-
-/** What a caller appends; the log adds `seq`, `at`, `prev` and `hash`. */
-export interface AuditEntry {
-  readonly kind: AuditKind;
-  readonly event_id?: string;
-  readonly session_id?: string;
-  readonly payload: Readonly<Record<string, unknown>>;
-}
-
-/** One JSONL line: `hash = sha256(prev + canonicalJSON(line without hash))`. */
-export interface AuditLine extends AuditEntry {
-  readonly seq: number;
-  readonly at: number;
-  readonly prev: string;
-  readonly hash: string;
-}
+/** Default `[audit] checkpoint_every`. */
+export const DEFAULT_CHECKPOINT_EVERY = 100;
 
 /** Outcome of {@link verifyChain}; `brokenAt` is the seq of the first bad line. */
 export interface ChainReport {
@@ -43,135 +51,149 @@ export interface ChainReport {
   readonly reason?: string;
 }
 
-/** The hash a line must carry, computed over every field but `hash`. */
-export function lineHash(line: Omit<AuditLine, "hash">): string {
-  return sha256Hex(`${line.prev}${canonicalJson(line)}`);
-}
-
 /** JSON round trip: drops `undefined`, so the hashed value is exactly the written one. */
 function plain<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function isLine(value: unknown): value is AuditLine {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.seq === "number" &&
-    typeof v.at === "number" &&
-    typeof v.prev === "string" &&
-    typeof v.hash === "string" &&
-    typeof v.kind === "string" &&
-    typeof v.payload === "object" &&
-    v.payload !== null
-  );
-}
-
-/** Parses one line; null when it is not a well-formed audit line. */
-export function parseLine(text: string): AuditLine | null {
-  try {
-    const value: unknown = JSON.parse(text);
-    return isLine(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-const TAIL_CHUNK = 64 * 1024;
-
-/** The tail of an open file: its last lines (at least one whole line) and final byte. */
-function readTail(fd: number): { lines: string[]; endsWithNewline: boolean } {
-  const size = fstatSync(fd).size;
-  let text = "";
-  for (let end = size; end > 0; ) {
-    const start = Math.max(0, end - TAIL_CHUNK);
-    const buf = Buffer.alloc(end - start);
-    readSync(fd, buf, 0, buf.length, start);
-    text = buf.toString("utf8") + text;
-    const lines = text.split("\n").filter((l) => l !== "");
-    if (lines.length > 1 || start === 0) {
-      return { lines: start === 0 ? lines : lines.slice(1), endsWithNewline: text.endsWith("\n") };
-    }
-    end = start;
-  }
-  return { lines: [], endsWithNewline: true };
-}
-
 /** Options for {@link AuditLog.open}. */
 export interface AuditOptions {
   now?: () => number;
-  /** A file every line is also appended to (the M0 subset of `[audit.forward]`). */
-  forward?: string | null;
+  /** Ships every line off the box (`[audit.forward]`); null or absent: local only. */
+  forwarder?: AuditForwarder | null;
+  /** The checkpoint key and interval; absent: unsigned, every 100 lines. */
+  signing?: SigningOptions | null;
 }
+
+/** The checkpoint reasons a caller asks for; a rotation goes through {@link AuditLog.rotate}. */
+export type CheckpointRequest = Exclude<CheckpointReason, "rotation">;
 
 /**
  * The append-only, hash-chained JSONL audit log (spec §Stores, T12). The file is opened
  * with `O_APPEND` and mode 0600; each line is written with one synchronous `write`, so
  * lines never interleave and nothing is buffered. On open the chain continues from the
  * last line; an unparseable tail restarts it with an `anomaly` line whose `prev` is the
- * hash of that tail, which {@link verifyChain} reports as a break.
+ * hash of that tail, which {@link verifyChain} reports as a break. Every line is handed to
+ * the forwarder after it is written; with a key, a signed `checkpoint` line follows every
+ * `every` lines and wherever the daemon asks for one (D-104).
  */
 export class AuditLog {
   private seq: number;
   private prev: string;
-  private pendingAnomaly: string | null;
+  private readonly tailAnomaly: string | null;
   private closed = false;
 
   private constructor(
     readonly path: string,
     private readonly fd: number,
-    private readonly forwardFd: number | null,
     private readonly now: () => number,
+    private readonly forwarder: AuditForwarder | null,
+    private readonly checkpoints: Checkpointer,
   ) {
-    const tail = readTail(fd);
-    const last = tail.lines.at(-1) ?? null;
-    const parsed = last === null ? null : parseLine(last);
-    const lastGood = tail.lines.map(parseLine).findLast((l) => l !== null) ?? null;
+    const tail = readTailLine(path);
+    const parsed = tail.last === null ? null : parseLine(tail.last);
+    const lastGood = findLastLine(path, () => true)?.line ?? null;
     if (!tail.endsWithNewline) writeSync(fd, "\n");
     this.seq = lastGood?.seq ?? 0;
-    this.prev = parsed?.hash ?? (last === null ? AUDIT_GENESIS : sha256Hex(last));
-    this.pendingAnomaly = last !== null && parsed === null ? "audit tail unparseable" : null;
+    this.prev = parsed?.hash ?? (tail.last === null ? AUDIT_GENESIS : sha256Hex(tail.last));
+    this.tailAnomaly = tail.last !== null && parsed === null ? "audit tail unparseable" : null;
   }
 
   /** Opens (creating directories and the file, 0600) for appending. */
   static open(path: string, opts: AuditOptions = {}): AuditLog {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     const fd = openSync(path, "a+", 0o600);
-    const fwd = opts.forward ?? null;
-    if (fwd !== null) mkdirSync(dirname(fwd), { recursive: true, mode: 0o700 });
-    const forwardFd = fwd === null ? null : openSync(fwd, "a", 0o600);
-    const log = new AuditLog(path, fd, forwardFd, opts.now ?? Date.now);
-    if (log.pendingAnomaly !== null) {
-      log.append({ kind: "anomaly", payload: { reason: log.pendingAnomaly, chain: "restarted" } });
-      log.pendingAnomaly = null;
+    const signing = opts.signing ?? { signer: null, every: DEFAULT_CHECKPOINT_EVERY };
+    const checkpoints = Checkpointer.fromLog(path, signing);
+    const log = new AuditLog(path, fd, opts.now ?? Date.now, opts.forwarder ?? null, checkpoints);
+    log.forwarder?.open(log.head(), (reason) => log.forwarderProblem(reason));
+    if (log.tailAnomaly !== null) {
+      log.append({ kind: "anomaly", payload: { reason: log.tailAnomaly, chain: "restarted" } });
     }
     return log;
   }
 
+  /** A forwarder's problem as an `anomaly` line; dropped once the log is closed (shutdown). */
+  private forwarderProblem(reason: string): void {
+    if (!this.closed) this.append({ kind: "anomaly", payload: { reason, source: "forwarder" } });
+  }
+
   /**
-   * Appends one line and returns it as written. Throws once closed: a closed descriptor's
-   * number can be reused by another file, so a late write must never reach it.
+   * Appends one line and returns it as written, then an interval checkpoint when one is
+   * due. Throws once closed (a closed descriptor's number can be reused by another file, so
+   * a late write must never reach it) and for `checkpoint` entries, which only
+   * {@link checkpoint} and {@link rotate} write.
    */
   append(entry: AuditEntry): AuditLine {
-    if (this.closed) throw new Error(`audit log ${this.path} is closed`);
-    const body = plain({ ...entry, seq: this.seq + 1, at: this.now(), prev: this.prev });
-    const line: AuditLine = { ...body, hash: lineHash(body) };
-    const text = `${canonicalJson(line)}\n`;
-    writeSync(this.fd, text);
-    if (this.forwardFd !== null) writeSync(this.forwardFd, text);
-    this.seq = line.seq;
-    this.prev = line.hash;
+    if (entry.kind === "checkpoint") throw new Error("checkpoint lines are signed, not appended");
+    const line = this.write(entry, this.now());
+    if (this.checkpoints.due(this.head())) this.checkpoint("interval");
     return line;
+  }
+
+  /**
+   * Appends a checkpoint signing the chain through the current head (session end, boot,
+   * shutdown). Null without a key, or when no line was appended since the last checkpoint.
+   */
+  checkpoint(reason: CheckpointRequest): AuditLine | null {
+    const at = this.now();
+    const statement = this.checkpoints.statement(reason, this.head(), at);
+    if (statement === null) return null;
+    const line = this.write({ kind: "checkpoint", payload: statement }, at);
+    this.checkpoints.written(line);
+    return line;
+  }
+
+  /**
+   * Key rotation: a checkpoint signed by the current key naming `next` (its id and public
+   * key), after which `next` signs. Throws without a current key.
+   */
+  rotate(next: CheckpointSigner): AuditLine {
+    const at = this.now();
+    const statement = this.checkpoints.hasKey()
+      ? this.checkpoints.statement("rotation", this.head(), at, next)
+      : null;
+    if (statement === null) throw new Error("no current key to sign the rotation with");
+    const line = this.write({ kind: "checkpoint", payload: statement }, at);
+    this.checkpoints.written(line, next);
+    return line;
+  }
+
+  /** The last line written: what the next line follows. */
+  head(): ChainHead {
+    return { seq: this.seq, hash: this.prev };
+  }
+
+  /** The signing key, interval and last checkpoint. */
+  signing(): SigningStatus {
+    return this.checkpoints.status();
   }
 
   /** Flushes to disk and closes; later appends throw. Idempotent. */
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    for (const fd of [this.fd, this.forwardFd]) {
-      if (fd === null) continue;
-      fsyncSync(fd);
-      closeSync(fd);
+    fsyncSync(this.fd);
+    closeSync(this.fd);
+  }
+
+  private write(entry: AuditEntry, at: number): AuditLine {
+    if (this.closed) throw new Error(`audit log ${this.path} is closed`);
+    const body = plain({ ...entry, seq: this.seq + 1, at, prev: this.prev });
+    const line: AuditLine = { ...body, hash: lineHash(body) };
+    writeSync(this.fd, `${canonicalJson(line)}\n`);
+    this.seq = line.seq;
+    this.prev = line.hash;
+    this.forward(line);
+    return line;
+  }
+
+  /** The forwarder records its own failures (`status().lastError`); none may fail an append. */
+  private forward(line: AuditLine): void {
+    try {
+      this.forwarder?.send(line);
+    } catch {
+      // A forwarder is contractually non-throwing; this guard keeps the local log primary.
     }
   }
 }
@@ -192,7 +214,8 @@ export function readAudit(path: string): { lines: AuditLine[]; problems: string[
   return { lines, problems };
 }
 
-function checkLine(text: string, prevSeq: number, prevHash: string): string | null {
+/** Why `text` does not continue a chain at `prevSeq`/`prevHash`, or null when it does. */
+export function checkLine(text: string, prevSeq: number, prevHash: string): string | null {
   const line = parseLine(text);
   if (line === null) return "unparseable line";
   if (line.seq !== prevSeq + 1) return `seq ${line.seq} follows ${prevSeq}`;
@@ -201,16 +224,22 @@ function checkLine(text: string, prevSeq: number, prevHash: string): string | nu
   return lineHash(rest) === hash ? null : "hash does not match the line";
 }
 
-/**
- * Verifies the chain (T12): every line parses, `seq` increases by one from 1, `prev`
- * is the previous line's hash (the genesis constant first) and `hash` recomputes. Tail
- * truncation leaves a valid shorter chain; that is what shipping the log off-box covers.
- */
-export function verifyChain(path: string): ChainReport {
-  if (!existsSync(path)) return { ok: true, lines: 0 };
-  const texts = readFileSync(path, "utf8")
+/** The non-empty lines of a file (missing: none). */
+export function auditTexts(path: string): string[] {
+  if (!existsSync(path)) return [];
+  return readFileSync(path, "utf8")
     .split("\n")
     .filter((t) => t !== "");
+}
+
+/**
+ * Verifies the chain (T12): every line parses, `seq` increases by one from 1, `prev`
+ * is the previous line's hash (the genesis constant first) and `hash` recomputes. A cut
+ * tail leaves a valid shorter chain: the signed checkpoints and the off-box copy cover
+ * that (`verifyAudit`, `compareCopies`).
+ */
+export function verifyChain(path: string): ChainReport {
+  const texts = auditTexts(path);
   let prevSeq = 0;
   let prevHash = AUDIT_GENESIS;
   for (const text of texts) {

@@ -12,7 +12,9 @@ import {
   resolvePolicyConfig,
 } from "@jev-cops/core";
 import { createJudge, type ProviderConfig } from "@jev-cops/judge";
-import { AuditLog } from "./audit.ts";
+import type { AuditLog } from "./audit.ts";
+import type { AuditForwarder } from "./audit-forward/types.ts";
+import { type AuditRuntime, closeAudit, openAudit } from "./audit-setup.ts";
 import type { DaemonConfig } from "./config.ts";
 import { ConfirmViews } from "./confirm-view.ts";
 import { GitProbe } from "./git-probe.ts";
@@ -44,6 +46,8 @@ export interface DaemonDeps {
   gitRunner?: GitRunner;
   /** What the daemon protects beyond its config (config files, own binary); see {@link defaultJudgeInputs}. */
   inputs?: Partial<JudgeInputs>;
+  /** The audit forwarder's reconnect backoff (tests shorten it). */
+  forwardRetry?: { readonly minMs: number; readonly maxMs: number };
 }
 
 /** Per-policy `degraded` flags as last seen in a decision trace. */
@@ -61,6 +65,8 @@ export class DegradedFlags {
 export interface Runtime {
   readonly config: DaemonConfig;
   readonly audit: AuditLog;
+  /** Ships the audit log off the box (`[audit.forward]`); null when none is configured. */
+  readonly forwarder: AuditForwarder | null;
   readonly sessions: SessionStore;
   /** What `/v1/session` reports taught the daemon per root session (mode, model, …). */
   readonly facts: SessionFactsStore;
@@ -82,8 +88,11 @@ export interface Runtime {
   readonly startedAt: number;
   /** The engine for the policy set in force (rebuilt after a reload). */
   engine(): PolicyEngine;
-  /** Stops timers and watchers, writes the shutdown line, closes the stores. Idempotent. */
-  close(): void;
+  /**
+   * Stops timers and watchers, writes the shutdown line (and its checkpoint), closes the
+   * stores and the log, then lets the forwarder flush. Idempotent.
+   */
+  close(): Promise<void>;
 }
 
 function judgeSettings(config: DaemonConfig): JudgeConfig {
@@ -158,8 +167,6 @@ function startupWarnings(config: DaemonConfig, judgeName: string): string[] {
   }
   if (judgeName === "disabled")
     out.push("judge = off: the semantic layer is disabled, the floor decides");
-  if (config.audit.forward?.kind === "syslog")
-    out.push("audit.forward syslog is M2; not forwarding");
   return out;
 }
 
@@ -192,21 +199,25 @@ function buildGitProbe(config: DaemonConfig, deps: DaemonDeps, now: () => number
 interface Closeable {
   stopGc: () => void;
   policies: PolicySet;
-  audit: AuditLog;
+  audit: AuditRuntime;
   stores: ReadonlyArray<{ close(): void }>;
 }
 
-/** Idempotent shutdown: timers and watchers, the shutdown line, then the stores. */
-function closer(parts: Closeable): () => void {
-  let closed = false;
+/**
+ * Idempotent shutdown: timers and watchers, the shutdown line, the stores, then the log
+ * and its forwarder (which flushes within its budget). A second call waits for the first.
+ */
+function closer(parts: Closeable): () => Promise<void> {
+  let closing: Promise<void> | null = null;
   return () => {
-    if (closed) return;
-    closed = true;
-    parts.stopGc();
-    parts.policies.close();
-    parts.audit.append({ kind: "boot", payload: { event: "shutdown" } });
-    parts.audit.close();
-    for (const store of parts.stores) store.close();
+    closing ??= (async () => {
+      parts.stopGc();
+      parts.policies.close();
+      parts.audit.audit.append({ kind: "boot", payload: { event: "shutdown" } });
+      for (const store of parts.stores) store.close();
+      await closeAudit(parts.audit);
+    })();
+    return closing;
   };
 }
 
@@ -295,8 +306,11 @@ export async function createRuntime(given: DaemonConfig, deps: DaemonDeps = {}):
   const now = deps.now ?? Date.now;
   const log = deps.log ?? stderrLogger(now);
   const policies = await PolicySet.load(config.policies.dir);
-  const forward = config.audit.forward?.kind === "file" ? config.audit.forward.target : null;
-  const audit = AuditLog.open(config.audit.path, { now, forward });
+  const opened = openAudit(config, {
+    now,
+    ...(deps.forwardRetry === undefined ? {} : { retry: deps.forwardRetry }),
+  });
+  const audit = opened.audit;
   policies.setCallbacks(policyCallbacks(audit, log, now));
   const cores = coreConfigs(config);
   const stores = openStores(config, cores, now);
@@ -309,6 +323,7 @@ export async function createRuntime(given: DaemonConfig, deps: DaemonDeps = {}):
     ...built.warnings,
     ...startupWarnings(config, built.judge.name),
     ...git.warnings,
+    ...opened.warnings,
   ];
   const stopGc = startGc(sessions, precedents, audit);
   policies.watch();
@@ -320,6 +335,7 @@ export async function createRuntime(given: DaemonConfig, deps: DaemonDeps = {}):
   return {
     config,
     audit,
+    forwarder: opened.forwarder,
     ...stores,
     confirmViews: new ConfirmViews(),
     policies,
@@ -333,6 +349,6 @@ export async function createRuntime(given: DaemonConfig, deps: DaemonDeps = {}):
     now,
     startedAt: now(),
     engine: engineFactory({ policies, judge, cores, now, precedents }),
-    close: closer({ stopGc, policies, audit, stores: Object.values(stores) }),
+    close: closer({ stopGc, policies, audit: opened, stores: Object.values(stores) }),
   };
 }

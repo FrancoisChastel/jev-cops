@@ -86,12 +86,19 @@ describe("appending", () => {
     expect(() => log.append({ kind: "boot", payload: {} })).toThrow(/closed/);
   });
 
-  test("a forward file receives byte-identical lines", () => {
-    const fwd = join(dir, "copy.jsonl");
-    const log = AuditLog.open(path, { forward: fwd });
-    log.append({ kind: "boot", payload: {} });
+  test("checkpoint lines cannot be appended: only signed through checkpoint()", () => {
+    const log = AuditLog.open(path);
+    expect(() => log.append({ kind: "checkpoint", payload: {} })).toThrow(/signed/);
     log.close();
-    expect(readFileSync(fwd, "utf8")).toBe(readFileSync(path, "utf8"));
+  });
+
+  test("a garbage last line after good ones continues the seq from the last good line", () => {
+    writeThree().close();
+    writeFileSync(path, `${readFileSync(path, "utf8")}garbage\n`);
+    const log = AuditLog.open(path);
+    expect(log.head().seq).toBe(4);
+    log.close();
+    expect(readAudit(path).lines.at(-1)?.kind).toBe("anomaly");
   });
 
   test("an unparseable tail restarts the chain with an anomaly, which verification flags", () => {

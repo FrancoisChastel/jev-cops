@@ -86,22 +86,47 @@ function fileAndDir(file: string, shared: ReadonlySet<string>, sideFiles: readon
   return isShared ? [file, ...sideFiles.map((s) => `${file}${s}`)] : [file, dir];
 }
 
+/** A file and the files the daemon writes next to it (temp, pending). */
+const CURSOR_SIDE_FILES = [".tmp"];
+const KEY_SIDE_FILES = [".next"];
+
+/**
+ * The audit's own files (D-103, D-104): the forward cursor, the signing key (and the key a
+ * rotation is waiting to switch to), each with its directory unless shared, and the files
+ * given alone: the file forward's copy, the public key, the syslog CA and client key.
+ */
+function auditFiles(config: DaemonConfig, shared: ReadonlySet<string>) {
+  const fwd = config.audit.forward;
+  const copy = fwd?.kind === "file" ? [fwd.target] : [];
+  const cursor = fwd === null ? [] : fileAndDir(fwd.cursor, shared, CURSOR_SIDE_FILES);
+  const tls = [fwd?.syslog?.ca, fwd?.syslog?.cert, fwd?.syslog?.key].filter(
+    (p): p is string => typeof p === "string",
+  );
+  const clientKey = fwd?.syslog?.key ?? null;
+  const key = fileAndDir(config.audit.key, shared, KEY_SIDE_FILES);
+  return { copy, cursor, tls, clientKey: clientKey === null ? [] : [clientKey], key };
+}
+
 /**
  * Every path the judge depends on: the policies directory (whole), the audit log, the
  * store, both sockets and each config file with their directories (just the file when
- * the directory is shared), the audit's file forward, `~/.jev-cops/` under the OS home and
- * `[daemon] home`, the running daemon binary when compiled and `[daemon] hook_binary`.
- * Each entry is also listed under its real path when a symlink leads to it. Absolute,
- * deduplicated, in a stable order.
+ * the directory is shared), the audit's forward copy, cursor, signing and public keys and
+ * TLS files, `~/.jev-cops/` under the OS home and `[daemon] home`, the running daemon
+ * binary when compiled and `[daemon] hook_binary`. Each entry is also listed under its
+ * real path when a symlink leads to it. Absolute, deduplicated, in a stable order.
  */
 export function judgeInputPaths(config: DaemonConfig, inputs: JudgeInputs): string[] {
   const shared = sharedDirs(config, inputs);
-  const forward = config.audit.forward?.kind === "file" ? [config.audit.forward.target] : [];
+  const audit = auditFiles(config, shared);
   const binaries = [inputs.selfBinary, config.daemon.hookBinary].filter((b) => b !== null);
   const paths = [
     config.policies.dir,
     ...fileAndDir(config.audit.path, shared, []),
-    ...forward,
+    ...audit.copy,
+    ...audit.cursor,
+    ...audit.key,
+    config.audit.publicKey,
+    ...audit.tls,
     ...fileAndDir(config.store.path, shared, SQLITE_SIDE_FILES),
     ...fileAndDir(config.daemon.socket, shared, []),
     ...fileAndDir(config.daemon.adminSocket, shared, []),
@@ -121,7 +146,8 @@ const ADAPTER_RECORDS = ["claude-code-hook.log", "claude-code.json"];
 
 /**
  * The judge's own records, as `[policy] privatePaths` entries (M1 gate review, finding M2):
- * the audit log and its forward copy, the store (SQLite side files included) with their
+ * the audit log and its forward copy and cursor, the signing key (D-098: never readable by
+ * the agent) and a syslog client key, the store (SQLite side files included) with their
  * directories unless shared, `~/.jev-cops/` under the OS home and `[daemon] home` with the
  * adapters' records in it. Exempt (`!`), because agents read them legitimately or they
  * hold no record: both sockets, the policies directory and the config files. Each also
@@ -130,11 +156,14 @@ const ADAPTER_RECORDS = ["claude-code-hook.log", "claude-code.json"];
  */
 export function judgePrivatePaths(config: DaemonConfig, inputs: JudgeInputs): string[] {
   const shared = sharedDirs(config, inputs);
-  const forward = config.audit.forward?.kind === "file" ? [config.audit.forward.target] : [];
+  const audit = auditFiles(config, shared);
   const homes = [inputs.osHome, config.daemon.home].map((h) => join(h, ".jev-cops"));
   const records = [
     ...fileAndDir(config.audit.path, shared, []),
-    ...forward,
+    ...audit.copy,
+    ...audit.cursor,
+    ...audit.key,
+    ...audit.clientKey,
     ...fileAndDir(config.store.path, shared, SQLITE_SIDE_FILES),
     ...homes.flatMap((dir) => [dir, ...ADAPTER_RECORDS.map((f) => join(dir, f))]),
   ];

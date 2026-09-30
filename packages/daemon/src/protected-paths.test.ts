@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import type { DaemonConfig } from "./config.ts";
+import type { AuditForward, DaemonConfig } from "./config.ts";
 import {
   compiledBinary,
   defaultJudgeInputs,
@@ -27,12 +27,92 @@ function spread(over: Partial<DaemonConfig["daemon"]> = {}): DaemonConfig {
     },
     policies: { dir: "/srv/jv/policies" },
     audit: {
+      ...base.audit,
       path: "/srv/jv-log/audit.jsonl",
-      forward: { kind: "file", target: "/mnt/copy.jsonl" },
+      forward: forwardTo("file", "/mnt/copy.jsonl"),
+      key: "/srv/jv-keys/audit-ed25519.key",
+      publicKey: "/srv/jv-pub/audit-ed25519.pub",
     },
     store: { path: "/srv/jv-db/store.sqlite" },
   };
 }
+
+/** A `[audit.forward]` of `kind`, its cursor in its own directory. */
+function forwardTo(kind: "file" | "syslog", target: string): AuditForward {
+  const syslog = {
+    host: "siem",
+    port: 6514,
+    ca: "/etc/jv-tls/ca.pem",
+    cert: "/etc/jv-tls/client.pem",
+    key: "/etc/jv-tls/client.key",
+    serverName: null,
+    facility: 16,
+    appName: "copsd",
+    enterpriseNumber: 32473,
+    maxMessageBytes: 8192,
+    resendOverlap: 100,
+  };
+  return {
+    kind,
+    target,
+    required: false,
+    maxLagLines: 1000,
+    maxLagMs: 60_000,
+    cursor: "/srv/jv-cursor/forward.cursor",
+    syslog: kind === "syslog" ? syslog : null,
+  };
+}
+
+describe("the audit's own files (D-103, D-104)", () => {
+  test("protected: cursor, signing key and its pending rotation, public key, TLS files", () => {
+    const config = {
+      ...spread(),
+      audit: { ...spread().audit, forward: forwardTo("syslog", "siem:6514") },
+    };
+    const paths = judgeInputPaths(config, INPUTS);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "/srv/jv-cursor",
+        "/srv/jv-cursor/forward.cursor",
+        "/srv/jv-keys",
+        "/srv/jv-keys/audit-ed25519.key",
+        "/srv/jv-pub/audit-ed25519.pub",
+        "/etc/jv-tls/ca.pem",
+        "/etc/jv-tls/client.pem",
+        "/etc/jv-tls/client.key",
+      ]),
+    );
+    expect(paths).not.toContain("/etc/jv-tls");
+    expect(paths).not.toContain("/srv/jv-pub");
+    expect(paths).not.toContain("siem:6514");
+  });
+
+  test("private: cursor, signing key and the client key; never the public key or the CA", () => {
+    const config = {
+      ...spread(),
+      audit: { ...spread().audit, forward: forwardTo("syslog", "siem:6514") },
+    };
+    const paths = judgePrivatePaths(config, INPUTS);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "/srv/jv-cursor/forward.cursor",
+        "/srv/jv-keys",
+        "/srv/jv-keys/audit-ed25519.key",
+        "/etc/jv-tls/client.key",
+      ]),
+    );
+    expect(paths).not.toContain("/srv/jv-pub/audit-ed25519.pub");
+    expect(paths).not.toContain("/etc/jv-tls/ca.pem");
+  });
+
+  test("a key in a shared directory: the key and its pending rotation, not the directory", () => {
+    const key = join(tmpdir(), "audit.key");
+    const config = { ...spread(), audit: { ...spread().audit, key } };
+    const paths = judgePrivatePaths(config, INPUTS);
+    expect(paths).toEqual(expect.arrayContaining([key, `${key}.next`]));
+    expect(paths).not.toContain(tmpdir());
+  });
+});
 
 const INPUTS: JudgeInputs = {
   configFiles: ["/srv/jv-etc/cops.toml"],
@@ -96,7 +176,10 @@ describe("shared directories are never protected whole (only the file in them)",
   });
 
   test("an audit log in the home dir, a config in the daemon's cwd", () => {
-    const config = { ...spread(), audit: { path: "/home/dev/audit.jsonl", forward: null } };
+    const config = {
+      ...spread(),
+      audit: { ...spread().audit, path: "/home/dev/audit.jsonl", forward: null },
+    };
     const paths = judgeInputPaths(config, { ...INPUTS, configFiles: ["/work/repo/j.toml"] });
     expect(paths).toContain("/home/dev/audit.jsonl");
     expect(paths).toContain("/work/repo/j.toml");
@@ -134,7 +217,7 @@ describe("symlinked locations are protected under their real path too", () => {
     const config = {
       ...spread(),
       policies: { dir: join(root, "link", "policies") },
-      audit: { path: join(root, "link", "logs", "audit.jsonl"), forward: null },
+      audit: { ...spread().audit, path: join(root, "link", "logs", "audit.jsonl"), forward: null },
     };
     const paths = judgeInputPaths(config, INPUTS);
     expect(paths).toContain(join(root, "link", "policies"));
@@ -201,7 +284,7 @@ describe("judgePrivatePaths: the judge's own records, never its policies or conf
     });
     const config = {
       ...base,
-      audit: { path: "/home/dev/.jev-cops/audit.jsonl", forward: null },
+      audit: { ...base.audit, path: "/home/dev/.jev-cops/audit.jsonl", forward: null },
       store: { path: "/home/dev/.jev-cops/cops.sqlite" },
     };
     const paths = judgePrivatePaths(config, INPUTS);

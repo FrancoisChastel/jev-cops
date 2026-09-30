@@ -11,7 +11,7 @@ import {
 } from "@jev-cops/core";
 import { registerSdkModule } from "@jev-cops/sdk/register";
 import { type AuditLine, readAudit } from "../audit.ts";
-import type { DaemonConfig, EnforcementMode, HttpBind } from "../config.ts";
+import type { AuditForward, DaemonConfig, EnforcementMode, HttpBind } from "../config.ts";
 import type { GitRunner } from "../git-run.ts";
 import { SILENT_LOGGER } from "../log.ts";
 import { type RunningDaemon, startDaemon } from "../server.ts";
@@ -37,6 +37,14 @@ export interface TestDaemonOptions {
   /** Replaces the real git runner (timeouts, counting). */
   gitRunner?: GitRunner;
   http?: HttpBind | null;
+  /** `[audit.forward]`; default none. */
+  forward?: AuditForward | null;
+  /** `[audit] checkpoint_every`; default 100. */
+  checkpointEvery?: number;
+  /** `[audit] require_signing`; default false. */
+  requireSigning?: boolean;
+  /** The forwarder's reconnect backoff; default 20 ms to 200 ms here. */
+  forwardRetry?: { readonly minMs: number; readonly maxMs: number };
   /** `[daemon] hook_binary`; default none. */
   hookBinary?: string;
   context?: ContextConfigInput;
@@ -133,7 +141,14 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
     },
     context: opts.context ?? {},
     policy: mergeConfig<PolicyConfigInput>({ when: { budgetMs: 1_000 } }, opts.policy ?? {}),
-    audit: { path: join(dir, "audit.jsonl"), forward: null },
+    audit: {
+      path: join(dir, "audit.jsonl"),
+      forward: opts.forward ?? null,
+      checkpointEvery: opts.checkpointEvery ?? 100,
+      requireSigning: opts.requireSigning ?? false,
+      key: join(dir, "keys", "audit-ed25519.key"),
+      publicKey: join(dir, "audit-ed25519.pub"),
+    },
     store: { path: join(dir, "store.sqlite") },
     enforcement: { mode: opts.mode ?? "enforce" },
   };
@@ -163,6 +178,7 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     ...(opts.judge === undefined ? {} : { judge: opts.judge }),
     ...(opts.now === undefined ? {} : { now: opts.now }),
     ...(opts.gitRunner === undefined ? {} : { gitRunner: opts.gitRunner }),
+    forwardRetry: opts.forwardRetry ?? { minMs: 20, maxMs: 200 },
   });
   return {
     daemon,
