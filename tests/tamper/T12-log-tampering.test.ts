@@ -17,7 +17,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { VerdictResponse } from "@jev-cops/core";
 import { runDoctorCommand } from "../../packages/cli/src/commands/doctor.ts";
-import { offlineCanary } from "../../packages/cli/src/commands/doctor-canary.ts";
 import { captureIo } from "../../packages/cli/src/io.ts";
 import { copsToml, doctorEnv, doctorFixture } from "../../packages/cli/src/testing/doctor.ts";
 import { verifyChain } from "../../packages/daemon/src/audit.ts";
@@ -83,7 +82,7 @@ describe("T12 log tampering", () => {
     const f = doctorFixture();
     const doctor = async () => {
       const io = captureIo();
-      const deps = { env: doctorEnv(f), canary: offlineCanary, notice: () => {} };
+      const deps = { env: doctorEnv(f), notice: () => {} };
       const argv = ["--json", "--config", copsToml(f, td.config)];
       const code = await runDoctorCommand(argv, io, { deps: () => deps, tty: false });
       const report = JSON.parse(io.stdout.join("\n")) as {

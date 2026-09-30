@@ -19,7 +19,6 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CLAUDE_CODE_GAPS } from "../../adapters/claude-code/src/gaps.ts";
 import { isUnder } from "../../adapters/claude-code/testing/fs-guard.ts";
-import { offlineCanary } from "../../packages/cli/src/commands/doctor-canary.ts";
 import { runDoctor } from "../../packages/cli/src/commands/doctor-run.ts";
 import { runInstallCommand } from "../../packages/cli/src/commands/install.ts";
 import { captureIo } from "../../packages/cli/src/io.ts";
@@ -130,7 +129,7 @@ describe("T4 Claude Code: cops doctor reports the gap when present and unmitigat
   const doctor = () =>
     runDoctor(
       { harness: "claude-code", live: false, config: copsToml(f, td.config) },
-      { env: doctorEnv(f), canary: offlineCanary, notice: () => {} },
+      { env: doctorEnv(f), notice: () => {} },
     );
 
   test("the jev-cops hook missing from the effective settings is a failure", async () => {

@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 import { CLAUDE_CODE_GAPS, CLAUDE_CODE_STATE_FILE } from "@jev-cops/adapter-claude-code";
 import { PI_GAPS } from "@jev-cops/adapter-pi/install";
 import { ConfigError, type LoadedConfig, loadConfig } from "@jev-cops/daemon";
-import { type CanaryHook, type CanaryRunner, canaryChecks } from "./doctor-canary.ts";
+import { type CanaryHook, canaryChecks, doctorCanary } from "./doctor-canary.ts";
 import {
   claudeVersionChecks,
   hookLogCheck,
@@ -18,13 +18,7 @@ import {
   trustCheck,
 } from "./doctor-claude.ts";
 import { keyChecks } from "./doctor-claude-keys.ts";
-import {
-  auditChecks,
-  type DaemonProbe,
-  daemonChecks,
-  enforcementOf,
-  probeDaemon,
-} from "./doctor-daemon.ts";
+import { auditChecks, type DaemonProbe, daemonChecks, probeDaemon } from "./doctor-daemon.ts";
 import {
   binaryChecks,
   duplicatesCheck,
@@ -50,10 +44,9 @@ export interface DoctorOptions {
   readonly config?: string;
 }
 
-/** The process around a run: its view of the machine, the canary runner, where notices go. */
+/** The process around a run: its view of the machine and where notices go. */
 export interface DoctorDeps {
   readonly env: DoctorEnv;
-  readonly canary: CanaryRunner;
   readonly notice: (line: string) => void;
 }
 
@@ -143,21 +136,19 @@ function canaryBlocked(hooks: readonly unknown[], probe: DaemonProbe): Check | n
 }
 
 /**
- * The offline canary through each registered PreToolUse hook that talks to copsd's socket
- * (a hook on another socket would only fail closed, and write its local log).
+ * The offline canary (the adapter's, shared with `cops install`) through each registered
+ * PreToolUse hook that talks to copsd's socket (a hook on another socket would only fail
+ * closed, and write its local log); never when copsd is unreachable (D-092).
  */
 async function canarySection(
   f: HookFacts,
-  deps: DoctorDeps,
+  e: DoctorEnv,
   probe: DaemonProbe,
   daemonHome: string,
 ): Promise<Check[]> {
-  const hooks = canaryHooks(f, deps.env);
+  const hooks = canaryHooks(f, e);
   const blocked = canaryBlocked(hooks, probe);
   if (blocked !== null) return [blocked];
-  const e = deps.env;
-  const enforcement = enforcementOf(probe);
-  const env = { ...e.env, HOME: e.home };
   const out: Check[] = [];
   for (const { hook, socket } of hooks) {
     if (socket === null || !samePath(socket, probe.socket)) {
@@ -165,8 +156,8 @@ async function canarySection(
       out.push(check("canary", "offline canary", "warn", detail));
       continue;
     }
-    const opts = { hook, home: daemonHome, cwd: f.view.projectDir, env, enforcement, run: e.run };
-    out.push(...canaryChecks(await deps.canary(opts), hook, enforcement));
+    const opts = { hook, home: e.home, daemonHome, cwd: f.view.projectDir, env: e.env, run: e.run };
+    out.push(...canaryChecks(await doctorCanary(opts), hook));
   }
   return out;
 }
@@ -209,7 +200,7 @@ async function claudeCodeChecks(
     ...keyChecks(facts),
     trustCheck(e, facts.view.projectDir),
     hookLogCheck(e.home),
-    ...(await canarySection(facts, deps, probe, paths.home)),
+    ...(await canarySection(facts, e, probe, paths.home)),
     ...(o.live ? await liveCanaryChecks({ e, auditPath: paths.audit, notice: deps.notice }) : []),
   ];
 }

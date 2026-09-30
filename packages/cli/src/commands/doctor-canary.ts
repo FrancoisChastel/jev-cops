@@ -1,26 +1,26 @@
 /**
- * The offline canary of `cops doctor` (PLAN-M1 §4.4, D-078 proposal): the hook is spawned
- * exactly as the effective settings register it (command + args, exec form, no shell) and
- * fed two synthetic `PreToolUse` payloads, each under its own throw-away session:
- * - a `Write` to `<home>/.claude/settings.json` (home = copsd's), expected exit 2 with a JSON
- *   `deny` and `continue: false`: the binary runs, copsd answers, `config-tamper` is loaded
- *   and `kill` is mapped. In `observe` mode the hook cannot block, by design: exit 0 with
- *   copsd's "would have" note as `additionalContext`;
- * - a `Bash` `true`, expected exit 0 and no output.
- * Nothing is executed: the hook only judges. The kill latches the throw-away session in copsd.
- *
- * The runner sits behind {@link CanaryRunner} so the adapter's shared `runOfflineCanary`
- * (adapters/claude-code/src/canary.ts, from `cops install`) can replace it; the result shape
- * is the shared one.
+ * The offline canary of `cops doctor` (PLAN-M1 §4.4, D-091, D-092). The canary itself (the
+ * two synthetic `PreToolUse` payloads, what each must answer, and how a run is classified)
+ * is the adapter's `runOfflineCanary` (adapters/claude-code/src/canary.ts), the one
+ * `cops install claude-code` runs. This module only runs it through one registered hook with
+ * the doctor's process runner, and renders each probe as a check:
+ * ok → ok, observe → warn (the hook cannot block, by design), unreachable → fail with a
+ * hint, failed → fail ("gate silently disabled" when the config write got through).
+ * The config write targets copsd's home (`[daemon] home`), the one `config-tamper` protects;
+ * the hook runs with the user's HOME, in the project, under the registered timeout.
  */
-import { randomUUID } from "node:crypto";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
+import {
+  type CanaryProbe,
+  type CanaryResult,
+  runOfflineCanary,
+  type Spawn,
+} from "@jev-cops/adapter-claude-code";
 import {
   type Check,
   type CheckStatus,
   check,
   type Env,
-  type ProcessResult,
   type ProcessRunner,
 } from "./doctor-types.ts";
 
@@ -31,166 +31,90 @@ export interface CanaryHook {
   readonly timeoutS?: number;
 }
 
-/** What one canary run needs. */
-export interface CanaryOptions {
+/** What one doctor canary run needs. */
+export interface DoctorCanaryOptions {
   readonly hook: CanaryHook;
-  /** copsd's home: the config write targets `<home>/.claude/settings.json`. */
+  /** The user's home: the hook's HOME. */
   readonly home: string;
+  /** copsd's home: the config write targets `<daemonHome>/.claude/settings.json`. */
+  readonly daemonHome: string;
   /** The payloads' `cwd` and the hook's working directory. */
   readonly cwd: string;
-  /** The hook's environment (Claude Code passes its own through). */
+  /** The doctor's environment (only `PATH` reaches the hook, with `HOME`). */
   readonly env: Env;
-  /** copsd's enforcement mode (`/v1/health`); null when unknown (enforce is expected). */
-  readonly enforcement: "observe" | "enforce" | null;
   readonly run: ProcessRunner;
 }
 
-/**
- * One case. `expected` and `observed` use one vocabulary (`exit 2, deny, continue:false`,
- * `exit 0, no output`, `timed out`, `did not start`, …): a case passed iff they are equal.
- */
-export interface CanaryCase {
-  readonly name: string;
-  readonly exitCode: number | null;
-  readonly expected: string;
-  readonly observed: string;
-  readonly detail: string;
-}
-
-/** Every case, and whether all of them passed. */
-export interface CanaryResult {
-  readonly ok: boolean;
-  readonly cases: readonly CanaryCase[];
-}
-
-/** Runs the canary through one registered hook; never throws. */
-export type CanaryRunner = (o: CanaryOptions) => Promise<CanaryResult>;
-
-/** The config-write case's name. */
-export const CONFIG_WRITE_CASE = "config write is killed";
-/** The benign case's name. */
+/** The benign probe's check name. */
 export const BENIGN_CASE = "benign call proceeds";
+/** The config-write probe's check name. */
+export const CONFIG_WRITE_CASE = "config write is killed";
 /** Claude Code's registered PreToolUse timeout when the entry names none. */
 const DEFAULT_TIMEOUT_S = 30;
 const OBSERVE_NOTE = "enforcement observe: the hook cannot block, by design";
 
-function payload(id: string, cwd: string, tool: string, input: Record<string, unknown>): string {
-  return JSON.stringify({
-    session_id: `jev-cops-doctor-${id}`,
-    cwd,
-    permission_mode: "default",
-    hook_event_name: "PreToolUse",
-    tool_name: tool,
-    tool_input: input,
-    tool_use_id: `toolu_doctor_${id}`,
+/** Runs the shared canary through `o.hook`, as Claude Code would spawn it. Never throws. */
+export function doctorCanary(o: DoctorCanaryOptions): Promise<CanaryResult> {
+  const spawn: Spawn = (r) =>
+    o.run({
+      argv: r.argv,
+      env: r.env,
+      cwd: r.cwd ?? o.cwd,
+      stdin: r.stdin ?? "",
+      timeoutMs: r.timeoutMs,
+    });
+  return runOfflineCanary({
+    hook: { command: o.hook.command, args: o.hook.args },
+    home: o.home,
+    targetHome: o.daemonHome,
+    cwd: o.cwd,
+    env: o.env,
+    timeoutMs: (o.hook.timeoutS ?? DEFAULT_TIMEOUT_S) * 1_000,
+    spawn,
   });
-}
-
-function jsonOf(text: string): Record<string, unknown> | null {
-  try {
-    const value: unknown = JSON.parse(text);
-    return typeof value === "object" && value !== null && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function jsonParts(json: Record<string, unknown>): string[] {
-  const hso = (json.hookSpecificOutput ?? {}) as Record<string, unknown>;
-  const parts = [
-    ...(typeof hso.permissionDecision === "string" ? [hso.permissionDecision] : []),
-    ...(hso.additionalContext === undefined ? [] : ["additionalContext"]),
-    ...(hso.updatedInput === undefined ? [] : ["updatedInput"]),
-    ...(json.continue === false ? ["continue:false"] : []),
-  ];
-  return parts.length === 0 ? ["other JSON"] : parts;
-}
-
-/** What a hook run did, as Claude Code reads it (exit code, then the JSON decision). */
-export function describeRun(r: ProcessResult): string {
-  if (r.error !== null) return "did not start";
-  if (r.timedOut) return "timed out";
-  const out = r.stdout.trim();
-  const json = out === "" ? null : jsonOf(out);
-  const rest = out === "" ? ["no output"] : json === null ? ["non-JSON output"] : jsonParts(json);
-  return [`exit ${r.exitCode}`, ...rest].join(", ");
 }
 
 function firstLine(text: string): string {
   return text.trim().split("\n")[0] ?? "";
 }
 
-function writeDetail(passed: boolean, observe: boolean, r: ProcessResult): string {
-  if (passed) {
-    return observe
-      ? `${OBSERVE_NOTE} (copsd returned what it would have done)`
-      : "The hook ran, copsd answered, config-tamper killed the write, and the kill ends the turn";
-  }
-  const through = r.error === null && !r.timedOut && r.exitCode !== 2;
-  const why = firstLine(r.error ?? r.stderr);
+function statusOf(p: CanaryProbe): CheckStatus {
+  if (p.outcome === "ok") return "ok";
+  return p.outcome === "observe" ? "warn" : "fail";
+}
+
+function failedDetail(p: CanaryProbe, why: string): string {
+  if (p.name === "benign-bash") return `A benign call did not pass cleanly${why}`;
+  const through = p.exitCode !== null && p.exitCode !== 2;
   const lead = through
     ? "The hook let a config write through: gate silently disabled"
     : "The hook did not block as expected";
-  return why === "" ? lead : `${lead} (${why})`;
+  return `${lead}${why}`;
 }
 
-function benignDetail(passed: boolean, r: ProcessResult): string {
-  if (passed) return "A benign call proceeds with no output";
-  const why = firstLine(r.error ?? r.stderr);
-  return `A benign call did not pass cleanly${why === "" ? "" : ` (${why})`}`;
+/** Why a probe came out the way it did, for a human. */
+function explain(p: CanaryProbe): string {
+  const line = firstLine(p.stderr);
+  const why = line === "" ? "" : ` (${line})`;
+  switch (p.outcome) {
+    case "ok":
+      return p.name === "benign-bash"
+        ? "A benign call proceeds with no output"
+        : "The hook ran, copsd answered, config-tamper killed the write, and the kill ends the turn";
+    case "observe":
+      return `${OBSERVE_NOTE} (copsd returned what it would have done)`;
+    case "unreachable":
+      return `The hook could not reach copsd${why}, so it blocks every non-read call (fail closed): check its --socket, start copsd and re-run`;
+    case "failed":
+      return failedDetail(p, why);
+  }
 }
 
-async function spawnCase(o: CanaryOptions, stdin: string): Promise<ProcessResult> {
-  const timeoutMs = (o.hook.timeoutS ?? DEFAULT_TIMEOUT_S) * 1_000;
-  return o.run({
-    argv: [o.hook.command, ...o.hook.args],
-    env: o.env,
-    cwd: o.cwd,
-    stdin,
-    timeoutMs,
-  });
-}
-
-/** The doctor's own canary runner (see the module comment). */
-export const offlineCanary: CanaryRunner = async (o) => {
-  const nonce = randomUUID();
-  const observe = o.enforcement === "observe";
-  const target = join(o.home, ".claude", "settings.json");
-  const write = await spawnCase(
-    o,
-    payload(`${nonce}-write`, o.cwd, "Write", { file_path: target, content: "{}" }),
-  );
-  const benign = await spawnCase(o, payload(`${nonce}-bash`, o.cwd, "Bash", { command: "true" }));
-  const expectWrite = observe ? "exit 0, additionalContext" : "exit 2, deny, continue:false";
-  const cases = [
-    { name: CONFIG_WRITE_CASE, run: write, expected: expectWrite },
-    { name: BENIGN_CASE, run: benign, expected: "exit 0, no output" },
-  ].map(({ name, run, expected }) => {
-    const observed = describeRun(run);
-    const passed = observed === expected;
-    const detail =
-      name === CONFIG_WRITE_CASE ? writeDetail(passed, observe, run) : benignDetail(passed, run);
-    return { name, exitCode: run.exitCode, expected, observed, detail };
-  });
-  return { ok: cases.every((c) => c.expected === c.observed), cases };
-};
-
-/** The canary's cases as report lines; in observe mode a passing config write is a warning. */
-export function canaryChecks(
-  result: CanaryResult,
-  hook: CanaryHook,
-  enforcement: "observe" | "enforce" | null,
-): Check[] {
-  return result.cases.map((c) => {
-    const passed = c.expected === c.observed;
-    const status: CheckStatus = !passed
-      ? "fail"
-      : enforcement === "observe" && c.name === CONFIG_WRITE_CASE
-        ? "warn"
-        : "ok";
-    const detail = `via ${basename(hook.command)}: expected ${c.expected}; observed ${c.observed}. ${c.detail}`;
-    return check("canary", c.name, status, detail);
+/** The canary's probes as report lines, in the order they ran. */
+export function canaryChecks(result: CanaryResult, hook: CanaryHook): Check[] {
+  return result.probes.map((p) => {
+    const name = p.name === "benign-bash" ? BENIGN_CASE : CONFIG_WRITE_CASE;
+    const detail = `via ${basename(hook.command)}: expected ${p.expected}; observed ${p.observed}. ${explain(p)}`;
+    return check("canary", name, statusOf(p), detail);
   });
 }

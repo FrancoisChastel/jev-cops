@@ -14,7 +14,6 @@ import {
   AUDIT_CAVEAT,
   auditChecks,
   daemonChecks,
-  enforcementOf,
   fetchHealth,
   probeDaemon,
 } from "./doctor-daemon.ts";
@@ -55,7 +54,6 @@ describe("doctor: copsd health on both sockets", () => {
     expect(byName(checks, "judge")).toMatchObject({ status: "warn" });
     expect(byName(checks, "judge")?.detail).toContain("disabled");
     expect(byName(checks, "protected paths")?.status).toBe("ok");
-    expect(enforcementOf(probe)).toBe("enforce");
     expect(checks.every((c) => c.group === "copsd")).toBe(true);
   });
 
@@ -69,7 +67,6 @@ describe("doctor: copsd health on both sockets", () => {
     expect(byName(checks, "enforcement")?.detail).toContain("no verdict is enforced");
     expect(byName(checks, "policies")?.status).toBe("fail");
     expect(byName(checks, "policies")?.detail).toContain("config-tamper is not loaded");
-    expect(enforcementOf(probe)).toBe("observe");
   });
 
   test("daemon down: the agent socket fails with a hint, the rest is not guessed", async () => {
@@ -81,7 +78,6 @@ describe("doctor: copsd health on both sockets", () => {
     expect(agent?.detail).toContain("fail closed");
     expect(byName(checks, "admin socket")?.status).toBe("warn");
     expect(byName(checks, "enforcement")).toBeUndefined();
-    expect(enforcementOf(probe)).toBeNull();
   });
 
   test("only the admin socket answers: the agent socket fails, facts come from the admin socket", async () => {

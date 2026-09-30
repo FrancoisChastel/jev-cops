@@ -11,6 +11,7 @@ import { hookCommand } from "../testing/setup.ts";
 import {
   CANARY_DEFAULT_TIMEOUT_MS,
   canaryPayloads,
+  describeHookRun,
   registeredPreToolUse,
   runOfflineCanary,
 } from "./canary.ts";
@@ -79,6 +80,45 @@ describe("runOfflineCanary (PLAN-M1 §4.4, D-078 proposal)", () => {
     const r = await runOfflineCanary({ hook: { command: fake, args: [] }, home, env });
     expect(r.status).toBe("failed");
     expect(r.detail).toContain("config-write");
+    expect(r.probes[1]).toMatchObject({ outcome: "failed", observed: "exit 0, no output" });
+  }, 30_000);
+
+  test("the write probe targets copsd's home (targetHome), not the hook's HOME", async () => {
+    // cwd outside `home`: `<home>/.claude/settings.json` is neither copsd's user settings nor
+    // a project settings file of the cwd, so config-tamper would let the write through.
+    const cwd = join(root, "elsewhere");
+    mkdirSync(cwd, { recursive: true });
+    const hook = hookCommand(enforce.config.daemon.socket);
+    const wrong = await runOfflineCanary({ hook, home, cwd, env });
+    expect(wrong.status).toBe("failed");
+    const target = enforce.config.daemon.home;
+    const r = await runOfflineCanary({ hook, home, targetHome: target, cwd, env });
+    expect(r.status).toBe("ok");
+    const write = JSON.parse(canaryPayloads(target, cwd, "n").write) as {
+      tool_input: { file_path: string };
+    };
+    expect(write.tool_input.file_path).toBe(join(target, ".claude", "settings.json"));
+  }, 30_000);
+
+  test("each probe says what the hook did, in the vocabulary of what was expected", async () => {
+    const r = await runOfflineCanary({
+      hook: hookCommand(enforce.config.daemon.socket),
+      home,
+      env,
+    });
+    expect(r.probes.map((p) => [p.expected, p.observed])).toEqual([
+      ["exit 0, no output", "exit 0, no output"],
+      [
+        "exit 2, deny, continue:false (observe mode: exit 0, additionalContext)",
+        "exit 2, deny, continue:false",
+      ],
+    ]);
+    const observed = await runOfflineCanary({
+      hook: hookCommand(observe.config.daemon.socket),
+      home,
+      env,
+    });
+    expect(observed.probes[1]?.observed).toBe("exit 0, additionalContext");
   }, 30_000);
 });
 
@@ -124,6 +164,64 @@ describe("canary classification (stubbed spawn)", () => {
 
   test("defaults", () => {
     expect(CANARY_DEFAULT_TIMEOUT_MS).toBeGreaterThan(13_000);
+  });
+
+  test("a hook killed at the deadline fails; the caller's deadline is the one used", async () => {
+    const seen: number[] = [];
+    const spawn = async (r: SpawnRequest): Promise<SpawnResult> => {
+      seen.push(r.timeoutMs);
+      return { exitCode: null, stdout: "", stderr: "", timedOut: true, error: null };
+    };
+    const r = await runOfflineCanary({ hook, home, env, spawn, timeoutMs: 30_000 });
+    expect(seen).toEqual([30_000, 30_000]);
+    expect(r.status).toBe("failed");
+    expect(r.probes.map((p) => p.observed)).toEqual(["timed out", "timed out"]);
+    expect(r.probes[0]?.stderr).toBe("timed out");
+  });
+
+  test("the hook gets HOME and PATH only, in the cwd, with the payload on stdin", async () => {
+    const requests: SpawnRequest[] = [];
+    const spawn = async (req: SpawnRequest): Promise<SpawnResult> => {
+      requests.push(req);
+      return { exitCode: 0, stdout: "", stderr: "", timedOut: false, error: null };
+    };
+    const secretEnv = { PATH: "/p", ANTHROPIC_API_KEY: "sk-x", CLAUDE_CONFIG_DIR: "/c" };
+    await runOfflineCanary({ hook, home, cwd: "/w", env: secretEnv, spawn, nonce: "n1" });
+    expect(requests.map((q) => q.env)).toEqual([
+      { PATH: "/p", HOME: home },
+      { PATH: "/p", HOME: home },
+    ]);
+    expect(requests.map((q) => q.cwd)).toEqual(["/w", "/w"]);
+    expect(JSON.parse(requests[0]?.stdin ?? "{}")).toMatchObject({
+      session_id: "jev-cops-canary-bash-n1",
+      cwd: "/w",
+    });
+  });
+});
+
+describe("describeHookRun: a run as Claude Code reads it", () => {
+  const base = { exitCode: 0, stderr: "", timedOut: false, error: null };
+  test.each([
+    [{ ...base, stdout: "" }, "exit 0, no output"],
+    [{ ...base, stdout: "hello" }, "exit 0, non-JSON output"],
+    [{ ...base, stdout: '{"a":1}' }, "exit 0, other JSON"],
+    [{ ...base, stdout: "[1]" }, "exit 0, non-JSON output"],
+    [
+      { ...base, stdout: '{"hookSpecificOutput":{"permissionDecision":"ask","updatedInput":{}}}' },
+      "exit 0, ask, updatedInput",
+    ],
+    [
+      {
+        ...base,
+        exitCode: 2,
+        stdout: '{"continue":false,"hookSpecificOutput":{"permissionDecision":"deny"}}',
+      },
+      "exit 2, deny, continue:false",
+    ],
+    [{ ...base, exitCode: null, error: "ENOENT" }, "did not start"],
+    [{ ...base, exitCode: null, timedOut: true }, "timed out"],
+  ])("%j → %s", (run, text) => {
+    expect(describeHookRun({ stdout: "", ...run })).toBe(text);
   });
 });
 

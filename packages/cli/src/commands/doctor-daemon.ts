@@ -83,11 +83,6 @@ function healthOf(p: DaemonProbe): Health | null {
   return p.admin.ok ? p.admin.health : null;
 }
 
-/** The daemon's enforcement mode, or null when neither socket answered. */
-export function enforcementOf(p: DaemonProbe): "observe" | "enforce" | null {
-  return healthOf(p)?.enforcement ?? null;
-}
-
 function agentCheck(p: DaemonProbe): Check {
   if (p.agent.ok) {
     return check(

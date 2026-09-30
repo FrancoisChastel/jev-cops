@@ -1,14 +1,15 @@
 /**
- * The offline canary (PLAN-M1 §4.4, D-078 proposal): spawn the hook exactly as the settings
- * register it (command + args, exec form) with two synthetic `PreToolUse` payloads under
- * throw-away sessions, and check what it answers:
+ * The offline canary (PLAN-M1 §4.4, D-091): spawn the hook exactly as the settings register
+ * it (command + args, exec form) with two synthetic `PreToolUse` payloads under throw-away
+ * sessions, and check what it answers:
  * - `Bash` `true` → exit 0, empty stdout (the binary runs, the daemon answers, allow maps
  *   to "no decision");
- * - `Write` to `<home>/.claude/settings.json` → exit 2 with a JSON deny and
+ * - `Write` to `<copsd home>/.claude/settings.json` → exit 2 with a JSON deny and
  *   `continue: false` (config-tamper is loaded and `kill` is mapped). In `observe` mode it
  *   exits 0 with the "would have: kill" note instead.
- * A daemon that is down or too slow makes both calls fail closed ("unreachable"). Shared by
- * `cops install claude-code` and `cops doctor`.
+ * A daemon that is down or too slow makes both calls fail closed ("unreachable"). The one
+ * source of truth for the payloads and expectations: `cops install claude-code` and
+ * `cops doctor` both run it and only render the result differently.
  */
 import { join } from "node:path";
 import { isJevCopsEntry } from "./hook-entries.ts";
@@ -26,12 +27,18 @@ export interface CanaryHook {
 /** How to run the canary. */
 export interface CanaryOptions {
   readonly hook: CanaryHook;
-  /** HOME for the hook process; the settings file the write probe targets lives under it. */
+  /** HOME for the hook process (the user's home). */
   readonly home: string;
-  /** The payloads' cwd (default `home`). */
+  /**
+   * The home whose `.claude/settings.json` the write probe targets: copsd's `[daemon] home`,
+   * the one `config-tamper` protects (default `home`).
+   */
+  readonly targetHome?: string;
+  /** The payloads' cwd and the hook's working directory (default `home`). */
   readonly cwd?: string;
   /** Base environment; only `PATH` is passed on (plus `HOME`). */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** Kill the hook after this long (default {@link CANARY_DEFAULT_TIMEOUT_MS}). */
   readonly timeoutMs?: number;
   readonly spawn?: Spawn;
   /** Suffix for the throw-away session ids (default a random UUID). */
@@ -41,10 +48,15 @@ export interface CanaryOptions {
 /** One probe's verdict: as expected, observe mode, daemon unreachable, or wrong. */
 export type CanaryOutcome = "ok" | "observe" | "unreachable" | "failed";
 
-/** One synthetic call and what the hook did with it. */
+/**
+ * One synthetic call and what the hook did with it. `expected` and `observed` share one
+ * vocabulary ({@link describeHookRun}); `stderr` is the hook's stderr, or why it did not run
+ * ("timed out", the spawn error).
+ */
 export interface CanaryProbe {
   readonly name: "benign-bash" | "config-write";
   readonly expected: string;
+  readonly observed: string;
   readonly outcome: CanaryOutcome;
   readonly exitCode: number | null;
   readonly stdout: string;
@@ -65,8 +77,13 @@ export interface CanaryResult {
 
 const UNREACHABLE =
   "daemon not reachable: the hook will block every non-read call until copsd runs (fail closed)";
+const EXPECTED_BENIGN = "exit 0, no output";
+const EXPECTED_WRITE = "exit 2, deny, continue:false (observe mode: exit 0, additionalContext)";
 
-/** The two payloads (JSON text), each under its own throw-away session. */
+/**
+ * The two payloads (JSON text), each under its own throw-away session; the write targets
+ * `<home>/.claude/settings.json`.
+ */
 export function canaryPayloads(home: string, cwd: string, nonce: string) {
   const base = (name: string) => ({
     session_id: `jev-cops-canary-${name}-${nonce}`,
@@ -90,6 +107,31 @@ function jsonOf(stdout: string): Record<string, unknown> | null {
   } catch {
     return null; // not JSON: the probe's outcome says what was expected instead
   }
+}
+
+function jsonParts(json: Record<string, unknown>): string[] {
+  const hso = (json.hookSpecificOutput ?? {}) as Record<string, unknown>;
+  const parts = [
+    ...(typeof hso.permissionDecision === "string" ? [hso.permissionDecision] : []),
+    ...(hso.additionalContext === undefined ? [] : ["additionalContext"]),
+    ...(hso.updatedInput === undefined ? [] : ["updatedInput"]),
+    ...(json.continue === false ? ["continue:false"] : []),
+  ];
+  return parts.length === 0 ? ["other JSON"] : parts;
+}
+
+/**
+ * What a hook run did, as Claude Code reads it: `did not start`, `timed out`, or the exit
+ * code followed by the JSON decision parts (`exit 2, deny, continue:false`,
+ * `exit 0, no output`, `exit 0, non-JSON output`, …).
+ */
+export function describeHookRun(r: SpawnResult): string {
+  if (r.error !== null) return "did not start";
+  if (r.timedOut) return "timed out";
+  const out = r.stdout.trim();
+  const json = out === "" ? null : jsonOf(out);
+  const rest = out === "" ? ["no output"] : json === null ? ["non-JSON output"] : jsonParts(json);
+  return [`exit ${r.exitCode}`, ...rest].join(", ");
 }
 
 function unreachable(r: SpawnResult): boolean {
@@ -126,9 +168,8 @@ async function probe(
   const benign = name === "benign-bash";
   return {
     name,
-    expected: benign
-      ? "exit 0, no output"
-      : "exit 2, JSON deny with continue:false (observe mode: exit 0, 'would have: kill')",
+    expected: benign ? EXPECTED_BENIGN : EXPECTED_WRITE,
+    observed: describeHookRun(r),
     outcome: benign ? benignOutcome(r) : writeOutcome(r),
     exitCode: r.exitCode,
     stdout: r.stdout,
@@ -139,7 +180,7 @@ async function probe(
 function summarize(probes: readonly CanaryProbe[]): CanaryResult {
   const bad = probes.find((p) => p.outcome === "failed");
   if (bad !== undefined) {
-    const got = `exit ${bad.exitCode ?? "none"}, stdout ${JSON.stringify(bad.stdout.trim().slice(0, 200))}, stderr ${JSON.stringify(bad.stderr.trim().slice(0, 200))}`;
+    const got = `${bad.observed}, stdout ${JSON.stringify(bad.stdout.trim().slice(0, 200))}, stderr ${JSON.stringify(bad.stderr.trim().slice(0, 200))}`;
     const detail = `the hook did not answer the ${bad.name} probe as expected (${bad.expected}; got ${got}): the gate is not in force`;
     return { status: "failed", detail, probes };
   }
@@ -157,7 +198,8 @@ function summarize(probes: readonly CanaryProbe[]): CanaryResult {
 
 /** Runs both probes (the benign one first, each in its own session) and classifies them. */
 export async function runOfflineCanary(o: CanaryOptions): Promise<CanaryResult> {
-  const p = canaryPayloads(o.home, o.cwd ?? o.home, o.nonce ?? crypto.randomUUID());
+  const nonce = o.nonce ?? crypto.randomUUID();
+  const p = canaryPayloads(o.targetHome ?? o.home, o.cwd ?? o.home, nonce);
   const benign = await probe(o, "benign-bash", p.benign);
   const write = await probe(o, "config-write", p.write);
   return summarize([benign, write]);

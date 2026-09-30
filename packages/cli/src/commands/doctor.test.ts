@@ -22,7 +22,6 @@ import {
   writeJson,
 } from "../testing/doctor.ts";
 import { type DoctorProcess, PROCESS_DOCTOR, parseDoctorArgs, runDoctorCommand } from "./doctor.ts";
-import { offlineCanary } from "./doctor-canary.ts";
 import { processDoctorEnv } from "./doctor-process.ts";
 import type { DoctorEnv } from "./doctor-types.ts";
 
@@ -43,7 +42,7 @@ beforeEach(() => {
 afterEach(() => f.dispose());
 
 function proc(e: DoctorEnv = doctorEnv(f), tty = false, notices: string[] = []): DoctorProcess {
-  return { deps: () => ({ env: e, canary: offlineCanary, notice: (l) => notices.push(l) }), tty };
+  return { deps: () => ({ env: e, notice: (l) => notices.push(l) }), tty };
 }
 
 /** A healthy Claude Code setup: hook installed, folder trusted, version recorded, claude 2.1.285. */

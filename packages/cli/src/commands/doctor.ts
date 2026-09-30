@@ -9,7 +9,6 @@
  */
 import { parseArgs } from "node:util";
 import { EXIT, type Io } from "../io.ts";
-import { offlineCanary } from "./doctor-canary.ts";
 import { processDoctorEnv } from "./doctor-process.ts";
 import { exitCodeOf, renderHuman, renderJson } from "./doctor-render.ts";
 import { type DoctorDeps, type DoctorOptions, runDoctor } from "./doctor-run.ts";
@@ -71,7 +70,7 @@ export function parseDoctorArgs(argv: readonly string[]): DoctorArgs {
   };
 }
 
-/** The real process: its environment (home from `--home`), the doctor's canary, stderr notices. */
+/** The real process: its environment (home from `--home`) and stderr notices. */
 export interface DoctorProcess {
   deps(home: string | null, io: Io): DoctorDeps;
   readonly tty: boolean;
@@ -81,7 +80,6 @@ export interface DoctorProcess {
 export const PROCESS_DOCTOR: DoctorProcess = {
   deps: (home, io) => ({
     env: processDoctorEnv(home === null ? {} : { home }),
-    canary: offlineCanary,
     notice: (line) => io.err(line),
   }),
   get tty() {
