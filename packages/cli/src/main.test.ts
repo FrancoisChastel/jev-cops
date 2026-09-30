@@ -31,6 +31,8 @@ describe("jev-cops", () => {
 
   test("doctor is a command, listed in the usage; a usage error exits 2 before any check", async () => {
     expect(CLI_USAGE).toContain("doctor [--harness claude-code|pi|all]");
+    expect(CLI_USAGE).toContain("It writes no configuration; the canary leaves");
+    expect(CLI_USAGE).not.toContain("read-only");
     const io = captureIo();
     expect(await main(["doctor", "--harness", "codex"], io)).toBe(2);
     expect(io.stderr[0]).toContain("cops doctor: --harness must be one of");

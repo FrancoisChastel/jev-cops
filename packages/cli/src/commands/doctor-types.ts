@@ -1,8 +1,9 @@
 /**
  * Shared shapes of `cops doctor` (PLAN-M1 §4.3–4.4): a check, and everything the doctor
  * reads from its process, injected so that tests run on a temp home with stand-in
- * binaries and never touch the real one. The doctor is read-only by design: nothing here
- * writes, and the only processes it starts are the ones it reports on.
+ * binaries and never touch the real one. The doctor writes no configuration: nothing here
+ * writes, and the only processes it starts are the ones it reports on (copsd audits the
+ * canary's calls and latches their throw-away session).
  */
 
 /** How one check came out; `gap` is a known bypass jev-cops cannot close (never silent). */

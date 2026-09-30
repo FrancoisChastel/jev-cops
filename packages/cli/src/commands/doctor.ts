@@ -4,7 +4,8 @@
  * both sockets, the audit chain, each harness's install, runs the offline canary through
  * the registered hook, optionally the live canary, and prints every known gap (spec:
  * "Every bypass we know we cannot close is printed by `doctor` … never silent").
- * Read-only by design: it never writes a harness's configuration, or anything else.
+ * It writes no configuration (a harness's or its own); the offline canary leaves its calls
+ * in copsd's audit log and latches its throw-away session there (D-091), which the report says.
  * Exit 0 when nothing failed (warnings and gaps included), 1 when a check failed, 2 on usage.
  */
 import { parseArgs } from "node:util";

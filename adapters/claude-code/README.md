@@ -35,7 +35,8 @@ In short: build, start `copsd`, run `cops install claude-code`, then `cops docto
    log only.
 2. Register the hook: `./dist/cops install claude-code` (see what it would change first with
    `--dry-run`).
-3. Check it: `./dist/cops doctor` (read-only; `--harness claude-code` to skip Pi). It checks
+3. Check it: `./dist/cops doctor` (`--harness claude-code` to skip Pi; it writes no
+   configuration; the canary leaves audit lines and latches a throw-away session in copsd). It checks
    copsd on both sockets, the audit chain, the `claude` version, that the hook is in force on
    every event it needs, the binary, the socket, risky settings and workspace trust, runs the
    same canary as the install through the registered entry, and prints every known gap. Exit

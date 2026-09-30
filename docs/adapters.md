@@ -511,7 +511,11 @@ docs, or facts the docs do not state:
   project, killed at the entry's `timeout`, the write aimed at copsd's `[daemon] home` (the
   one `config-tamper` protects). It reports each probe: `ok` → ok, `observe` → warn,
   `unreachable` → fail with a hint, `failed` → fail ("gate silently disabled" when the write
-  got through).
+  got through). The doctor writes no configuration; the canary leaves audit lines and
+  latches a throw-away session in copsd (its report says so under the title). It does not
+  unlatch that session over the admin socket: the hook, not the doctor, maps the canary's
+  Claude Code session id to copsd's, and an unlatch would add an admin write and another
+  audit line for a session nothing uses again.
 - **Uninstall.** Removes the installer-owned handlers, the groups and event arrays they
   emptied and a `hooks` object left empty; a file left as `{}` is deleted (its backup
   stays); the state file goes when it names that settings file; `[daemon] hook_binary`

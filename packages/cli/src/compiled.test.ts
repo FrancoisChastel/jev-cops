@@ -107,7 +107,7 @@ describe("compiled jev-cops", () => {
   }, 30_000);
 
   // --harness pi: this machine's own Claude Code managed settings are never read here.
-  test("doctor runs from the binary (read-only; PATH holds no claude or pi)", async () => {
+  test("doctor runs from the binary (no config written; PATH holds no claude or pi)", async () => {
     const td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     try {
       const [home, bin, project] = ["doctor-home", "doctor-bin", "doctor-project"].map((d) => {

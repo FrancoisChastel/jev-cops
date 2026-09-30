@@ -144,6 +144,10 @@ describe("cops doctor", () => {
     ).toBe(0);
     const text = tty.stdout.join("\n");
     expect(text).toMatch(/^cops doctor \(jev-cops /);
+    // What a run leaves behind (M1 gate review, L2): it is not read-only.
+    expect(text.split("\n")[1]).toBe(
+      "writes no configuration; the canary leaves audit lines and latches a throw-away session in copsd",
+    );
     expect(text).toContain("\ncopsd\n  ✓ agent socket");
     expect(text).toContain("\nclaude-code gaps\n  • ");
     expect(text).toContain("  ! judge");

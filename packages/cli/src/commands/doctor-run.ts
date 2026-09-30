@@ -1,9 +1,10 @@
 /**
  * `cops doctor` end to end (PLAN-M1 §4.4): config, copsd on both sockets, the audit chain,
  * then per harness its checks, the offline canary through the registered hook, the gated
- * live canary, and every known gap. Read-only: it reads files and sockets, and starts only
- * `claude --version`, the registered hook (`--version`, the canary payloads) and, with
- * `--live` and `JEV_COPS_LIVE_CANARY=1`, `claude -p`.
+ * live canary, and every known gap. It writes no configuration: it reads files and sockets,
+ * and starts only `claude --version`, the registered hook (`--version`, the canary payloads,
+ * whose calls copsd audits and whose throw-away session it latches) and, with `--live` and
+ * `JEV_COPS_LIVE_CANARY=1`, `claude -p`.
  */
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";

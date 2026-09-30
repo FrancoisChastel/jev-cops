@@ -79,7 +79,7 @@ Start the daemon, register jev-cops with the harness, then check the whole chain
 ./dist/cops install claude-code --dry-run    # the settings diff, nothing written
 ./dist/cops install claude-code              # ~/.claude/settings.json; --project, --local, --managed
 ./dist/cops install pi                       # ~/.pi/agent/extensions/jev-cops.ts; --project
-./dist/cops doctor                           # read-only: daemon, audit chain, hooks, canary, gaps
+./dist/cops doctor                           # daemon, audit chain, hooks, canary, gaps
 ```
 
 `cops install claude-code` merges the hook into Claude Code's settings (with a backup),
@@ -89,7 +89,8 @@ hook. Both installers print every known gap, and `--uninstall` removes only what
 added. `cops doctor` checks copsd on both sockets, the audit chain, each harness's install
 (hook in force on every event, binary, socket, risky settings, workspace trust), runs the
 same canary through the registered hook, and prints every gap it cannot close; it exits 1
-on any failure. Details: [adapters/claude-code/README.md](adapters/claude-code/README.md),
+on any failure. It writes no configuration; the canary leaves audit lines and latches a
+throw-away session in copsd. Details: [adapters/claude-code/README.md](adapters/claude-code/README.md),
 [adapters/pi/README.md](adapters/pi/README.md).
 
 ## Writing a policy

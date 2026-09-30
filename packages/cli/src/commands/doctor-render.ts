@@ -22,6 +22,9 @@ const ASCII_MARKS: Readonly<Record<CheckStatus, string>> = {
   gap: "[gap] ",
 };
 const MAX_NAME = 28;
+/** What a run leaves behind (M1 gate review, L2): the doctor is not read-only (D-091). */
+export const DOCTOR_FOOTPRINT =
+  "writes no configuration; the canary leaves audit lines and latches a throw-away session in copsd";
 
 /** Checks per status. */
 export function countChecks(checks: readonly Check[]): Counts {
@@ -41,14 +44,17 @@ function groups(checks: readonly Check[]): Map<string, Check[]> {
   return out;
 }
 
-/** The report for a person: one block per group, then the totals and the exit code. */
+/**
+ * The report for a person: the title and {@link DOCTOR_FOOTPRINT}, one block per group, then
+ * the totals and the exit code.
+ */
 export function renderHuman(checks: readonly Check[], tty: boolean): string[] {
   const marks = tty ? TTY_MARKS : ASCII_MARKS;
   const width = Math.min(
     MAX_NAME,
     Math.max(0, ...checks.filter((c) => c.status !== "gap").map((c) => c.name.length)),
   );
-  const lines = [`cops doctor (jev-cops ${CLI_VERSION})`];
+  const lines = [`cops doctor (jev-cops ${CLI_VERSION})`, DOCTOR_FOOTPRINT];
   for (const [group, list] of groups(checks)) {
     lines.push("", group);
     for (const c of list) {
