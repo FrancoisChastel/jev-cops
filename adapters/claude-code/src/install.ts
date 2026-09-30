@@ -271,7 +271,11 @@ export type UninstallOptions = Omit<
   InstallOptions,
   "socket" | "transport" | "httpUrl" | "hookBinary"
 > & {
-  readonly hookBinary?: string;
+  /**
+   * Hook binaries whose entries are jev-cops's whatever their name (`--hook-binary`, the
+   * ones cops.toml and the state file record); the installer's own names always count.
+   */
+  readonly knownHooks?: readonly string[];
 };
 
 function removeWithBackup(o: UninstallOptions, path: string, before: string): string {
@@ -296,7 +300,7 @@ export function uninstallClaudeCodeHooks(o: UninstallOptions): InstallResult {
   const path = settingsPathFor(o.scope, o);
   const { before, existing } = readTarget(path, fs);
   const base: Base = { scope: o.scope, path, before, gaps: CLAUDE_CODE_GAPS };
-  const { settings, removed } = stripJevCops(existing, o.hookBinary);
+  const { settings, removed } = stripJevCops(existing, o.knownHooks);
   if (before === null || removed === 0) return result(base, { status: "absent" });
   const after = Object.keys(settings).length === 0 ? null : serializeSettings(settings, before);
   const common = { changed: true, after, diff: lineDiff(before, after, path) };

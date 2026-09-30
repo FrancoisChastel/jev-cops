@@ -6,6 +6,7 @@
  * proceed, never fires first (hooks#timeouts).
  */
 import { basename, isAbsolute } from "node:path";
+import { namedProgram, realpathOrNull } from "./hook-identity.ts";
 
 /** Every event the installer registers, in the order it writes them. */
 export const INSTALLED_EVENTS = [
@@ -112,12 +113,21 @@ export function jevCopsHookEntries(
   );
 }
 
-/** Executable names the installer has ever registered (the compiled hook, the CLI). */
+/**
+ * Program names the installer has ever registered, or the README shows: the compiled hook,
+ * the npm meta package's `bin/cops-hook.ts` (the Docker e2e's F2: uninstall missed it), the
+ * adapter's `hook-main.ts`, and the CLI (`cops hook`), compiled or as the meta package's
+ * `bin/cops.ts`. Matched on the program an entry names (hook-identity.ts `namedProgram`: the
+ * script under `bun`, else the command).
+ */
 const HOOK_NAMES: ReadonlySet<string> = new Set([
   "cops-hook",
   "cops-hook.exe",
+  "cops-hook.ts",
+  "hook-main.ts",
   "cops",
   "cops.exe",
+  "cops.ts",
   "jev-cops",
 ]);
 const SHELL_FORM = /(?:^|[/\s])cops(?:-hook)?(?:\.exe)?\s(?:.*\s)?--harness[= ]claude-code\b/;
@@ -132,12 +142,20 @@ function forClaudeCode(args: readonly string[]): boolean {
   );
 }
 
-function ownsCommand(command: string, args: unknown, hookBinary?: string): boolean {
+/** Whether `path` is one of `known` (as written, or the same file after symlinks). */
+function isKnown(path: string, known: readonly string[]): boolean {
+  if (known.includes(path)) return true;
+  const real = realpathOrNull(path);
+  return real !== null && known.some((k) => realpathOrNull(k) === real);
+}
+
+function ownsCommand(command: string, args: unknown, known: readonly string[]): boolean {
   if (args === undefined) return SHELL_FORM.test(command);
   if (!Array.isArray(args) || !args.every((a): a is string => typeof a === "string")) return false;
   if (!forClaudeCode(args)) return false;
-  if (command === hookBinary || HOOK_NAMES.has(basename(command))) return true;
-  return args.some((a) => basename(a) === "hook-main.ts");
+  const program = namedProgram(command, args);
+  if (HOOK_NAMES.has(basename(command)) || HOOK_NAMES.has(basename(program))) return true;
+  return isKnown(command, known) || isKnown(program, known);
 }
 
 function ownsUrl(url: unknown): boolean {
@@ -149,16 +167,22 @@ function ownsUrl(url: unknown): boolean {
   }
 }
 
+/** Hook binaries whose entries are jev-cops's whatever their name (one path, or several). */
+export type KnownHooks = string | readonly string[];
+
 /**
  * True when `handler` is a jev-cops Claude Code hook the installer wrote (now or by an
  * earlier version, or by hand from the README): a command hook for `--harness claude-code`
- * run by `cops-hook`, `cops hook`, `bun …/hook-main.ts` or `hookBinary`, or an HTTP hook to
- * the daemon's {@link CLAUDE_CODE_HOOK_PATH}. Identity for merge, idempotence and uninstall;
+ * whose program (the command, or the script under `bun`) is named as one of
+ * {@link HOOK_NAMES} or is one of the `known` hook binaries (the one being installed, the
+ * one recorded in cops.toml or the state file; symlinks resolved), or an HTTP hook to the
+ * daemon's {@link CLAUDE_CODE_HOOK_PATH}. Identity for merge, idempotence and uninstall;
  * the ConfigChange check (intact.ts) is the strict one.
  */
-export function isJevCopsEntry(handler: unknown, hookBinary?: string): boolean {
+export function isJevCopsEntry(handler: unknown, known?: KnownHooks): boolean {
   if (!isRecord(handler)) return false;
   if (handler.type === "http") return ownsUrl(handler.url);
   if (handler.type !== "command" || typeof handler.command !== "string") return false;
-  return ownsCommand(handler.command, handler.args, hookBinary);
+  const binaries = known === undefined ? [] : typeof known === "string" ? [known] : known;
+  return ownsCommand(handler.command, handler.args, binaries);
 }

@@ -66,3 +66,15 @@ export function setDaemonHookBinary(before: string | null, value: string): strin
   if (!ok) throw new Error(handEdit(value));
   return text;
 }
+
+/** `[daemon] hook_binary` of a cops.toml text, or null (no file, no key, not TOML). */
+export function readDaemonHookBinary(text: string | null): string | null {
+  if (text === null) return null;
+  try {
+    const daemon = parse(text).daemon as Record<string, unknown> | undefined;
+    const value = daemon?.hook_binary;
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null; // a cops.toml that does not parse names no binary
+  }
+}

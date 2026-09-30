@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   CLAUDE_CODE_HOOK_PATH,
   HOOK_TIMEOUTS_S,
@@ -73,6 +76,30 @@ describe("isJevCopsEntry: which handlers the installer owns", () => {
     ],
     ["--harness=claude-code", { type: "command", command: BIN, args: ["--harness=claude-code"] }],
     ["shell form", { type: "command", command: "/x/cops-hook --harness claude-code" }],
+    [
+      "the npm meta package's bin (F2)",
+      {
+        type: "command",
+        command: "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+        args,
+      },
+    ],
+    [
+      "bun + the meta package's bin",
+      {
+        type: "command",
+        command: "/usr/local/bin/bun",
+        args: ["/g/jev-cops/bin/cops-hook.ts", ...args],
+      },
+    ],
+    [
+      "the meta package's cops, as `cops hook`",
+      { type: "command", command: "/g/jev-cops/bin/cops.ts", args: ["hook", ...args] },
+    ],
+    [
+      "the adapter's hook-main.ts run directly",
+      { type: "command", command: "/g/@jev-cops/adapter-claude-code/src/hook-main.ts", args },
+    ],
     ["the daemon's HTTP route", { type: "http", url: `${URL_}${CLAUDE_CODE_HOOK_PATH}` }],
   ])("owns %s", (_name, handler) => {
     expect(isJevCopsEntry(handler)).toBe(true);
@@ -84,10 +111,33 @@ describe("isJevCopsEntry: which handlers the installer owns", () => {
     );
   });
 
+  test("owns a known binary by any path to it (symlinks), or as the script under bun", () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "jvcc-own-")));
+    try {
+      const real = join(dir, "renamed-hook.ts");
+      writeFileSync(real, "#!/usr/bin/env bun\n");
+      const link = join(dir, "link");
+      symlinkSync(real, link);
+      const known = ["/elsewhere/other", real];
+      expect(isJevCopsEntry({ type: "command", command: link, args }, known)).toBe(true);
+      const viaBun = { type: "command", command: "/b/bun", args: [link, ...args] };
+      expect(isJevCopsEntry(viaBun, known)).toBe(true);
+      expect(isJevCopsEntry({ type: "command", command: link, args }, ["/elsewhere/other"])).toBe(
+        false,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test.each([
     ["a foreign command", { type: "command", command: "/usr/bin/lint", args: [] }],
     ["cops-hook for another harness", { type: "command", command: BIN, args: ["--harness", "pi"] }],
     ["an unrelated binary with our args", { type: "command", command: "/x/renamed", args }],
+    [
+      "an unrelated script under bun with our args",
+      { type: "command", command: "/b/bun", args: ["/x/other.ts", ...args] },
+    ],
     ["a foreign shell hook", { type: "command", command: "echo cops-hook" }],
     ["a foreign HTTP hook", { type: "http", url: "http://127.0.0.1:9/other" }],
     ["an HTTP hook with a bad URL", { type: "http", url: "::" }],

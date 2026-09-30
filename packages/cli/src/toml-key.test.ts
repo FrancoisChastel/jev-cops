@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { setDaemonHookBinary } from "./toml-key.ts";
+import { readDaemonHookBinary, setDaemonHookBinary } from "./toml-key.ts";
 
 const BIN = "/opt/jev-cops/dist/cops-hook";
 const parse = (t: string) => Bun.TOML.parse(t) as Record<string, Record<string, unknown>>;
@@ -67,5 +67,15 @@ describe("setDaemonHookBinary: one key, everything else byte-identical", () => {
 
   test("refuses a path with a newline", () => {
     expect(() => setDaemonHookBinary(null, "/a\nb")).toThrow();
+  });
+});
+
+describe("readDaemonHookBinary", () => {
+  test("the key, or null for no file, no key, another type, invalid TOML", () => {
+    expect(readDaemonHookBinary(`[daemon]\nhook_binary = "${BIN}"\n`)).toBe(BIN);
+    expect(readDaemonHookBinary(null)).toBeNull();
+    expect(readDaemonHookBinary('[judge]\nprovider = "off"\n')).toBeNull();
+    expect(readDaemonHookBinary("[daemon]\nhook_binary = 3\n")).toBeNull();
+    expect(readDaemonHookBinary("= = =")).toBeNull();
   });
 });

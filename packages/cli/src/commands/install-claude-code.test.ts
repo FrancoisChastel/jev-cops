@@ -4,7 +4,14 @@
  * on PATH. Every write is confined to the temp root (install-world.ts) and checked after.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { isUnder } from "../../../../adapters/claude-code/testing/fs-guard.ts";
 import { startTestDaemon, type TestDaemon } from "../../../daemon/src/testing/daemon.ts";
@@ -158,6 +165,44 @@ describe("cops install claude-code: user scope, enforce daemon", () => {
     expect(existsSync(statePath())).toBe(false);
     const again = await install(["--uninstall"]);
     expect(again.out).toContain("no jev-cops hooks in");
+  }, 30_000);
+});
+
+describe("cops install claude-code --uninstall: every form the installer registers (F2)", () => {
+  async function uninstall(extra: string[] = []) {
+    const io = captureIo();
+    const argv = ["claude-code", "--home", w.home, "--uninstall", ...extra];
+    const code = await runInstallCommand(argv, io, w.ctx());
+    return { code, out: io.stdout.join("\n"), err: io.stderr.join("\n") };
+  }
+
+  test("the npm install's bin/cops-hook.ts entries go with a plain --uninstall", async () => {
+    const original = writeJson(settingsPath(), { theme: "dark" });
+    const npmHook = join(w.root, "lib", "cops-hook.ts");
+    const io = captureIo();
+    const argv = ["claude-code", "--home", w.home, "--hook-binary", npmHook];
+    expect(
+      await runInstallCommand([...argv, "--socket", enforce.config.daemon.socket], io, w.ctx()),
+    ).toBe(0);
+    expect(readFileSync(settingsPath(), "utf8")).toContain(npmHook);
+    const r = await uninstall();
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`jev-cops hooks removed from ${settingsPath()}`);
+    expect(readFileSync(settingsPath(), "utf8")).toBe(original);
+  }, 30_000);
+
+  test("a hook under a name of its own is known from cops.toml and the state file", async () => {
+    const original = writeJson(settingsPath(), { theme: "dark" });
+    const renamed = join(w.bin, "my-gate");
+    symlinkSync(join(w.root, "lib", "cops-hook.ts"), renamed);
+    const io = captureIo();
+    const argv = ["claude-code", "--home", w.home, "--hook-binary", renamed];
+    expect(
+      await runInstallCommand([...argv, "--socket", enforce.config.daemon.socket], io, w.ctx()),
+    ).toBe(0);
+    const r = await uninstall();
+    expect(r.out).toContain("jev-cops hooks removed");
+    expect(readFileSync(settingsPath(), "utf8")).toBe(original);
   }, 30_000);
 });
 

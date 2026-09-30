@@ -4,7 +4,12 @@
  * order and every key the installer does not own are kept, and only handlers
  * {@link isJevCopsEntry} recognises are removed.
  */
-import { type HookEntries, INSTALLED_EVENTS, isJevCopsEntry } from "./hook-entries.ts";
+import {
+  type HookEntries,
+  INSTALLED_EVENTS,
+  isJevCopsEntry,
+  type KnownHooks,
+} from "./hook-entries.ts";
 
 type Json = Record<string, unknown>;
 
@@ -22,11 +27,11 @@ export function hooksShapeError(settings: Readonly<Json>): string | null {
 }
 
 /** `groups` without jev-cops handlers; a group left with none is dropped. */
-function stripGroups(groups: readonly unknown[], hookBinary?: string) {
+function stripGroups(groups: readonly unknown[], known?: KnownHooks) {
   let removed = 0;
   const kept = groups.flatMap((g): unknown[] => {
     if (!isRecord(g) || !Array.isArray(g.hooks)) return [g];
-    const handlers = g.hooks.filter((h) => !isJevCopsEntry(h, hookBinary));
+    const handlers = g.hooks.filter((h) => !isJevCopsEntry(h, known));
     const n = g.hooks.length - handlers.length;
     removed += n;
     if (n === 0) return [g];
@@ -35,11 +40,11 @@ function stripGroups(groups: readonly unknown[], hookBinary?: string) {
   return { kept, removed };
 }
 
-function stripHooks(hooks: Json, dropEmpty: boolean, hookBinary?: string) {
+function stripHooks(hooks: Json, dropEmpty: boolean, known?: KnownHooks) {
   let removed = 0;
   const pairs = Object.entries(hooks).flatMap(([event, groups]): [string, unknown][] => {
     if (!Array.isArray(groups)) return [[event, groups]];
-    const out = stripGroups(groups, hookBinary);
+    const out = stripGroups(groups, known);
     removed += out.removed;
     if (out.removed === 0) return [[event, groups]];
     return dropEmpty && out.kept.length === 0 ? [] : [[event, out.kept]];
@@ -57,9 +62,9 @@ function withKey(settings: Readonly<Json>, key: string, value: unknown): Json {
   );
 }
 
-function strip(settings: Readonly<Json>, dropEmpty: boolean, hookBinary?: string) {
+function strip(settings: Readonly<Json>, dropEmpty: boolean, known?: KnownHooks) {
   if (!isRecord(settings.hooks)) return { settings: settings as Json, removed: 0 };
-  const out = stripHooks(settings.hooks, dropEmpty, hookBinary);
+  const out = stripHooks(settings.hooks, dropEmpty, known);
   if (out.removed === 0) return { settings: settings as Json, removed: 0 };
   const empty = dropEmpty && Object.keys(out.hooks).length === 0;
   return {
@@ -75,9 +80,9 @@ function strip(settings: Readonly<Json>, dropEmpty: boolean, hookBinary?: string
  */
 export function stripJevCops(
   settings: Readonly<Json>,
-  hookBinary?: string,
+  known?: KnownHooks,
 ): { settings: Json; removed: number } {
-  return strip(settings, true, hookBinary);
+  return strip(settings, true, known);
 }
 
 /**
@@ -89,11 +94,11 @@ export function stripJevCops(
 export function mergeHooks(
   existing: Readonly<Json>,
   entries: HookEntries,
-  hookBinary?: string,
+  known?: KnownHooks,
 ): Json {
   const shape = hooksShapeError(existing);
   if (shape !== null) throw new Error(shape);
-  const base = strip(existing, false, hookBinary).settings;
+  const base = strip(existing, false, known).settings;
   const hooks: Json = isRecord(base.hooks) ? base.hooks : {};
   const added = INSTALLED_EVENTS.map((event): [string, unknown] => {
     const current = hooks[event];

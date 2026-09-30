@@ -30,6 +30,7 @@ import {
   uninstallClaudeCodeHooks,
   writeClaudeCodeState,
 } from "@jev-cops/adapter-claude-code";
+import { readDaemonHookBinary } from "../toml-key.ts";
 import { CLI_VERSION } from "../version.ts";
 import type { ClaudeInstallArgs } from "./install-args.ts";
 import type { InstallContext } from "./install-context.ts";
@@ -279,6 +280,31 @@ function forgetState(settingsPath: string, s: Setup, ctx: InstallContext): strin
   return path;
 }
 
+/** `hook_binary` of the state file, or null (missing, unreadable, not a string). */
+function stateHookBinary(s: Setup, ctx: InstallContext): string | null {
+  const text = ctx.fs.readFile(claudeCodeStatePath(s.home));
+  try {
+    const recorded = text === null ? null : (JSON.parse(text) as { hook_binary?: unknown });
+    return typeof recorded?.hook_binary === "string" ? recorded.hook_binary : null;
+  } catch {
+    return null; // an unreadable state file names no binary
+  }
+}
+
+/**
+ * The hook binaries whose entries an uninstall removes whatever their name: `--hook-binary`,
+ * the ones cops.toml and the state file record, and the one this `cops` would register.
+ */
+function knownHooks(s: Setup, ctx: InstallContext, given: string | null): string[] {
+  const found = [
+    given,
+    readDaemonHookBinary(ctx.fs.readFile(s.configPath)),
+    stateHookBinary(s, ctx),
+    defaultHookBinary(ctx.runtime, s.env.PATH ?? ""),
+  ];
+  return [...new Set(found.filter((p): p is string => p !== null && p !== ""))];
+}
+
 /** `--uninstall`: only jev-cops's entries go; the state file too when it names that file. */
 export function uninstallClaudeCode(
   a: ClaudeInstallArgs,
@@ -288,7 +314,10 @@ export function uninstallClaudeCode(
 ): ClaudeReport {
   const base = emptyReport("uninstall", a, s);
   const { hookBinary: _unused, ...where } = settingsOptions(a, s, ctx, "");
-  const settings = uninstallClaudeCodeHooks(hookBinary === null ? where : { ...where, hookBinary });
+  const settings = uninstallClaudeCodeHooks({
+    ...where,
+    knownHooks: knownHooks(s, ctx, hookBinary),
+  });
   if (settings.status === "printed") return { ...base, settings };
   const statePath = settings.written ? forgetState(settings.path, s, ctx) : null;
   return { ...base, ok: true, settings, statePath };
