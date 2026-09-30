@@ -56,7 +56,7 @@ export function recordHold(
   const expiresAt = rt.now() + rt.config.daemon.holdTokenTtlMs;
   const { reason, sessionHarness } = hold;
   const view = { event_id: event.id, verdict: "hold", reason, raw: j.normalized.raw } as const;
-  const full = { ...view, detail: j.decision.detail };
+  const full = { ...view, detail: j.decision.detail, summary: j.decision.confirmLines.join("\n") };
   if (NO_PRECEDENT.has(event.harness) || NO_PRECEDENT.has(sessionHarness ?? "")) {
     rt.confirmViews.put(full, expiresAt, minted.hash);
     return { kind: "view", ...minted };

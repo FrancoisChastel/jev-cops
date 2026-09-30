@@ -18,6 +18,8 @@ export interface ConfirmView {
   readonly raw: string;
   /** The human paragraph of the decision. */
   readonly detail: string;
+  /** The decision's confirm summary (`Decision.confirmLines`, one per line): no score. */
+  readonly summary: string;
 }
 
 /** A view's own token checked: it matched, it did not, or the view has none. */

@@ -97,13 +97,20 @@ describe("GET /v1/explain on the agent socket needs the pending hold's token", (
     expect((await daemon().call("GET", query)).status).toBe(403);
   });
 
-  test("with the token: only { event_id, verdict, reason, raw, detail }", async () => {
+  test("with the token: only { event_id, verdict, reason, raw, detail, summary }", async () => {
     td = await startTestDaemon({ policies: { "guard.ts": GUARD } });
     const { event, body } = await taintedHold();
     const res = await explain(event.id, bearer(body.hold_token));
     expect(res.status).toBe(200);
     const view = res.body as Record<string, string>;
-    expect(Object.keys(view).sort()).toEqual(["detail", "event_id", "raw", "reason", "verdict"]);
+    expect(Object.keys(view).sort()).toEqual([
+      "detail",
+      "event_id",
+      "raw",
+      "reason",
+      "summary",
+      "verdict",
+    ]);
     expect(view).toMatchObject({
       event_id: event.id,
       verdict: "hold",
@@ -111,6 +118,9 @@ describe("GET /v1/explain on the agent socket needs the pending hold's token", (
       raw: `rm -rf ${TAINTED}`,
     });
     expect(view.detail).toContain("HUMAN-ONLY-DETAIL");
+    expect(view.summary?.split("\n")).toEqual(
+      expect.arrayContaining(["guard@1: hold", "guard@1 detail: HUMAN-ONLY-DETAIL"]),
+    );
     expect(keysDeep(view).filter((k) => STRUCTURED.includes(k))).toEqual([]);
     const json = JSON.stringify(view);
     expect(json).not.toContain(AGENT_PROSE);
@@ -177,6 +187,7 @@ describe("GET /v1/explain on the agent socket needs the pending hold's token", (
       "event_id",
       "raw",
       "reason",
+      "summary",
       "verdict",
     ]);
   });

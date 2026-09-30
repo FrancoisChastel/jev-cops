@@ -78,6 +78,7 @@ describe("a Claude Code hold", () => {
         reason: "test policy guard",
         raw: "rm -rf /srv/data",
         detail: expect.stringContaining("HUMAN-ONLY-DETAIL"),
+        summary: "guard@1: hold\nguard@1 detail: HUMAN-ONLY-DETAIL",
       },
     });
     const wrong = await t.call("GET", `/v1/explain/${e.id}`, undefined, bearer("x".repeat(43)));
