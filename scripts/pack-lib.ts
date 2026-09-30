@@ -4,7 +4,7 @@
  * packages in publish order, packing, unpacking, and the file-list, manifest, import and
  * secret rules. Used by `scripts/pack-smoke.ts`, `scripts/release.ts` and their tests.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import { dirname, join, normalize, resolve } from "node:path";
 
@@ -124,6 +124,29 @@ export function releaseVersion(pkgs: readonly WorkspacePackage[]): string {
   const meta = pkgs.find((p) => p.manifest.name === "jev-cops");
   if (meta === undefined) throw new Error("no jev-cops package in the workspace");
   return meta.manifest.version;
+}
+
+/** A semver version (with an optional prerelease). */
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+/** The top-level `"version"` line of a two-space-indented package.json. */
+const VERSION_LINE = /^ {2}"version": "[^"]*"/m;
+
+/**
+ * Sets `version` in every publishable package.json (the lockstep bump; internal
+ * dependencies stay `workspace:*` and are pinned at pack time). Returns the files changed.
+ */
+export function setLockstepVersion(version: string, repo: string = REPO): string[] {
+  if (!SEMVER.test(version)) throw new Error(`not a version: ${version}`);
+  const changed: string[] = [];
+  for (const pkg of publishable(workspacePackages(repo))) {
+    const path = join(repo, pkg.dir, "package.json");
+    const text = readFileSync(path, "utf8");
+    const next = text.replace(VERSION_LINE, `  "version": "${version}"`);
+    if (next === text) continue;
+    writeFileSync(path, next);
+    changed.push(path);
+  }
+  return changed;
 }
 
 async function run(argv: string[], cwd: string): Promise<string> {

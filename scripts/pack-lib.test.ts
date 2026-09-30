@@ -18,6 +18,7 @@ import {
   REPO_URL,
   releaseVersion,
   secretProblems,
+  setLockstepVersion,
   type TarballInput,
   tarballProblems,
   type Unpacked,
@@ -283,5 +284,44 @@ describe("the rules catch what must not ship", () => {
       license: readFileSync(join(REPO, "LICENSE"), "utf8"),
     };
     expect(tarballProblems(input)).toContain("LICENSE differs from the repository's");
+  });
+});
+
+describe("setLockstepVersion", () => {
+  let repo: string;
+  beforeAll(() => {
+    repo = mkdtempSync(join(tmpdir(), "jev-cops-bump-"));
+    const write = (path: string, json: object) => {
+      mkdirSync(dirname(join(repo, path)), { recursive: true });
+      writeFileSync(join(repo, path), `${JSON.stringify(json, null, 2)}\n`);
+    };
+    write("package.json", { name: "root", version: "0.0.0", private: true, workspaces: ["p/*"] });
+    write("p/core/package.json", { name: "@jev-cops/core", version: "0.1.0" });
+    write("p/meta/package.json", {
+      name: "jev-cops",
+      version: "0.1.0",
+      dependencies: { "@jev-cops/core": "workspace:*" },
+    });
+    write("p/other/package.json", { name: "other", version: "9.9.9" });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  test("bumps every publishable manifest, nothing else, and is idempotent", () => {
+    const changed = setLockstepVersion("0.2.0-rc.1", repo);
+    expect(changed).toEqual([join(repo, "p/core/package.json"), join(repo, "p/meta/package.json")]);
+    const meta = JSON.parse(readFileSync(join(repo, "p/meta/package.json"), "utf8"));
+    expect(meta).toEqual({
+      name: "jev-cops",
+      version: "0.2.0-rc.1",
+      dependencies: { "@jev-cops/core": "workspace:*" },
+    });
+    expect(JSON.parse(readFileSync(join(repo, "p/other/package.json"), "utf8")).version).toBe(
+      "9.9.9",
+    );
+    expect(setLockstepVersion("0.2.0-rc.1", repo)).toEqual([]);
+  });
+
+  test("refuses what is not a version", () => {
+    expect(() => setLockstepVersion("v0.2", repo)).toThrow("not a version: v0.2");
   });
 });
