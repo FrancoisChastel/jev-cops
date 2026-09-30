@@ -2,11 +2,12 @@
  * What `copsd` as a login service needs whatever the service manager (PLAN-SETUP §7.3, S-11):
  * the names, the paths under the given home, an explicit `PATH` (launchd's default is only
  * `/usr/bin:/bin:/usr/sbin:/sbin`, and user services inherit no shell `PATH`), and the
- * daemon program as absolute paths: the `copsd` binary next to a compiled `cops`, or the
- * running `bun` plus the installed `@jev-cops/daemon` entry on the npm path.
+ * daemon program as absolute paths: the `copsd` binary next to a compiled `cops`, or on the
+ * npm path the running `bun` plus the `jev-cops` package's `bin/copsd.ts` (else the
+ * installed `@jev-cops/daemon` main).
  */
 import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, extname, isAbsolute, join } from "node:path";
 import type { CliRuntime } from "@jev-cops/adapter-claude-code";
 import { err, ok, type Result } from "@jev-cops/core";
 
@@ -138,8 +139,10 @@ export interface DaemonProgram {
 
 /**
  * The absolute argv that starts copsd: `<dir of cops>/copsd` for a compiled `cops`
- * (install.sh puts the three binaries in one directory), else `[bun, <@jev-cops/daemon
- * entry>]` with the running bun. Refused, never guessed, when either is missing.
+ * (install.sh puts the three binaries in one directory); else, with the running bun, the
+ * `copsd` entry next to the running `cops` entry (the `jev-cops` package's `bin/copsd.ts`
+ * beside `bin/cops.ts`, as D-108 finds the hook), else the installed `@jev-cops/daemon`
+ * main. Refused, never guessed, when none is there.
  */
 export function resolveDaemonProgram(
   runtime: CliRuntime,
@@ -150,7 +153,8 @@ export function resolveDaemonProgram(
     const problem = executableProblem(copsd);
     return problem === null ? ok({ program: [copsd], install: "compiled" }) : err(problem);
   }
-  const entry = deps.resolveEntry();
+  const sibling = join(dirname(runtime.main), `copsd${extname(runtime.main)}`);
+  const entry = existsSync(sibling) ? sibling : deps.resolveEntry();
   if (entry === null) {
     return err("@jev-cops/daemon is not installed next to @jev-cops/cli: reinstall jev-cops");
   }

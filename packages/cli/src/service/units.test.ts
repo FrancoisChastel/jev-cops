@@ -105,6 +105,18 @@ describe("resolveDaemonProgram", () => {
     expect(r).toEqual({ ok: true, value: { program: [bun, entry], install: "package" } });
   });
 
+  test("the jev-cops package: its bin/copsd.ts next to the running bin/cops.ts wins (D-108)", () => {
+    const bun = exe(join(root, "bun"));
+    const bin = join(root, "node_modules", "jev-cops", "bin");
+    const copsdTs = exe(join(bin, "copsd.ts"));
+    const daemon = exe(join(root, "node_modules", "@jev-cops", "daemon", "src", "main.ts"));
+    const r = resolveDaemonProgram(
+      { execPath: bun, main: join(bin, "cops.ts") },
+      { resolveEntry: () => daemon, pathEnv: "" },
+    );
+    expect(r).toEqual({ ok: true, value: { program: [bun, copsdTs], install: "package" } });
+  });
+
   test("a bun reached through a stable link on the service PATH is named by that link", () => {
     const bun = exe(join(root, "Cellar", "bun", "1.3.13", "bin", "bun"));
     mkdirSync(join(root, "brew", "bin"), { recursive: true });
