@@ -142,7 +142,7 @@ A scanner reads a directory, but a `Write` or `Edit` has not happened yet. `mate
 builds the directory the scanner sees:
 
 ```ts
-const m = await materialize(skillDir, { kind: "write", file, content }, "~/.jev-cops/scan");
+const m = await materialize(skillDir, { kind: "write", file, content }, join(home, ".jev-cops", "scan"));
 // m.value.dir: <root>/<sha256>.<random>/ (0700), m.value.sha256, m.value.cleanup()
 ```
 
