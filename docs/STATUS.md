@@ -143,28 +143,47 @@ clone → check → gate → build all green. Fixes before M1:
   and every known gap printed. T4 installer + doctor halves live. Flaky policy-watch test
   made deterministic. Decisions D-089–D-092.
 
-**Totals:** 2932 tests + 6 todo, coverage 98.7 % functions / 99.2 % lines, gate PASS.
+- **M1 steps 8–9**: one shared canary; the M1 tamper matrix complete (every Claude Code
+  part of PLAN-M1 §6 live); **real interactive `claude` 2.1.280 capture** against a local
+  fake API with a proven-offline harness (`docs/captures/claude-code-m1.md`): benign call,
+  push hold → ask (decline/accept), kill, ConfigChange on an external edit, headless deny,
+  auto mode, Agent SDK. Fixes from the capture: Agent SDK sessions are headless (D-093),
+  `/bin/ps` only (D-094), confirm prompts carry a score-free summary because Claude Code
+  persists ask text in an agent-readable transcript (D-096). Decisions D-093–D-096.
+
+**Totals:** 2968 tests + 6 todo, coverage 98.8 % functions / 99.2 % lines (80 % per file),
+`bun run gate` PASS (6 policies, 93 cases, 186 runs), three binaries build.
+
+## M1 definition of done
+
+| Item (spec §Milestones) | Status |
+|---|---|
+| Claude Code HTTP and command hooks | done: command hook for every event; HTTP for post events (`--transport http`); PreToolUse is command-only because HTTP hooks fail open (docs) |
+| hold-to-ask and hold-to-defer mapping | hold → ask with a human, deny otherwise; `defer` deliberately never emitted (D-070: the docs say it is ignored on multi-call turns) |
+| `cops install claude-code` and `cops doctor` with a canary tool call | done: offline canary at install and doctor, gated live canary |
+| config-tamper policy live | done (tiered, 48 fixture cases) |
+| Gate: `tests/tamper` subset for M1 | green on Pi and Claude Code; remaining 6 todos are M2 (OpenShell) |
 
 ## In progress
 
-- M1 steps 8–9: one shared canary (doctor switches to the adapter's `runOfflineCanary`),
-  remaining Claude Code tamper parts, docs, and a real interactive `claude` capture against
-  a local fake API.
+- M1 gate review (Fable 5.1).
 
 ## Next
 
+- The judge's own state is agent-readable without OpenShell: `~/.jev-cops/audit.jsonl`
+  and the SQLite store hold the full scored decisions (D-050), and writes to them are
+  `kill` (D-082) but reads are not matched. Needs a gap line at least; possibly a
+  `config-tamper` hold on direct reads. Also `~/.claude/projects/` transcripts (D-096 limits
+  what they contain).
 - Self-minted holds: an agent that posts its own `/v1/judge` gets that hold's token and a
   precedent matching its later real call; only OpenShell (keeping tool processes off the
   socket) closes it — T07 todo for M2.
 - Carriers not yet parsed: `watch`, `script -c`, `tmux`/`screen` command strings, `flock`,
   `chroot`, `nsenter`, `sudo -s`, `vim -c '!…'`, `parallel`; T5 "exec of a freshly written
   file is judged on its content" uses the write's taint, not its content.
-- M1 steps 6–9: `cops install claude-code`/`install pi` (writes the settings block,
-  `[daemon] hook_binary`, `~/.jev-cops/claude-code.json` with the Claude Code version),
-  `cops doctor` + offline/live canary, T4 installer gap, a real interactive `claude`
-  capture covering: the ask dialog (text, newlines, whether a declined ask hides our reason
-  from Claude), auto mode's classifier after a hook ask, ConfigChange on a real edit, SDK /
-  VS Code parent argv (SDK hosts are headless today, D-086), `stopReason` display.
+- Not verified live: VS Code / desktop parent argv; the real server-side auto-mode
+  classifier after a hook ask (needs the real API).
+- M2: OpenShell compiler, JIT grants, audit shipped off-box, T1–T13 on Pi and Claude Code.
 
 ## Known gaps carried forward (from the normalizer report)
 
