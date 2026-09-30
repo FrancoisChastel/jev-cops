@@ -7,6 +7,13 @@ import type { CompileInput } from "../src/compile.ts";
 import { STARTER_POLICY_REFS } from "../src/findings.ts";
 import { defaultLayout } from "../src/layout.ts";
 
+/**
+ * The compiler version the goldens are compiled with, pinned: the header and the inputs hash
+ * name the version, and a lockstep bump must not rewrite every golden. `compile.test.ts`
+ * checks that the release version is the default.
+ */
+export const GOLDEN_VERSION = "0.0.0";
+
 const JUDGE = { port: 17_681 };
 const GITHUB_HTTPS = { host: "github.com", transport: "https", port: 443 } as const;
 const GITHUB_SSH = { host: "github.com", transport: "ssh", port: 22 } as const;

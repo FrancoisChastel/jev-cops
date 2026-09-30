@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { SCENARIOS } from "../goldens/scenarios.ts";
+import { GOLDEN_VERSION, SCENARIOS } from "../goldens/scenarios.ts";
 import { compilePolicy } from "./compile.ts";
 import { JUDGE_RULE } from "./fragments/judge-route.ts";
 import { renderReport } from "./report.ts";
@@ -19,7 +19,7 @@ function golden(file: string, actual: string): string {
 describe("goldens: byte-identical", () => {
   for (const { name, input } of SCENARIOS) {
     test(name, () => {
-      const out = compilePolicy(input);
+      const out = compilePolicy(input, GOLDEN_VERSION);
       expect(renderReport(out)).toBe(golden(`${name}.report.txt`, renderReport(out)));
       const yamlPath = join(DIR, `${name}.yaml`);
       if (out.yaml === null) {
@@ -33,7 +33,7 @@ describe("goldens: byte-identical", () => {
 });
 
 describe("goldens: T1 and T13 hold in every emitted policy", () => {
-  const emitted = SCENARIOS.map((s) => ({ s, out: compilePolicy(s.input) })).filter(
+  const emitted = SCENARIOS.map((s) => ({ s, out: compilePolicy(s.input, GOLDEN_VERSION) })).filter(
     (x) => x.out.policy !== null,
   );
 

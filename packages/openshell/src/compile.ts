@@ -5,6 +5,7 @@
  * kernel cannot protect, and why it would refuse. It reads no file, runs nothing, never
  * throws; a non-empty `refusals` means no policy at all, never a weaker one.
  */
+import manifest from "../package.json" with { type: "json" };
 import { emitPolicy, inputsHash } from "./emit.ts";
 import { type PolicyRef, policyFragmentsFor, policyLabel } from "./findings.ts";
 import { JUDGE_PROVIDER_HOSTS, t13Refusals } from "./fragments/judge-hosts.ts";
@@ -15,8 +16,8 @@ import type { Harness, SandboxLayout } from "./layout.ts";
 import { type OpenShellPolicy, parsePolicy } from "./schema.ts";
 import type { Absent, PolicyUpdate } from "./types.ts";
 
-/** The compiler's version; follows the workspace (the CLI keeps it equal to `cops --version`). */
-export const COMPILER_VERSION = "0.0.0";
+/** The compiler's version: the package's, in lockstep with `cops --version`. */
+export const COMPILER_VERSION: string = manifest.version;
 /** Every rule the compiler writes starts with this; `_provider_*` rules are never ours. */
 export const RULE_PREFIX = "jev_cops_";
 
@@ -77,10 +78,10 @@ const PROVIDER_T13 =
 const PI_JUDGE_ROUTE =
   "Pi: the judge route is node's, so every tool Pi spawns can reach copsd's four routes; a resolve on the sandbox listener allows the one call only (PLAN-M2 §2 row 9, D-111)";
 
-function normalized(input: CompileInput): Record<string, unknown> {
+function normalized(input: CompileInput, version: string): Record<string, unknown> {
   const refs = input.policies.map(policyLabel).sort();
   return {
-    compiler: COMPILER_VERSION,
+    compiler: version,
     harness: input.harness,
     layout: input.layout,
     policies: refs,
@@ -205,8 +206,15 @@ function reportOf(
   };
 }
 
-/** Compiles `input`; see the module comment. */
-export function compilePolicy(input: CompileInput): CompiledPolicy {
+/**
+ * Compiles `input`; see the module comment. `version` is the compiler version named in the
+ * header and hashed with the input: {@link COMPILER_VERSION} unless pinned (the goldens pin
+ * it, so a lockstep version bump does not rewrite them).
+ */
+export function compilePolicy(
+  input: CompileInput,
+  version: string = COMPILER_VERSION,
+): CompiledPolicy {
   const judgeHosts = judgeHostsOf(input);
   const f = fragmentsOf(input, judgeHosts);
   const policy = assemble(f);
@@ -215,9 +223,9 @@ export function compilePolicy(input: CompileInput): CompiledPolicy {
     protection: backsOf(input.policies, "protection"),
     task: backsOf(input.policies, "task-allowlist"),
   };
-  const hash = inputsHash(normalized(input));
+  const hash = inputsHash(normalized(input, version));
   const meta = {
-    version: COMPILER_VERSION,
+    version,
     inputsHash: hash,
     backs: commentMap(policy, backs.protection, backs.task),
   };
