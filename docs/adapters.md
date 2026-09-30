@@ -205,7 +205,10 @@ Verified on 2026-09-29 against the Claude Code docs for **v2.1.285**
 re-fetched for this step and unchanged since the M1 plan) and against a real **claude
 2.1.280** whose model calls were scripted by a local fake Anthropic Messages API (Claude
 Code, its hook runner and the hook were real; see [Verified live](#verified-live)).
-`doctor` and a captured real-model run are M1 steps 7–9. The installer's docs were
+`cops doctor` is M1 step 7. An interactive run of the real `claude` 2.1.280 through a pty, and
+Agent SDK 0.3.285 runs, both against a local fake API, are captured in
+[`captures/claude-code-m1.md`](./captures/claude-code-m1.md) (M1 step 9; see
+[Verified live (M1 step 9)](#verified-live-m1-step-9)). The installer's docs were
 re-checked on 2026-09-29 (settings, settings-reference, hooks, permissions,
 managed-settings, env-vars; changelog head still v2.1.285): see [Install](#install) and
 [Docs drift found for the installer](#docs-drift-found-for-the-installer).
@@ -253,7 +256,9 @@ refused (see failure handling).
 Canonical event built by the hook:
 
 - `id`: `evt_` + ULID. `harness`: `"claude-code"`. `harness_version`: the `claude_version`
-  recorded in `~/.jev-cops/claude-code.json` by install/doctor, omitted until then.
+  recorded in `~/.jev-cops/claude-code.json` by `cops install` (the doctor only reads it,
+  D-092), omitted until then. An Agent SDK run starts its own bundled `claude`, so the value
+  can be wrong there (SDK 0.3.285 bundles 2.1.285).
 - `session`: `{ id: "sess_" + session_id, parent_id: null, mode }`, or for a call carrying
   `agent_id`, `{ id: "sess_<session_id>.<agent_id>", parent_id: "sess_<session_id>" }` with
   `actor.kind: "subagent"` (D-075). No `task` (the daemon pins it from the first prompt).
@@ -262,12 +267,16 @@ Canonical event built by the hook:
 - No `env`: the daemon derives `env.git` from `cwd` (D-067); a missing sandbox counts as none.
 - Post events go through the daemon's own mapper (`@jev-cops/daemon/claude-code/post`, D-080),
   the one shared with `POST /v1/hooks/claude-code`.
-- `mode`: `headless` when the parent `claude` runs with `-p`/`--print` (or a short-flag
-  cluster with `p`) and no `--permission-prompt-tool` (or with `--permission-prompts none`);
-  in shell form up to three shells (`sh`, `bash`, `zsh`, `cmd`, `pwsh`, …) are unwrapped.
-  `/proc` on Linux, `ps` elsewhere, per call (a few ms). A parent that cannot be read, or
-  is not recognizably Claude Code (`claude`, `claude.exe`, or an interpreter running a
-  `claude-code` package), counts as headless.
+- `mode`: `headless` when the parent `claude` runs in print mode (`-p`/`--print`, a
+  short-flag cluster with `p`, or the print-only `--output-format`/`--input-format`) and no
+  `--permission-prompt-tool` (or with `--permission-prompts none`); in shell form up to three
+  shells (`sh`, `bash`, `zsh`, `cmd`, `pwsh`, …) are unwrapped. `/proc` on Linux, `/bin/ps`
+  elsewhere (never a `ps` found on `PATH`, which the agent may be able to write), per call
+  (a few ms). A parent that cannot be read, or is not recognizably Claude Code (`claude`,
+  `claude.exe`, or an interpreter running a `claude-code` package), counts as headless. The
+  Agent SDK (0.3.285) starts `claude --output-format stream-json --verbose --input-format
+  stream-json …` with no `-p`: headless, unless `canUseTool` adds `--permission-prompt-tool
+  stdio`, whose host then answers the `ask` (verified live, M1 step 9).
 
 ### Verdict mapping
 
@@ -352,11 +361,11 @@ From PLAN-M1 §2 (docs of 2026-09-29, Claude Code v2.1.285; "spec" is `docs/SPEC
 | 14 | Tool names | `Task`, `MultiEdit`, `BashOutput/KillShell` | tools-reference table: `Agent` (fields `prompt`, `description`, `subagent_type`, `model`), `PowerShell`, `Monitor` (`command` or `ws`), `Glob`, `Grep`, `WebSearch`, `NotebookEdit`, `TaskStop`, `TaskCreate/Get/List/Update`, `TodoWrite` (off by default), `Skill`, `Workflow`, `Artifact`, `SendUserFile`, `PushNotification`, `RemoteTrigger`, `ShareOnboardingGuide`, `SendMessage`, `EnterWorktree`, `LSP`, … No `Task`, no `MultiEdit`, no `BashOutput`. MCP: "`mcp__<server>__<tool>`". | Core `TOOL_RULES` gains the current names (§4, D-074); `Task`/`MultiEdit` stay as aliases. |
 | 15 | File paths | — | hooks#pretooluse-input: "For the file tools `Write`, `Edit`, and `Read`, `tool_input.file_path` is always absolute: Claude Code expands `~` and relative paths before hooks run" | Nothing to pin for file tools; T9 rewrites concern Bash. Windows backslash paths are out of scope for M1 (printed gap). |
 | 16 | Hooks that never fire | — | hooks#pretooluse: "Files you reference with `@` in your prompt are added without any tool call … no PreToolUse hook fires"; "PreToolUse also doesn't fire for `EndConversation`". headless#bare-mode: `--bare` skips "auto-discovery of hooks". cli-reference `--safe-mode`: "hooks … do not load … Managed settings policy still applies, including policy-configured hooks". hooks#disable-or-remove-hooks: `--settings '{"disableAllHooks": true}'` "takes precedence over project and local settings"; "Only `disableAllHooks` set at the managed settings level can disable managed hooks". `--setting-sources`, `--restricted` ("loads only managed settings and `--settings`"). | Printed by `doctor` and the installer. A **managed** install (`--managed`) survives `--safe-mode`, `--restricted`, `disableAllHooks` outside managed, and `--settings`; `--bare` is unverified for managed hooks (gap). |
-| 17 | Workspace trust | — | hooks#workspace-trust: "**Interactive session**: Claude Code holds back hooks from every settings file, including your own `~/.claude/settings.json`, until you accept the workspace trust dialog"; "**`-p` or SDK session**: … treats the folder as trusted, so hooks committed in a repository's `.claude/settings.json` run". | Same shape as Pi's project trust. Doctor reads `projects["<path>"].hasTrustDialogAccepted` in `~/.claude.json` for the cwd and warns. |
+| 17 | Workspace trust | — | hooks#workspace-trust: "**Interactive session**: Claude Code holds back hooks from every settings file, including your own `~/.claude/settings.json`, until you accept the workspace trust dialog"; "**`-p` or SDK session**: … treats the folder as trusted, so hooks committed in a repository's `.claude/settings.json` run". | Same shape as Pi's project trust. Doctor reads `projects["<path>"].hasTrustDialogAccepted` in `$CLAUDE_CONFIG_DIR/.claude.json` (else `~/.claude.json`) with the documented parent-trust rule: in a repository the key is the git root; outside one, the folder or a parent whose trust extends to it. It warns when none is accepted. |
 | 18 | `allowManagedHooksOnly` / HTTP allowlists | "managed settings for lockdown" | hooks#hook-locations: under `allowManagedHooksOnly` "Your user, project, local, and plugin hooks are blocked"; "`allowedHttpHookUrls`: when defined at any settings level, Claude Code runs an HTTP hook handler only if its URL matches the merged allowlist"; "`httpHookAllowedEnvVars` … interpolates only the environment variables on that list". Changelog 2.1.267: unreadable managed allowlists "admit nothing". | Installer refuses a user/project install under `allowManagedHooksOnly` (unless `--managed`); `--transport http` requires the daemon URL to match `allowedHttpHookUrls` when that key exists. |
 | 19 | Managed settings paths | "managed settings for lockdown" | managed-settings: "**macOS**: `/Library/Application Support/ClaudeCode/managed-settings.json` · **Linux and WSL**: `/etc/claude-code/managed-settings.json` · **Windows**: `C:\Program Files\ClaudeCode\managed-settings.json`", plus "an optional `managed-settings.d/` directory"; "Claude Code doesn't read the legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json`". Also `~/.claude.json` (global config: trust flags). | These directories join the `config-tamper` protected set; `--managed` writes `managed-settings.d/50-jev-cops.json` when writable, else prints it. |
 | 20 | `ConfigChange` | "`ConfigChange` (kill on any change to the hook block)" | hooks#configchange: matchers `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills`; input `source`, `file_path`; "Use exit code 2 or a JSON `decision` to prevent the change. When blocked, the new settings are not applied to the running session"; "`policy_settings` changes can't be blocked"; "A blocked change surfaces no message to you or to Claude". Runs "for each settings-file change it detects, not for managed settings that arrive from MDM or the claude.ai console". | The hook blocks every settings change whose file no longer carries an intact jev-cops block or sets `disableAllHooks`; blocks when the daemon is unreachable; reports to `/v1/session` and the daemon latches kill (D-077). `policy_settings`: report only. |
-| 21 | Hook environment | — | hooks#common-input-fields: "A hook process inherits the parent environment, apart from the `OTEL_*` exporter variables … and, when `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is set to `1`, the variables it strips"; hook JSON must be the only stdout: "If your shell profile prints text on startup, it can interfere with JSON parsing" (shell form only). env-vars: `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION=1` in hooks. No version variable. | Exec form (`args: [...]`) with the socket path as an argument, never `$JEV_COPS_SOCKET`. `harness_version` comes from `claude --version` recorded by install/doctor (D-076). |
+| 21 | Hook environment | — | hooks#common-input-fields: "A hook process inherits the parent environment, apart from the `OTEL_*` exporter variables … and, when `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is set to `1`, the variables it strips"; hook JSON must be the only stdout: "If your shell profile prints text on startup, it can interfere with JSON parsing" (shell form only). env-vars: `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION=1` in hooks. No version variable. | Exec form (`args: [...]`) with the socket path as an argument, never `$JEV_COPS_SOCKET`. `harness_version` comes from `claude --version` recorded by `cops install` (D-092; the doctor only reads it). |
 | 22 | Duplicate handlers | — | hooks#hook-handler-fields: "All matching hooks run in parallel. If you define the same handler in more than one settings file, it runs once." hooks-guide: "When multiple `PreToolUse` hooks return `updatedInput` … the last one to finish takes effect." | User + project installs with identical entries do not double-judge; different socket args would. Doctor flags mismatched jev-cops entries and any other rewriting PreToolUse hook. |
 | 23 | Precedence with other hooks | — | "When multiple PreToolUse hooks return different decisions, precedence is `deny` > `defer` > `ask` > `allow`." hooks#pretooluse-decision-control: "A hook's `"ask"` also forces a permission prompt in auto mode: the classifier can still deny the tool call, but it can't approve the call silently" (2.1.211+). | Another hook's `allow` cannot undo jev-cops's `deny` or `ask`. `hold → ask` is valid in `auto` mode. |
 | 24 | Reason visibility | "`reason` goes back to the agent"; `detail` "never shown to the agent" | `permissionDecisionReason`: "For `"ask"`, shown to the user but not Claude. For `"deny"`, shown to Claude. For `"allow"` and `"defer"`, written to the debug log only". `stopReason` "stays in the conversation, so Claude sees it". | ask → reason may carry `raw` + `detail` (human only, T8). deny/kill → `reason` only; `stopReason` = `reason`. |
@@ -388,10 +397,35 @@ what Claude read:
 | exit 0, `additionalContext` | a `hook_additional_context` attachment next to the tool result |
 | `UserPromptSubmit`: exit 2 + `decision: "block"` | no model request; the result names the JSON reason |
 
-Not verified live (needs an interactive TTY or a real model; M1 step 9 captures them): the
-interactive `ask` dialog text and its rendering of newlines, `auto` mode's classifier after a
-hook `ask` (what Claude reads if the classifier denies), `ConfigChange` firing on a real
-settings edit, SDK / VS Code argv (row 10), and `stopReason` display.
+The interactive `ask` dialog, `auto` mode after a hook `ask`, `ConfigChange` on a real edit,
+the Agent SDK argv and the `stopReason` display were verified in M1 step 9: see the next
+section. VS Code and the desktop app are still not verified.
+
+<a id="verified-live-m1-step-9"></a>
+### Verified live (M1 step 9)
+
+`claude` **2.1.280**, interactive through a pty (tmux) and `-p`, plus
+`@anthropic-ai/claude-agent-sdk` **0.3.285** (bundled `claude` 2.1.285), installed by `cops
+install claude-code --home <tmp>` from `dist/`, `copsd --enforce` with the repo policies, a
+local fake Messages API scripting the tool calls (dummy key, no other endpoint reached). Full
+record: [`captures/claude-code-m1.md`](./captures/claude-code-m1.md). Differences from the
+docs, or facts the docs do not state:
+
+| # | Fact (observed) | Docs | Consequence |
+|---|---|---|---|
+| 44 | The ask dialog shows Claude Code's own "Bash command" header (the command and the agent's `description`), then "Hook PreToolUse:Bash requires confirmation for this command:" and our `permissionDecisionReason` in a bordered block, every `\n` a line, blank lines kept, then Claude Code's trailer "`<hook source>` to update hooks"; options "1. Yes / 2. No", "Esc to cancel · Tab to amend". | "shown to the user but not Claude" | The ask text layout (reason, normalized command, detail, `cops explain` pointer) renders as written. The `description` next to it stays a printed gap. |
+| 45 | Declining an ask ends the turn with no request; on the next prompt the model gets Claude Code's generic rejection ("The user doesn't want to proceed with this tool use…"). Accepting runs the tool; the model gets its output. Neither path carries our reason, command or detail. | "For `"ask"`, shown to the user but not Claude" | Verified: interactive asks keep `detail` from the model. |
+| 46 | Claude Code stores every hook's stdout in the session transcript (`$CLAUDE_CONFIG_DIR/projects/<cwd>/<session>.jsonl`, a `hook_success` attachment) and, with `--debug`, in the debug log: the ask's full text, detail included. It is not sent to the model, not even by `claude -p --resume`. | not stated | The agent can read its own transcript: the ask's detail (the scores D-066 keeps off agent channels) is agent-readable without OpenShell. Gap printed. |
+| 47 | `kill`: the user sees "PreToolUse:Write hook stopped continuation: `<stopReason>`" and the deny reason as the tool error; no further request is made. The model gets the reason as the tool result and, on its next turn, a system text "PreToolUse:Write hook stopped continuation: `<stopReason>`". | "`stopReason` … stays in the conversation, so Claude sees it" | Verified: reason only, never the detail. |
+| 48 | A blocked prompt shows "UserPromptSubmit operation blocked by hook:", the reason, and "Original prompt: …" as a warning; no request is made. | row 30 | Interactive rendering of the latch. |
+| 49 | An external edit of the user settings fired `ConfigChange` (`source: user_settings`) within about a second; the block (exit 2) showed nothing; the running session kept the PreToolUse hook the file no longer had (it judged the next call after an admin unlatch); restoring the file fired a second, intact, change that applied. | row 20, row 32 | Verified end to end: the D-077 latch and the D-087 check work on a real edit. |
+| 50 | 2.1.280 starts interactive sessions in the default mode, labelled "manual mode"; hook payloads say `permission_mode: "default"`, also for `--permission-mode manual`. `SessionStart` payloads carry no `permission_mode`. | auto is the starting mode from 2.1.283; `manual` is an alias (row 39) | `manual` never reaches the hook on 2.1.280. Doctor's `defaultMode` note now names 2.1.283. |
+| 51 | Auto mode: a hook `ask` still opens the dialog; no classifier request follows. The classifier is server-side in 2.1.280: the main request carries `safeguards: [{"type":"dangerous_tool_use","classifier_context":{…}}]` (mode, cwd, home, rule roots, trusted directories, git state, `user_identity`; no hook output) and the answer is expected with the response. A server that returns none makes Claude Code classify locally for the rest of the session. | row 23, row 26 | Our reason reaches no model in auto mode. What the real server classifier decides after an ask was not verified (needs the real API). |
+| 52 | The Agent SDK starts `<sdk>/claude --output-format stream-json --verbose --input-format stream-json [--permission-prompt-tool stdio] --setting-sources=… --permission-mode …`: no `-p`. Taken for interactive, a hold became an ask the host-less run denied, and **the whole ask text became the tool result the model read**. | headless: "`-p` or SDK session" | Fixed: `--output-format`/`--input-format` count as print mode (headless unless a permission host). With `canUseTool`, the host gets the ask text as `decisionReason` and the model gets only the host's message. |
+| 53 | 2.1.285 (the SDK's binary) prefixes an exit-2 reason in the tool result with "PreToolUse:Bash hook error: "; 2.1.280 `-p` gives the reason alone. | not stated | Agent-visible text only; no action. |
+| 54 | With `CLAUDE_CONFIG_DIR` set, Claude Code keeps its global config (onboarding, trust, approved keys) at `$CLAUDE_CONFIG_DIR/.claude.json`, and looks up keychain items whose service names carry a hash of the config directory (`Claude Code-credentials-<hash>`). | row 43: not stated | Row 43's reading order is right: trust is read from `$CLAUDE_CONFIG_DIR/.claude.json` first. |
+| 55 | Under macOS `sandbox-exec`, setuid `/bin/ps` cannot run: the hook cannot read its parent and counts the session headless (the fail-safe). The hook used to run `ps` from `PATH`. | — | The hook now runs `/bin/ps`: a `ps` the agent plants earlier on `PATH` (e.g. Homebrew's user-writable `/opt/homebrew/bin`) cannot fake an interactive parent. |
+| 56 | `updatedInput` with no permission decision, from the real hook and a real copsd `rewrite`: Claude Code ran the pinned command and checked it against the allow rules. | row 27 | Re-verified with jev-cops end to end (row 27 used a probe hook). |
 
 ### Install
 
@@ -444,14 +478,20 @@ settings edit, SDK / VS Code argv (row 10), and `stopReason` display.
   binary (D-082); `~/.jev-cops/claude-code.json` = `{ claude_version, installed_at, scope,
   settings_path, hook_binary, socket }`, `claude_version` from `claude --version` run with the
   install's `HOME` (null when `claude` is not on `PATH`).
-- **Canary.** `runOfflineCanary` (`src/canary.ts`, shared with `cops doctor`) spawns the
+- **Canary.** `runOfflineCanary` (`src/canary.ts`, the one `cops doctor` runs too) spawns the
   `PreToolUse` entry read back from the written file, with `HOME` and `PATH` only: `Bash`
   `true` → exit 0, no output; `Write` of `<home>/.claude/settings.json` → exit 2, JSON deny,
   `continue: false`, each under its own throw-away `jev-cops-canary-*` session (the write's
   session stays latched). Outcomes: `ok`; `observe` (exit 0 with "would have: kill");
   `unreachable` (the hook failed closed: "daemon not reachable: the hook will block every
   non-read call until copsd runs (fail closed)", exit 0); `failed` (exit 1, and the settings,
-  cops.toml and state are restored).
+  cops.toml and state are restored). `cops doctor` runs the same function through every
+  registered exec-form `PreToolUse` entry that matches all tools and passes copsd's own
+  socket, never when copsd is unreachable (D-092): the hook with the user's `HOME`, in the
+  project, killed at the entry's `timeout`, the write aimed at copsd's `[daemon] home` (the
+  one `config-tamper` protects). It reports each probe: `ok` → ok, `observe` → warn,
+  `unreachable` → fail with a hint, `failed` → fail ("gate silently disabled" when the write
+  got through).
 - **Uninstall.** Removes the installer-owned handlers, the groups and event arrays they
   emptied and a `hooks` object left empty; a file left as `{}` is deleted (its backup
   stays); the state file goes when it names that settings file; `[daemon] hook_binary`
@@ -482,12 +522,12 @@ unchanged). Differences from PLAN-M1 §2 and what was built on it:
 | 40 | permissions#project-allow-rules-and-workspace-trust: project `permissions.allow` rules apply only after workspace trust; a tracked `settings.local.json` needs trust too. | A bare `Bash` rule in an untrusted project still refuses the install (it applies once the folder is trusted). |
 | 41 | permissions: "`Bash(*)` is equivalent to `Bash`"; "a bare `PowerShell` or `PowerShell(*)` matches every command"; the `:*` suffix equals a trailing ` *`. | The refusal matches those forms (and `Monitor`, which the normalizer treats as Bash, D-071). |
 | 42 | settings-reference#allowedhttphookurls: "array of URL patterns, with `*` as a wildcard", "Arrays merge across settings files"; managed-settings: an invalid managed list is an empty managed allowlist while other files' entries still apply. | The HTTP refusal merges every file's list and matches `*` as "anything". |
-| 43 | The docs do not say where `~/.claude.json` lives when `CLAUDE_CONFIG_DIR` is set. | Trust is read from `$CLAUDE_CONFIG_DIR/.claude.json`, then `~/.claude.json` (unverified). |
+| 43 | The docs do not say where `~/.claude.json` lives when `CLAUDE_CONFIG_DIR` is set. | Trust is read from `$CLAUDE_CONFIG_DIR/.claude.json`, then `~/.claude.json`. Verified live on 2.1.280 (row 54): with `CLAUDE_CONFIG_DIR` set, Claude Code keeps it at `$CLAUDE_CONFIG_DIR/.claude.json`. |
 
 ### Gaps `cops doctor` must print (M1)
 
 These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`;
-`cops install claude-code` prints them, and doctor (step 7) will:
+`cops install claude-code` and `cops doctor` print them:
 
 - **A hook that cannot start is a non-blocking error.** A missing, non-executable or
   mistyped binary lets every call through; doctor checks the path and runs a canary.
@@ -509,10 +549,15 @@ These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`;
 - **Another hook's `updatedInput` races jev-cops's rewrite** (the last to finish wins).
 - **The ask dialog also shows the tool input as Claude sent it**, including its
   `description`, next to jev-cops's reason, command and detail.
-- **Headless comes from the parent argv.** A parent that cannot be read or is not
-  recognizably `claude` counts as headless (holds denied); a launcher running `claude`
-  without `-p` and with no human is taken for interactive, and a hold then becomes an ask
-  that a host-less run denies and shows to Claude (row 28).
+- **Headless comes from the parent argv** (`-p`/`--print`, or the print-only
+  `--output-format`/`--input-format` the Agent SDK passes). A parent that cannot be read or
+  is not recognizably `claude` counts as headless (holds denied); a launcher running `claude`
+  with none of those flags and no human is taken for interactive, and a hold then becomes an
+  ask that a host-less run denies and shows to Claude (rows 28, 52).
+- **The ask's text lands in agent-readable files.** Claude Code writes hook output to the
+  session transcript under `~/.claude/projects/` (and the debug log with `--debug`); the
+  ask's command and detail are readable there, although they never enter the model's
+  context (row 46).
 - **Reads and bookkeeping tools fail open** when the daemon is unreachable (warning and a
   line in `~/.jev-cops/claude-code-hook.log`); every other tool, MCP included, is blocked.
 - **No `env.git` from the hook.** The daemon derives it from a repository the agent can
@@ -520,7 +565,8 @@ These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`;
 - **The socket is reachable by the agent without OpenShell.** Claude Code holds carry no
   resolvable token, so no precedent comes from Claude Code in M1.
 - **Denied calls produce no post event.**
-- **`harness_version` needs `~/.jev-cops/claude-code.json`** (install/doctor); omitted until then.
+- **`harness_version` needs `~/.jev-cops/claude-code.json`** (written by `cops install`);
+  omitted until then, and wrong for an Agent SDK run, which bundles its own `claude`.
 - **Windows backslash paths are not normalized in M1.**
 - **A managed install can be skipped silently** when server-managed settings or an MDM
   profile supply the managed policy (first-wins, drift row 34).
