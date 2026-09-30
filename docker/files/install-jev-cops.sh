@@ -11,6 +11,7 @@ manifest="$tarballs/manifest.json"
 global="$BUN_INSTALL/install/global"
 mkdir -p "$global"
 
+# shellcheck disable=SC2016 # a JavaScript program: its ${…} are template literals
 bun -e '
   const [manifest, dir, out] = process.argv.slice(1);
   const packed = JSON.parse(await Bun.file(manifest).text());
