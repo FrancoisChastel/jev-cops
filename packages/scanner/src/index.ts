@@ -19,6 +19,20 @@ export {
   SKILLSPECTOR_LLM_ENV,
   type SkillspectorConfig,
 } from "./adapters/skillspector.ts";
+export {
+  type CollectedSkill,
+  collectSkill,
+  contentHash,
+  DEFAULT_LIMITS,
+  type Materialized,
+  type MaterializeLimits,
+  materialize,
+  type NotebookChange,
+  type SkillChange,
+  type SkillFile,
+  type TextEdit,
+  writeMaterialized,
+} from "./materialize.ts";
 export { oneLine, promptLikeOf, UNREADABLE_OUTPUT } from "./parse.ts";
 export {
   absolutePath,
