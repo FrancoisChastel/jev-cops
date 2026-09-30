@@ -7,6 +7,7 @@ import {
   compiledBinary,
   defaultJudgeInputs,
   type JudgeInputs,
+  installedCodeDirs,
   judgeInputPaths,
   judgePrivatePaths,
   protectJudgeInputs,
@@ -37,6 +38,7 @@ function spread(over: Partial<DaemonConfig["daemon"]> = {}): DaemonConfig {
 const INPUTS: JudgeInputs = {
   configFiles: ["/srv/jv-etc/cops.toml"],
   selfBinary: "/opt/jv/bin/copsd",
+  installedCode: [],
   osHome: "/home/dev",
   cwd: "/work/repo",
 };
@@ -237,6 +239,24 @@ describe("judgePrivatePaths: the judge's own records, never its policies or conf
 });
 
 describe("the running binary and the defaults", () => {
+  test("installed from npm: the @jev-cops scope and the jev-cops bins, whole", () => {
+    const g = "/home/dev/.bun/install/global/node_modules";
+    expect(installedCodeDirs(`${g}/@jev-cops/daemon/src`)).toEqual([
+      `${g}/@jev-cops`,
+      `${g}/jev-cops`,
+    ]);
+    expect(installedCodeDirs("/usr/lib/node_modules/@jev-cops/daemon/src")).toEqual([
+      "/usr/lib/node_modules/@jev-cops",
+      "/usr/lib/node_modules/jev-cops",
+    ]);
+    expect(installedCodeDirs("/work/jev-cops/packages/daemon/src")).toEqual([]);
+    expect(installedCodeDirs("/$bunfs/root")).toEqual([]);
+    const installed = [`${g}/@jev-cops`, `${g}/jev-cops`];
+    const paths = judgeInputPaths(spread(), { ...INPUTS, installedCode: installed });
+    expect(paths).toEqual(expect.arrayContaining(installed));
+    expect(judgeInputPaths(spread(), INPUTS).some((p) => p.includes("node_modules"))).toBe(false);
+  });
+
   test("process.execPath counts only inside a compiled binary", () => {
     expect(compiledBinary("/$bunfs/root/copsd", "/usr/local/bin/copsd")).toBe(
       "/usr/local/bin/copsd",
@@ -249,6 +269,7 @@ describe("the running binary and the defaults", () => {
     expect(defaultJudgeInputs()).toEqual({
       configFiles: [join(homedir(), ".config", "jev-cops", "cops.toml")],
       selfBinary: null,
+      installedCode: [],
       osHome: homedir(),
       cwd: process.cwd(),
     });

@@ -159,7 +159,7 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
   const daemon = await startDaemon(config, {
     log: SILENT_LOGGER,
     // As if loaded from `<dir>/cops.toml`; never the developer's own config file.
-    inputs: { configFiles: [join(dir, "cops.toml")], selfBinary: null },
+    inputs: { configFiles: [join(dir, "cops.toml")], selfBinary: null, installedCode: [] },
     ...(opts.judge === undefined ? {} : { judge: opts.judge }),
     ...(opts.now === undefined ? {} : { now: opts.now }),
     ...(opts.gitRunner === undefined ? {} : { gitRunner: opts.gitRunner }),

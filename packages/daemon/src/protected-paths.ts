@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import type { DaemonConfig } from "./config.ts";
 
 /**
@@ -15,6 +15,12 @@ export interface JudgeInputs {
   readonly configFiles: readonly string[];
   /** The running daemon binary when compiled; null under `bun run`/`bun test`. */
   readonly selfBinary: string | null;
+  /**
+   * The installed jev-cops code when the daemon runs from an npm or bun install, the
+   * source-package counterpart of `selfBinary` (see {@link installedCodeDirs}); empty in a
+   * source checkout or a compiled binary.
+   */
+  readonly installedCode: readonly string[];
   /** The OS user's home: the defaults live in its `~/.jev-cops/`, whatever `[daemon] home` says. */
   readonly osHome: string;
   /** The daemon's working directory; it and every directory above it are shared. */
@@ -36,12 +42,33 @@ export function compiledBinary(
   return COMPILED_ROOTS.some((root) => main.startsWith(root)) ? execPath : null;
 }
 
-/** The inputs of this process: the default user config file, `process.execPath` when compiled. */
+/**
+ * The directories holding the jev-cops code when `moduleDir` (this module's directory)
+ * lies in a `node_modules` tree, i.e. an npm or bun install: `node_modules/@jev-cops/`
+ * (core, the daemon, the hook's adapter, the CLI, the starter policies) and
+ * `node_modules/jev-cops/` (the `cops`, `copsd` and `cops-hook` bins). The hook imports
+ * that code on every call and the daemon at its next start, so an agent's write there is
+ * tampering with the judge. Empty outside `node_modules` (a source checkout, where the
+ * code is the developer's to edit, or a compiled binary).
+ */
+export function installedCodeDirs(moduleDir: string = import.meta.dir): string[] {
+  const parts = moduleDir.split(sep);
+  const at = parts.lastIndexOf("node_modules");
+  if (at <= 0) return [];
+  const modules = parts.slice(0, at + 1).join(sep);
+  return [join(modules, "@jev-cops"), join(modules, "jev-cops")];
+}
+
+/**
+ * The inputs of this process: the default user config file, `process.execPath` when
+ * compiled, the installed jev-cops packages when installed from npm.
+ */
 export function defaultJudgeInputs(): JudgeInputs {
   const osHome = homedir();
   return {
     configFiles: [join(osHome, ".config", "jev-cops", "cops.toml")],
     selfBinary: compiledBinary(),
+    installedCode: installedCodeDirs(),
     osHome,
     cwd: process.cwd(),
   };
@@ -90,7 +117,8 @@ function fileAndDir(file: string, shared: ReadonlySet<string>, sideFiles: readon
  * Every path the judge depends on: the policies directory (whole), the audit log, the
  * store, both sockets and each config file with their directories (just the file when
  * the directory is shared), the audit's file forward, `~/.jev-cops/` under the OS home and
- * `[daemon] home`, the running daemon binary when compiled and `[daemon] hook_binary`.
+ * `[daemon] home`, the running daemon binary when compiled (the installed jev-cops
+ * packages when not) and `[daemon] hook_binary`.
  * Each entry is also listed under its real path when a symlink leads to it. Absolute,
  * deduplicated, in a stable order.
  */
@@ -109,6 +137,7 @@ export function judgeInputPaths(config: DaemonConfig, inputs: JudgeInputs): stri
     join(inputs.osHome, ".jev-cops"),
     join(config.daemon.home, ".jev-cops"),
     ...binaries,
+    ...inputs.installedCode,
   ];
   return [...new Set(paths.flatMap((p) => [p, realPath(p)]))];
 }
