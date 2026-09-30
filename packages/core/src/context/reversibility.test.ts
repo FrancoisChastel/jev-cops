@@ -80,6 +80,27 @@ describe("reversibilityScore", () => {
     },
   );
 
+  test.each([
+    ["codex", "web_search"],
+    ["codex", "WebSearch"],
+    ["opencode", "websearch"],
+    ["codex", "write_stdin"],
+  ] as const)("%s %s names no destination or effect: opaque 0.5", async (harness, tool) => {
+    const n = await toolEvent(tool, "other", { query: "x", chars: "ls\n" }, { harness });
+    expect(reversibilityScore(n, caseFile(), CFG)).toEqual({ value: 0.5, why: ["opaque exec"] });
+  });
+
+  test("each harness's inert tools are reversible (0)", async () => {
+    for (const [harness, tool] of [
+      ["codex", "update_plan"],
+      ["opencode", "todowrite"],
+      ["claude-code", "TodoWrite"],
+    ] as const) {
+      const n = await toolEvent(tool, "other", { todos: [] }, { harness });
+      expect(reversibilityScore(n, caseFile(), CFG).value).toBe(0);
+    }
+  });
+
   test("without a repo, writes outside /tmp are irreversible", async () => {
     const n = await bashPre("echo hi > notes.md", { git: null, cwd: "/work/scratch" });
     expect(reversibilityScore(n, caseFile(), CFG).value).toBe(1);

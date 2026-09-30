@@ -264,6 +264,23 @@ describe("tokenTaint: one token under the taintFraction rules", () => {
     expect(cf.filesWritten().get("/work/repo/m.txt")?.taint).toBe(1);
   });
 
+  test("a shell-like tool core has no name for keeps its command text for T10", async () => {
+    const cf = await poisoned();
+    const command = "echo paste.evil.example > /work/repo/s.txt";
+    cf.recordPre(await toolEvent("shell", "exec", { command }, { harness: "codex" }));
+    expect(cf.filesWritten().get("/work/repo/s.txt")?.taint).toBe(1);
+  });
+
+  test("an OpenCode write records its content's hash, as a Claude Code Write does", async () => {
+    const cf = await poisoned();
+    const input = { filePath: "run.sh", content: "echo ok\n" };
+    cf.recordPre(await toolEvent("write", "fs.write", input, { harness: "opencode" }));
+    expect(cf.filesWritten().get("/work/repo/run.sh")).toMatchObject({
+      taint: 0,
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+  });
+
   test("a Pi bash redirect of tainted text taints the file it writes (T10)", async () => {
     const cf = await poisoned();
     cf.recordPre(

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { canonicalTool } from "../normalizer/normalize.ts";
+import { canonicalTool, eventToolRule } from "../normalizer/normalize.ts";
 import { PATCH_VERB } from "../normalizer/patch.ts";
 import type { NormalizedCommand, NormalizedEvent } from "../normalizer/types.ts";
 import type { ContextConfig } from "./config.ts";
@@ -97,7 +97,8 @@ function toolContent(n: NormalizedEvent): { text: string; full: boolean } {
   const editText = Array.isArray(edits) ? edits.map(newStringOf).join("\n") : "";
   const replacements = [str("new_string"), str("newString"), str("new_source")];
   const text = [str("content"), ...replacements, editText].join("\n");
-  return { text, full: canonicalTool(n.event.call.tool) === "Write" && str("content") !== "" };
+  const write = canonicalTool(n.event.call.tool, n.event.harness) === "Write";
+  return { text, full: write && str("content") !== "" };
 }
 
 /**
@@ -108,6 +109,18 @@ function commandContent(c: NormalizedCommand): { text: string; full: boolean } {
   const truncates = c.redirects.some((r) => r.op === ">" || r.op === ">|");
   const full = c.heredocs.length > 0 && truncates;
   return { text: [...c.argv.slice(1), ...c.heredocs].join("\n"), full };
+}
+
+/** Readers whose commands come from the input's own text (a shell command, a script). */
+const TEXT_READERS: ReadonlySet<string> = new Set(["bash", "monitor", "shell"]);
+
+/**
+ * True when a write's content is the command's own text: the event was read as a shell
+ * command on its harness (Claude Code `Bash`, Pi and OpenCode `bash`, an unknown `exec`
+ * tool with a string `command`), or the command is a patch file operation.
+ */
+function writesCommandText(n: NormalizedEvent, c: NormalizedCommand): boolean {
+  return c.verbs[0] === PATCH_VERB || TEXT_READERS.has(eventToolRule(n.event)?.reader ?? "");
 }
 
 function sha256(text: string): string {
@@ -126,8 +139,7 @@ function commandWrites(
 ): FileWrite[] {
   const writes = c.pathRefs.filter((r) => r.access === "write");
   if (writes.length === 0) return [];
-  const fromCommand = c.verbs[0] === PATCH_VERB || canonicalTool(n.event.call.tool) === "Bash";
-  const content = fromCommand ? commandContent(c) : toolContent(n);
+  const content = writesCommandText(n, c) ? commandContent(c) : toolContent(n);
   const sourceTaint = c.pathRefs
     .filter((r) => r.access !== "write")
     .reduce((max, r) => Math.max(max, base.files.get(r.path)?.taint ?? 0), 0);

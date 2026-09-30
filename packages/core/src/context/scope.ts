@@ -172,7 +172,7 @@ function softContributions(
   }
   const tools = expectedTools(task);
   const tool = n.event.call.tool;
-  if (tools !== null && !tools.has(canonicalTool(tool))) {
+  if (tools !== null && !tools.has(canonicalTool(tool, n.event.harness))) {
     out.push({ value: cfg.scope.unexpectedTool, sure: false, why: `tool not expected: ${tool}` });
   }
   return out;
@@ -190,7 +190,8 @@ const INERT_SCOPE: Readonly<ScopeScore> = Object.freeze({
  * 0, no allowlist → 0.5; no targets on an exec → 0.7; opaque parts → 0.7; a tool outside
  * the task's expected set → 0.5. The value is the min; `unsure` when the min comes only
  * from soft rules, which is when the spec lets the judge be asked. An inert tool (task
- * list, plan mode, …) has no side effect and is on task: 1.
+ * list, plan mode, …) has no side effect and is on task: 1. Tool names are read on the
+ * event's own harness (Codex `apply_patch` is an Edit, OpenCode `todowrite` is inert).
  */
 export function scopeScore(
   n: NormalizedEvent,
@@ -198,7 +199,9 @@ export function scopeScore(
   cfg: ContextConfig = DEFAULT_CONTEXT_CONFIG,
   hints?: RepoHints,
 ): ScopeScore {
-  if (isInertTool(n.event.call.tool)) return { ...INERT_SCOPE, why: [...INERT_SCOPE.why] };
+  if (isInertTool(n.event.call.tool, n.event.harness)) {
+    return { ...INERT_SCOPE, why: [...INERT_SCOPE.why] };
+  }
   const list = taskAllowlist(cf.task, hints, cfg);
   const targets = [...pathContributions(n, cfg), ...hostContributions(n, list, cfg)];
   const none: Contribution[] =

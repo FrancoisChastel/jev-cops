@@ -8,7 +8,11 @@
 import { isInertTool } from "@jev-cops/core/normalizer/tools";
 import { kindOf } from "@jev-cops/daemon/claude-code/post";
 
-/** True when `tool` proceeds (with a warning) while the daemon is unavailable. */
+/**
+ * True when `tool` proceeds (with a warning) while the daemon is unavailable. Inert names
+ * are Claude Code's own: another harness's bookkeeping name (`todowrite`, `update_plan`)
+ * is an unknown tool here and fails closed.
+ */
 export function failsOpen(tool: string): boolean {
-  return kindOf(tool) === "fs.read" || isInertTool(tool);
+  return kindOf(tool) === "fs.read" || isInertTool(tool, "claude-code");
 }

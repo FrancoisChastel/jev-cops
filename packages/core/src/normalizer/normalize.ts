@@ -42,8 +42,12 @@ function stringField(input: Record<string, unknown>, field: string): string | un
 
 const MCP_PREFIX = /^mcp(?::|__)/;
 
-/** The event's rule from its own harness's table (D-054); see {@link toolRule}. */
-function ruleFor(event: Event): ToolRule | null {
+/**
+ * The rule the event's input is read with: its tool's on the event's own harness (D-054,
+ * {@link toolRule}), else `bash` for an unknown non-MCP `exec` tool with a string
+ * `command`, else null (read as `other`).
+ */
+export function eventToolRule(event: Event): ToolRule | null {
   const { tool, kind, input } = event.call;
   const known = toolRule(tool, event.harness);
   if (known !== undefined) return known;
@@ -345,7 +349,7 @@ export function stateHash(event: Event, script: NormalizedScript, shell: boolean
 }
 
 async function normalizeUnguarded(event: Event, opts: NormalizeOptions): Promise<NormalizedEvent> {
-  const rule = ruleFor(event);
+  const rule = eventToolRule(event);
   const raw = rawOf(event, rule);
   const script = await readTool(rule, event, raw, opts);
   return { event, ...script, stateHash: stateHash(event, script, readAsBash(event, rule)), raw };
@@ -357,7 +361,7 @@ export const UNRENDERABLE_INPUT = "[unrenderable tool input]";
 function failClosed(event: Event): NormalizedEvent {
   let raw = UNRENDERABLE_INPUT;
   try {
-    raw = rawOf(event, ruleFor(event));
+    raw = rawOf(event, eventToolRule(event));
   } catch {
     // keep the placeholder: the input is unrenderable, which is itself suspicious
   }
