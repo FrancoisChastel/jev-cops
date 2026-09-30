@@ -1,0 +1,16 @@
+jev-cops: Pi extension installed at /home/dev/.pi/agent/extensions/jev-cops.ts
+jev-cops: socket $JEV_COPS_SOCKET or ~/.jev-cops/copsd.sock (at run time)
+jev-cops: known gaps (see docs/adapters.md#pi):
+  - No OpenShell: the agent runs with your permissions and can edit or delete this extension file; every deny is best-effort until the extensions directory is read-only (T1, T4).
+  - `pi --no-extensions` (-ne) starts Pi without discovered extensions, so without jev-cops; only an explicit `-e` path still loads.
+  - Project installs load only after the project is trusted in Pi; install globally for every project.
+  - A tool call blocked in `tool_call` produces no `tool_result`, so the daemon gets no post event for denied calls.
+  - `kill` blocks the call, sets Pi's batch-level `terminate` hint and calls ctx.abort() and ctx.shutdown(); shutdown is a no-op in print/json mode, so the abort is what ends a headless run.
+  - The adapter sends no `env.git`; copsd derives repo, branch, default branch (origin/HEAD) and dirty from the call's cwd with hardened read-only git. Those values come from a repository the agent can write, so it can steer them (for example point origin/HEAD elsewhere so `main` stops counting as the default branch); values it cannot derive are treated as exposure (D-024).
+  - Read-only tools (read, grep, find, ls) fail open when copsd is unreachable and are logged only to the Pi notification or stderr; every other tool fails closed.
+  - Tools from other extensions are sent as kind `other` with their raw input; nested agents started by other extensions are not linked as subagent sessions.
+  - Commands the user types with `!` in the Pi TUI (`user_bash`) do not go through `tool_call` and are not judged.
+  - Without OpenShell the agent can reach the daemon's sockets as you: the hold token keeps it from approving a hold this extension received or reading its confirm view, but it can post judge requests of its own and resolve or view those; the admin socket (budget reset, full explain) is human-only only when it is not mounted into the sandbox.
+  - Without OpenShell the agent runs as you and can read the judge's own records: ~/.jev-cops/audit.jsonl and the SQLite store hold every decision with its scores (the oracle no agent channel carries). config-tamper holds a direct read of them (cat, grep, sqlite3, the read tool, an agent-run `cops explain`); a read it cannot see (from inside an interpreter, a recursive read of a directory above them) gets through. OpenShell makes them unreadable to the agent (M2).
+  - Stopping copsd by name (`pkill`, `killall`, `kill $(pgrep …)`, a launchctl or systemctl stop) is held; a `kill <pid>`, or copsd run under another name, is not recognized. Either way the extension then blocks every non-read tool (fail closed): a denial of service, not a bypass; only OpenShell keeps the agent from signalling copsd (M2).
+  - config-tamper sees the paths a command names: a write through a variable (`d=~/.pi; … > $d/agent/settings.json`), through a symlink made earlier, or into a directory an archive or a patch fills (`tar -x`, `unzip`, `git apply`: the directory is judged, not the files in it) is caught only when a config path is named; OpenShell's read-only mounts close it (M2).

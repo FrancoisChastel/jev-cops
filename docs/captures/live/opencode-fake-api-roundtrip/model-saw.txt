@@ -1,0 +1,9 @@
+request 1 (step 0) → text "ok"
+  system: {"chars":2096,"sha256":"e7a6848eba328f28c7e870874cf0591e4edbaf90d7602ad8fdfe90601c6e656f"}
+  text: Generate a title for this conversation:
+  text: "SCENARIO:ls list the files here"
+request 2 (step 0) → call bash {"command":"ls","description":"List files"}
+  system: {"chars":9569,"sha256":"5b1bae4bae32fbc53c60bfc7b34444d99e991ac5ee67de54133531eadc9bb8c6"}
+  text: "SCENARIO:ls list the files here"
+request 3 (step 1) → text "Listed the files."
+  tool result: README.md auth build logs

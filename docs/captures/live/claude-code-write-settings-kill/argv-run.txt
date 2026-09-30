@@ -1,0 +1,2 @@
+claude -p SCENARIO:write-settings\ tidy\ the\ project\ settings --output-format stream-json --verbose --permission-mode manual --allowedTools Write 
+exit 0
