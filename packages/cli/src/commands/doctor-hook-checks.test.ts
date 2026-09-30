@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, writeFileSync } from "node:fs";
+import { chmodSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hookCommand } from "../../../../adapters/claude-code/testing/setup.ts";
 import {
@@ -136,6 +136,13 @@ describe("doctor: the jev-cops hook as registered", () => {
     withPreToolUse(process.execPath, ["x.ts", "--harness", "claude-code", "--bogus"]);
     const bad = socketChecks(facts().f, socket).find((c) => c.detail.includes("do not parse"));
     expect(bad?.status).toBe("fail");
+  });
+
+  test("the same socket spelled through a symlinked directory is the same socket", () => {
+    const link = join(f.root, "link");
+    symlinkSync(f.root, link);
+    installHook(f, join(link, "copsd.sock"));
+    expect(socketChecks(facts().f, socket)[0]?.status).toBe("ok");
   });
 
   test("mismatched duplicates across files warn", () => {

@@ -8,6 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { extensionSource, INSTALLED_FILE } from "@jev-cops/adapter-pi/install";
+import { samePath } from "./doctor-settings.ts";
 import { type Check, check, type DoctorEnv } from "./doctor-types.ts";
 
 const GROUP = "pi";
@@ -59,7 +60,8 @@ function socketCheck(i: PiInstall, e: DoctorEnv, daemonSocket: string): Check {
     );
   }
   if (i.baked !== null) {
-    if (i.baked === daemonSocket) return check(GROUP, "socket", "ok", `baked in: ${i.baked}`);
+    if (samePath(i.baked, daemonSocket))
+      return check(GROUP, "socket", "ok", `baked in: ${i.baked}`);
     return check(
       GROUP,
       "socket",
@@ -68,7 +70,7 @@ function socketCheck(i: PiInstall, e: DoctorEnv, daemonSocket: string): Check {
     );
   }
   const runtime = e.env.JEV_COPS_SOCKET || join(e.home, ".jev-cops", "copsd.sock");
-  if (runtime === daemonSocket)
+  if (samePath(runtime, daemonSocket))
     return check(GROUP, "socket", "ok", `resolved at run time: ${runtime}`);
   return check(
     GROUP,

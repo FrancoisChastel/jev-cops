@@ -38,7 +38,7 @@ import {
 } from "./doctor-hook-checks.ts";
 import { liveCanaryChecks } from "./doctor-live.ts";
 import { gapChecks, piChecks } from "./doctor-pi.ts";
-import { identityOf, readClaudeSettings } from "./doctor-settings.ts";
+import { identityOf, readClaudeSettings, samePath } from "./doctor-settings.ts";
 import { type Check, check, type DoctorEnv, type HarnessChoice } from "./doctor-types.ts";
 
 /** What `cops doctor` was asked for. */
@@ -152,7 +152,7 @@ async function canarySection(
   const env = { ...e.env, HOME: e.home };
   const out: Check[] = [];
   for (const { hook, socket } of hooks) {
-    if (socket !== probe.socket) {
+    if (socket === null || !samePath(socket, probe.socket)) {
       const detail = `not run through ${hook.command}: it does not talk to copsd's socket (see socket)`;
       out.push(check("canary", "offline canary", "warn", detail));
       continue;

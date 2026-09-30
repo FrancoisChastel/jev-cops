@@ -16,6 +16,7 @@ import {
   hookIdentityOf,
   identityOf,
   type SettingsView,
+  samePath,
   unrunnable,
 } from "./doctor-settings.ts";
 import { type Check, type CheckStatus, check, type DoctorEnv } from "./doctor-types.ts";
@@ -137,7 +138,7 @@ export function socketChecks(f: HookFacts, daemonSocket: string): Check[] {
         `the arguments of ${id.command} do not parse (${id.args.join(" ")}): the hook blocks every call (fail closed)`,
       );
     }
-    if (id.socket === daemonSocket)
+    if (samePath(id.socket, daemonSocket))
       return check(GROUP, "socket", "ok", `--socket ${id.socket} is copsd's agent socket`);
     return check(
       GROUP,

@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CLAUDE_CODE_GAPS } from "@jev-cops/adapter-claude-code";
 import { PI_GAPS } from "@jev-cops/adapter-pi/install";
 import { startTestDaemon } from "../../daemon/src/testing/daemon.ts";
 import { policyModule } from "../../daemon/src/testing/policies.ts";
@@ -78,6 +77,7 @@ describe("compiled jev-cops", () => {
     expect(out).toContain("0 failed · 0 problems → PASS");
   }, 60_000);
 
+  // --harness pi: this machine's own Claude Code managed settings are never read here.
   test("doctor runs from the binary (read-only; PATH holds no claude or pi)", async () => {
     const td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     try {
@@ -91,18 +91,24 @@ describe("compiled jev-cops", () => {
       lines.push(`admin_socket = ${JSON.stringify(adminSocket)}`, "[audit]");
       lines.push(`path = ${JSON.stringify(td.config.audit.path)}`);
       writeFileSync(toml, `${lines.join("\n")}\n`);
-      const argv = [join(dir, "cops"), "doctor", "--json", "--config", toml, "--home", home];
+      const flags = ["--harness", "pi", "--json", "--config", toml, "--home", home];
       const env = { PATH: bin, HOME: home };
-      const run = Bun.spawn(argv, { cwd: project, env, stdout: "pipe", stderr: "pipe" });
+      const run = Bun.spawn([join(dir, "cops"), "doctor", ...flags], {
+        cwd: project,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       const out = await new Response(run.stdout).text();
-      expect(await run.exited).toBe(0);
+      expect(await run.exited).toBe(1); // no Pi extension installed: a failure, as asked
       const report = JSON.parse(out) as {
         counts: Record<string, number>;
         checks: { name: string; status: string }[];
       };
       expect(report.checks.find((c) => c.name === "agent socket")?.status).toBe("ok");
       expect(report.checks.find((c) => c.name === "chain")?.status).toBe("ok");
-      expect(report.counts.gap).toBe(CLAUDE_CODE_GAPS.length + PI_GAPS.length);
+      expect(report.checks.find((c) => c.name === "extension")?.status).toBe("fail");
+      expect(report.counts.gap).toBe(PI_GAPS.length);
     } finally {
       await td.stop();
     }

@@ -4,7 +4,7 @@
  * which of those are jev-cops's, and how each jev-cops command handler would be spawned.
  */
 import { accessSync, constants, realpathSync, statSync } from "node:fs";
-import { basename, isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
   type HookIdentity,
   parseHookArgs,
@@ -119,12 +119,19 @@ export function copsForm(h: Json): CopsForm | null {
     : null;
 }
 
+/** `path` with symlinks resolved as far as it exists (a socket may not exist yet). */
 function realpathOr(path: string): string {
   try {
     return realpathSync(path);
   } catch {
-    return path; // missing: compared as spelled
+    const parent = dirname(path);
+    return parent === path ? path : join(realpathOr(parent), basename(path));
   }
+}
+
+/** Whether two paths name the same file (symlinks resolved where they exist, e.g. /tmp). */
+export function samePath(a: string, b: string): boolean {
+  return a === b || realpathOr(resolve(a)) === realpathOr(resolve(b));
 }
 
 /** The file an exec-form `command` spawns (as intact.ts resolves it), or null. */

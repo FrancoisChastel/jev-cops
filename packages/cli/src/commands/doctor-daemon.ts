@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import { verifyChain } from "@jev-cops/daemon";
 import { z } from "zod";
 import { CLI_VERSION } from "../version.ts";
+import { samePath } from "./doctor-settings.ts";
 import { type Check, check } from "./doctor-types.ts";
 
 const GROUP = "copsd";
@@ -105,7 +106,7 @@ function agentCheck(p: DaemonProbe): Check {
 }
 
 function adminCheck(p: DaemonProbe): Check {
-  if (p.adminSocket === p.socket) {
+  if (samePath(p.adminSocket, p.socket)) {
     return check(
       GROUP,
       "admin socket",
@@ -122,7 +123,7 @@ function adminCheck(p: DaemonProbe): Check {
     );
   }
   const theirs = p.agent.ok ? p.agent.health.sockets.admin : p.adminSocket;
-  if (theirs !== p.adminSocket) {
+  if (!samePath(theirs, p.adminSocket)) {
     return check(
       GROUP,
       "admin socket",
