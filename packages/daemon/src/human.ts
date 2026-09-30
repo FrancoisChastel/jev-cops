@@ -124,7 +124,7 @@ export function handleHealth(rt: Runtime): Reply {
       sockets: { agent: rt.config.daemon.socket, admin: rt.config.daemon.adminSocket },
       protected_paths: protectedPathCount(rt.config),
       latched_sessions: rt.latch.count(),
-      audit: auditHealth(rt.audit, rt.forwarder, rt.config.audit.forward),
+      audit: auditHealth(rt.audit, rt.forwarder, rt.config.audit),
       uptime: Math.max(0, Math.round((rt.now() - rt.startedAt) / 1000)),
     },
   };

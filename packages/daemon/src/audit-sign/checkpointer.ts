@@ -99,6 +99,14 @@ export class Checkpointer {
     if (next !== undefined) this.signer = next;
   }
 
+  /** Signs with `signer` from now on; only the key the log already put in force. */
+  adopt(signer: CheckpointSigner): void {
+    if (this.last?.inForce !== signer.keyId) {
+      throw new Error(`key ${signer.keyId} is not the key in force in the log`);
+    }
+    this.signer = signer;
+  }
+
   /** True when there is a key to sign with. */
   hasKey(): boolean {
     return this.signer !== null;

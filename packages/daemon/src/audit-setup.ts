@@ -3,7 +3,8 @@ import { FileTransport } from "./audit-forward/file.ts";
 import { CursorForwarder, type ForwarderOptions } from "./audit-forward/forwarder.ts";
 import { SyslogTransport } from "./audit-forward/syslog.ts";
 import type { AuditForwarder, ForwarderStatus } from "./audit-forward/types.ts";
-import type { AuditForward, DaemonConfig } from "./config.ts";
+import { applyRotation, keyMismatch, loadSigning } from "./audit-sign/boot.ts";
+import type { AuditConfig, AuditForward, DaemonConfig } from "./config.ts";
 
 /**
  * The daemon's audit wiring: the forwarder `[audit.forward]` names, the log opened with it,
@@ -49,12 +50,23 @@ function forwardWarning(fwd: AuditForward | null): string[] {
   ];
 }
 
-/** Opens the audit log with its forwarder. */
+/**
+ * Opens the audit log with its signing key and forwarder (D-103, D-104). A pending key
+ * rotation is applied here; a signing key that is not the one the log put in force is an
+ * `anomaly` line and a warning. Throws `SigningRequiredError` under `require_signing`
+ * without a usable key, before anything is opened.
+ */
 export function openAudit(config: DaemonConfig, deps: ForwardDeps): AuditRuntime {
-  const fwd = config.audit.forward;
-  const forwarder = buildForwarder(fwd, config.audit.path, deps);
-  const audit = AuditLog.open(config.audit.path, { now: deps.now, forwarder });
-  return { audit, forwarder, warnings: forwardWarning(fwd) };
+  const cfg = config.audit;
+  const keys = loadSigning(cfg);
+  const forwarder = buildForwarder(cfg.forward, cfg.path, deps);
+  const signing = { signer: keys.signer, every: cfg.checkpointEvery };
+  const audit = AuditLog.open(cfg.path, { now: deps.now, forwarder, signing });
+  if (keys.pending !== null) applyRotation(audit, cfg.key, keys.pending);
+  const mismatch = keyMismatch(audit);
+  if (mismatch !== null) audit.append({ kind: "anomaly", payload: { reason: mismatch } });
+  const warnings = [...keys.warnings, ...forwardWarning(cfg.forward)];
+  return { audit, forwarder, warnings: mismatch === null ? warnings : [...warnings, mismatch] };
 }
 
 /** Closes the log, then lets the forwarder ship what it can within its budget. */
@@ -63,15 +75,23 @@ export async function closeAudit(rt: AuditRuntime): Promise<void> {
   await rt.forwarder?.close();
 }
 
-/** The `audit` block of `/v1/health`: the head, and the forwarder's state (no target). */
-export function auditHealth(
-  audit: AuditLog,
-  forwarder: AuditForwarder | null,
-  forward: AuditForward | null,
-) {
+/**
+ * The `audit` block of `/v1/health`: the head, signing (key, key in force, interval, last
+ * checkpoint) and the forwarder's state (never its target).
+ */
+export function auditHealth(audit: AuditLog, forwarder: AuditForwarder | null, cfg: AuditConfig) {
   const status: ForwarderStatus | null = forwarder?.status() ?? null;
+  const forward = cfg.forward;
+  const s = audit.signing();
   return {
     head_seq: audit.head().seq,
+    signing: {
+      key_id: s.keyId,
+      in_force: s.inForce,
+      checkpoint_every: s.every,
+      last_checkpoint_seq: s.lastCheckpointSeq,
+      required: cfg.requireSigning,
+    },
     forward:
       status === null || forward === null
         ? null

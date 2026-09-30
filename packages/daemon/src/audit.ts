@@ -159,6 +159,11 @@ export class AuditLog {
     return line;
   }
 
+  /** Signs with `signer` from now on, which the log's last rotation already named. */
+  adoptKey(signer: CheckpointSigner): void {
+    this.checkpoints.adopt(signer);
+  }
+
   /** The last line written: what the next line follows. */
   head(): ChainHead {
     return { seq: this.seq, hash: this.prev };

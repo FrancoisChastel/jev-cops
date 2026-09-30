@@ -43,6 +43,12 @@ export interface TestDaemonOptions {
   checkpointEvery?: number;
   /** `[audit] require_signing`; default false. */
   requireSigning?: boolean;
+  /** An Ed25519 private key (PKCS #8 PEM) written to `[audit] key` before boot. */
+  signingKey?: string;
+  /** A key `cops keygen --rotate` left pending, written next to it before boot. */
+  pendingKey?: string;
+  /** Reuse this directory (a restart after `stop({ keepFiles: true })`). */
+  dir?: string;
   /** The forwarder's reconnect backoff; default 20 ms to 200 ms here. */
   forwardRetry?: { readonly minMs: number; readonly maxMs: number };
   /** `[daemon] hook_binary`; default none. */
@@ -67,7 +73,8 @@ export interface TestDaemon {
   callWithHeaders(method: Method, path: string, body?: unknown): Promise<HttpReplyWithHeaders>;
   audit(): AuditLine[];
   writePolicy(file: string, source: string): void;
-  stop(): Promise<void>;
+  /** Stops the daemon and removes its directory (unless `keepFiles`, for a restart). */
+  stop(opts?: { keepFiles?: boolean }): Promise<void>;
 }
 
 type Method = "GET" | "POST";
@@ -154,10 +161,19 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
   };
 }
 
+/** Writes the signing key and a pending rotation where `testConfig` points `[audit] key`. */
+function writeKeys(dir: string, opts: TestDaemonOptions): void {
+  const key = join(dir, "keys", "audit-ed25519.key");
+  mkdirSync(join(dir, "keys"), { recursive: true, mode: 0o700 });
+  if (opts.signingKey !== undefined) writeFileSync(key, opts.signingKey, { mode: 0o600 });
+  if (opts.pendingKey !== undefined) writeFileSync(`${key}.next`, opts.pendingKey, { mode: 0o600 });
+}
+
 /** Starts a daemon in a new temp directory (short path: Unix sockets cap at ~104 bytes). */
 export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaemon> {
-  const dir = mkdtempSync(join(tmpdir(), "jvd-"));
-  mkdirSync(join(dir, "policies"));
+  const dir = opts.dir ?? mkdtempSync(join(tmpdir(), "jvd-"));
+  mkdirSync(join(dir, "policies"), { recursive: true });
+  writeKeys(dir, opts);
   if (opts.policiesDir === undefined) {
     for (const [file, source] of Object.entries(opts.policies)) {
       writeFileSync(join(dir, "policies", file), source);
@@ -196,9 +212,9 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     writePolicy(file, source) {
       writeFileSync(join(dir, "policies", file), source);
     },
-    async stop() {
+    async stop(o = {}) {
       await daemon.stop();
-      rmSync(dir, { recursive: true, force: true });
+      if (o.keepFiles !== true) rmSync(dir, { recursive: true, force: true });
     },
   };
 }

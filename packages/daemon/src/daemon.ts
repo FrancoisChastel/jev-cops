@@ -214,6 +214,7 @@ function closer(parts: Closeable): () => Promise<void> {
       parts.stopGc();
       parts.policies.close();
       parts.audit.audit.append({ kind: "boot", payload: { event: "shutdown" } });
+      parts.audit.audit.checkpoint("shutdown");
       for (const store of parts.stores) store.close();
       await closeAudit(parts.audit);
     })();
@@ -331,6 +332,7 @@ export async function createRuntime(given: DaemonConfig, deps: DaemonDeps = {}):
     kind: "boot",
     payload: bootPayload(config, built.judge.name, policies, warnings),
   });
+  audit.checkpoint("boot");
   const lockfiles = new Set(Object.keys(cores.contextConfig.scope.registries));
   return {
     config,

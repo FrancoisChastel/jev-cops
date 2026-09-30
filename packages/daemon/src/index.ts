@@ -7,7 +7,13 @@
  * with no runtime dependency on `@jev-cops/core`, so the hook binary can bundle it.
  */
 export * from "./audit.ts";
+export * from "./audit-compare.ts";
+export { type RemoteCopy, readRemoteCopy } from "./audit-forward/syslog-parse.ts";
+export type * from "./audit-forward/types.ts";
 export * from "./audit-payload.ts";
+export * from "./audit-sign/checkpoint.ts";
+export * from "./audit-sign/keys.ts";
+export * from "./audit-verify.ts";
 export * from "./config.ts";
 export * from "./daemon.ts";
 export * from "./git-probe.ts";
