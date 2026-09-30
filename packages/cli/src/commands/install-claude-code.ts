@@ -2,8 +2,9 @@
  * `cops install claude-code` (PLAN-M1 §3 step 6): resolve the daemon config and the hook
  * binary, refuse a binary that is missing, not executable or of another version (§5 row 1),
  * write the settings (adapter install.ts), record `[daemon] hook_binary` in cops.toml and
- * the state file, then run the offline canary through the hook exactly as registered and
- * roll every write back when it answers wrongly. A daemon that is down is a warning: the
+ * the state file, then run the offline canary through the hook exactly as registered (its
+ * ConfigChange probe included: the hook must find itself in what was written) and roll
+ * every write back when it answers wrongly. A daemon that is down is a warning: the
  * hook fails closed until copsd runs.
  */
 
@@ -19,11 +20,13 @@ import {
   installClaudeCodeHooks,
   isRootLocked,
   isSharedWritable,
+  managedDirFor,
   readSettingsFile,
   registeredPreToolUse,
   restoreSettings,
   restoreText,
   runOfflineCanary,
+  settingsPathFor,
   uninstallClaudeCodeHooks,
   writeClaudeCodeState,
 } from "@jev-cops/adapter-claude-code";
@@ -85,12 +88,30 @@ async function canaryOf(
   if (hook === null) {
     return failedCanary(`no jev-cops PreToolUse entry in ${settings.path} after the write`);
   }
+  const configDir = s.configDir === null ? {} : { CLAUDE_CONFIG_DIR: s.configDir };
   return runOfflineCanary({
     hook,
     home: s.home,
-    env: { PATH: s.env.PATH ?? "" },
+    env: { PATH: s.env.PATH ?? "", ...configDir },
     spawn: ctx.spawn,
+    ...(hookSees(settings, s) ? { config: configProbe(s) } : {}),
   });
+}
+
+/**
+ * The ConfigChange probe: a user-settings change that changes nothing must be accepted by the
+ * hook's own intact check, run in the project whose settings it reads (the Docker e2e's F1).
+ */
+function configProbe(s: Setup) {
+  return { filePath: settingsPathFor("user", s), projectDir: s.projectDir };
+}
+
+/**
+ * Whether the hook will read the file just written: always, except a managed drop-in in a
+ * directory other than this OS's managed-settings directory (tests), which the hook never reads.
+ */
+function hookSees(settings: InstallResult, s: Setup): boolean {
+  return settings.scope !== "managed" || s.managedDir === managedDirFor(process.platform);
 }
 
 /** The per-user records an install wrote (null: not written, a managed install). */

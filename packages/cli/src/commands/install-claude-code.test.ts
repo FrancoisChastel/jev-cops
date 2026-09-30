@@ -204,6 +204,55 @@ describe("cops install claude-code: the canary's other answers", () => {
   }, 30_000);
 });
 
+describe("cops install claude-code: the hook must find itself in what was written (F1)", () => {
+  test("a hook binary that is a wrapper: the hook's own ConfigChange check refuses it; exit 1, rolled back", async () => {
+    const original = writeJson(settingsPath(), { theme: "dark" });
+    const source = join(
+      import.meta.dir,
+      "..",
+      "..",
+      "..",
+      "..",
+      "adapters",
+      "claude-code",
+      "src",
+      "hook-main.ts",
+    );
+    const wrapper = w.script("wrapped-hook", `exec "${process.execPath}" "${source}" "$@"`);
+    const io = captureIo();
+    const argv = [
+      "claude-code",
+      "--home",
+      w.home,
+      "--hook-binary",
+      wrapper,
+      "--socket",
+      enforce.config.daemon.socket,
+    ];
+    expect(await runInstallCommand(argv, io, w.ctx())).toBe(1);
+    const err = io.stderr.join("\n");
+    expect(err).toContain(
+      "the hook's own ConfigChange check does not find the registered hook intact",
+    );
+    expect(err).toContain("no cops hook on PreToolUse");
+    expect(io.stdout.join("\n")).toContain("rolled back");
+    expect(readFileSync(settingsPath(), "utf8")).toBe(original);
+    expect(existsSync(tomlPath())).toBe(false);
+  }, 30_000);
+
+  test("--project: the probe runs in the project, where the project settings are read", async () => {
+    const r = await install(["--project", "--json"]);
+    const report = JSON.parse(r.out) as { canary: { status: string; probes: { name: string }[] } };
+    expect(r.code).toBe(0);
+    expect(report.canary.status).toBe("ok");
+    expect(report.canary.probes.map((p) => p.name)).toEqual([
+      "benign-bash",
+      "config-write",
+      "config-change",
+    ]);
+  }, 30_000);
+});
+
 describe("cops install claude-code: refusals", () => {
   test("a bare Bash allow refuses (exit 1, nothing written); --force installs and records it", async () => {
     writeJson(settingsPath(), { permissions: { allow: ["Bash"] } });

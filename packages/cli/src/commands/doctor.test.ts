@@ -8,6 +8,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CLAUDE_CODE_GAPS } from "@jev-cops/adapter-claude-code";
 import { PI_GAPS } from "@jev-cops/adapter-pi/install";
+import { HOOK_SOURCE } from "../../../../adapters/claude-code/testing/setup.ts";
 import { startTestDaemon, type TestDaemon } from "../../../daemon/src/testing/daemon.ts";
 import { captureIo } from "../io.ts";
 import {
@@ -15,6 +16,7 @@ import {
   type DoctorFixture,
   doctorEnv,
   doctorFixture,
+  executable,
   installHook,
   REPO_POLICIES,
   standInClaude,
@@ -83,7 +85,11 @@ describe("cops doctor", () => {
       harness: "claude-code",
     });
     const canary = report.checks.filter((c) => c.group === "canary");
-    expect(canary.map((c) => c.status)).toEqual(["ok", "ok"]);
+    expect(canary.map((c) => [c.name, c.status])).toEqual([
+      ["benign call proceeds", "ok"],
+      ["config write is killed", "ok"],
+      ["settings change is accepted", "ok"],
+    ]);
     const gaps = report.checks.filter((c) => c.status === "gap").map((c) => c.detail);
     expect(gaps).toEqual([...CLAUDE_CODE_GAPS]);
     expect(report.counts.gap).toBe(CLAUDE_CODE_GAPS.length);
@@ -96,6 +102,22 @@ describe("cops doctor", () => {
     expect(code).toBe(1);
     expect(report.checks.find((c) => c.name === "registered")?.status).toBe("fail");
     expect(report.checks.find((c) => c.group === "canary")?.detail).toContain("not run");
+  });
+
+  test("the hook's own ConfigChange check disagrees with the registration: fail, exit 1 (F1)", async () => {
+    healthy();
+    // The settings name a wrapper; the hook it execs runs as hook-main.ts, a program the
+    // settings never name, so its own ConfigChange check would block every settings change.
+    const run = `exec ${JSON.stringify(process.execPath)} ${JSON.stringify(HOOK_SOURCE)} "$@"`;
+    const wrapper = executable(f.bin, "cops-hook", run);
+    installHook(f, td.config.daemon.socket, {}, wrapper);
+    const { code, report } = await doctorJson(["--harness", "claude-code"]);
+    expect(code).toBe(1);
+    const change = report.checks.find((c) => c.name === "settings change is accepted");
+    expect(change?.status).toBe("fail");
+    expect(change?.detail).toContain("the hook's own ConfigChange check");
+    expect(change?.detail).toContain("no cops hook on PreToolUse");
+    expect(report.checks.find((c) => c.name === "config write is killed")?.status).toBe("ok");
   });
 
   test("copsd down: fail with a hint, exit 1, and the gaps are still printed", async () => {

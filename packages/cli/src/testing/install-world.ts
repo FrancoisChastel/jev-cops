@@ -1,15 +1,24 @@
 /**
  * A throw-away world for `cops install` tests: a temp root holding the home, the project,
- * a managed-settings dir and a bin dir with a `cops-hook` (the real hook run by this Bun
- * from source) and a fake `claude`; a context whose file system refuses any write outside
- * the root. Nothing here reads or writes the real home directory.
+ * a managed-settings dir and a bin dir with a `cops-hook` (the real hook from source, laid
+ * out like the npm install: a bin symlink to an entry script run through its
+ * `#!/usr/bin/env bun` line, with this Bun on PATH as `bin/bun`) and a fake `claude`; a
+ * context whose file system refuses any write outside the root. Nothing here reads or
+ * writes the real home directory.
  */
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnProcess } from "@jev-cops/adapter-claude-code";
 import { type GuardedFs, guardedFs } from "../../../../adapters/claude-code/testing/fs-guard.ts";
-import { HOOK_SOURCE } from "../../../../adapters/claude-code/testing/setup.ts";
 import type { InstallContext } from "../commands/install-context.ts";
 
 /** The temp world and the context that runs in it. */
@@ -19,7 +28,7 @@ export interface InstallWorld {
   readonly project: string;
   readonly managed: string;
   readonly bin: string;
-  /** `bin/cops-hook`: the real hook from source. */
+  /** `bin/cops-hook`: the real hook from source (a symlink to an entry script, as npm lays it out). */
   readonly hook: string;
   readonly fs: GuardedFs;
   ctx(over?: Partial<InstallContext>): InstallContext;
@@ -29,6 +38,43 @@ export interface InstallWorld {
 }
 
 export const NOW = new Date("2026-09-29T09:12:00.000Z");
+
+/** The adapter's hook runtime, which the entry script imports (as the meta package's bin does). */
+const PROCESS_MODULE = join(
+  import.meta.dir,
+  "..",
+  "..",
+  "..",
+  "..",
+  "adapters",
+  "claude-code",
+  "src",
+  "process.ts",
+);
+
+/**
+ * `bin/cops-hook` → `lib/cops-hook.ts`, the meta package's bin with the adapter imported by
+ * path, and `bin/bun` → this Bun for its `#!/usr/bin/env bun` line. Not a wrapper: the
+ * program the settings name is the program that runs (hook-identity.ts).
+ */
+function npmStyleHook(root: string, bin: string): string {
+  mkdirSync(join(root, "lib"));
+  const entry = join(root, "lib", "cops-hook.ts");
+  const body = [
+    "#!/usr/bin/env bun",
+    "process.exitCode = 2;",
+    `const { runHookProcess } = await import(${JSON.stringify(PROCESS_MODULE)});`,
+    "await runHookProcess(process.argv.slice(2), []);",
+    "export {};",
+    "",
+  ];
+  writeFileSync(entry, body.join("\n"));
+  chmodSync(entry, 0o755);
+  symlinkSync(process.execPath, join(bin, "bun"));
+  const hook = join(bin, "cops-hook");
+  symlinkSync(entry, hook);
+  return hook;
+}
 
 /** Creates the world; call `dispose` in `afterEach`. */
 export function installWorld(): InstallWorld {
@@ -44,7 +90,7 @@ export function installWorld(): InstallWorld {
     chmodSync(path, 0o755);
     return path;
   };
-  const hook = script("cops-hook", `exec "${process.execPath}" "${HOOK_SOURCE}" "$@"`);
+  const hook = npmStyleHook(root, bin);
   script("claude", 'echo "2.1.285 (Claude Code)"');
   const ctx = (over: Partial<InstallContext> = {}): InstallContext => ({
     env: { PATH: `${bin}:/usr/bin:/bin` },

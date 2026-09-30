@@ -9,7 +9,11 @@
  */
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CLAUDE_CODE_GAPS, CLAUDE_CODE_STATE_FILE } from "@jev-cops/adapter-claude-code";
+import {
+  CLAUDE_CODE_GAPS,
+  CLAUDE_CODE_STATE_FILE,
+  settingsPathFor,
+} from "@jev-cops/adapter-claude-code";
 import { PI_GAPS } from "@jev-cops/adapter-pi/install";
 import { ConfigError, type LoadedConfig, loadConfig } from "@jev-cops/daemon";
 import { type AuditDoctorInput, auditChecks } from "./doctor-audit.ts";
@@ -141,6 +145,12 @@ function canaryHooks(f: HookFacts, e: DoctorEnv): { hook: CanaryHook; socket: st
   });
 }
 
+/** The user settings file Claude Code reads (`$CLAUDE_CONFIG_DIR` or `~/.claude`). */
+function userSettingsFile(e: DoctorEnv): string {
+  const location = { home: e.home, projectDir: e.cwd, configDir: e.env.CLAUDE_CONFIG_DIR || null };
+  return settingsPathFor("user", { ...location, managedDir: e.managedDir });
+}
+
 /** Why the canary cannot run at all, or null. */
 function canaryBlocked(hooks: readonly unknown[], probe: DaemonProbe): Check | null {
   if (hooks.length === 0) {
@@ -173,7 +183,15 @@ async function canarySection(
       out.push(check("canary", "offline canary", "warn", detail));
       continue;
     }
-    const opts = { hook, home: e.home, daemonHome, cwd: f.view.projectDir, env: e.env, run: e.run };
+    const opts = {
+      hook,
+      home: e.home,
+      daemonHome,
+      cwd: f.view.projectDir,
+      settingsFile: userSettingsFile(e),
+      env: e.env,
+      run: e.run,
+    };
     out.push(...canaryChecks(await doctorCanary(opts), hook));
   }
   return out;

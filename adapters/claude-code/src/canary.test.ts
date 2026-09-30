@@ -7,10 +7,11 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startTestDaemon, type TestDaemon } from "../../../packages/daemon/src/testing/daemon.ts";
-import { hookCommand } from "../testing/setup.ts";
+import { hookCommand, jevCopsSettings } from "../testing/setup.ts";
 import {
   CANARY_DEFAULT_TIMEOUT_MS,
   canaryPayloads,
+  configChangePayload,
   describeHookRun,
   registeredPreToolUse,
   runOfflineCanary,
@@ -122,6 +123,42 @@ describe("runOfflineCanary (PLAN-M1 §4.4, D-078 proposal)", () => {
   }, 30_000);
 });
 
+describe("runOfflineCanary with the ConfigChange probe: the hook's own intact check", () => {
+  function userSettings(value: Record<string, unknown>): string {
+    const dir = mkdtempSync(join(root, "cfg-"));
+    mkdirSync(join(dir, ".claude"));
+    const path = join(dir, ".claude", "settings.json");
+    writeFileSync(path, JSON.stringify(value, null, 2));
+    return dir;
+  }
+
+  test("registered exactly as the hook runs: an unchanged settings file is accepted", async () => {
+    const socket = enforce.config.daemon.socket;
+    const h = userSettings({ theme: "dark", ...jevCopsSettings(socket) });
+    const config = { filePath: join(h, ".claude", "settings.json") };
+    const r = await runOfflineCanary({ hook: hookCommand(socket), home: h, env, config });
+    expect(r.status).toBe("ok");
+    expect(r.probes.map((p) => [p.name, p.outcome, p.observed])).toEqual([
+      ["benign-bash", "ok", "exit 0, no output"],
+      ["config-write", "ok", "exit 2, deny, continue:false"],
+      ["config-change", "ok", "exit 0, no output"],
+    ]);
+  }, 30_000);
+
+  test("a hook that does not find itself in the settings: failed, with the hook's reason", async () => {
+    const socket = enforce.config.daemon.socket;
+    const other = join(root, "elsewhere.sock");
+    const h = userSettings(jevCopsSettings(other));
+    const config = { filePath: join(h, ".claude", "settings.json") };
+    const r = await runOfflineCanary({ hook: hookCommand(socket), home: h, env, config });
+    expect(r.status).toBe("failed");
+    const probe = r.probes.find((p) => p.name === "config-change");
+    expect(probe).toMatchObject({ outcome: "failed", observed: "exit 2, block" });
+    expect(r.detail).toContain("the hook's own ConfigChange check");
+    expect(r.detail).toContain("no cops hook on PreToolUse");
+  }, 30_000);
+});
+
 describe("canary classification (stubbed spawn)", () => {
   const stub =
     (answers: Partial<SpawnResult>[]) =>
@@ -177,6 +214,104 @@ describe("canary classification (stubbed spawn)", () => {
     expect(r.status).toBe("failed");
     expect(r.probes.map((p) => p.observed)).toEqual(["timed out", "timed out"]);
     expect(r.probes[0]?.stderr).toBe("timed out");
+  });
+
+  test("the ConfigChange probe: unreachable, and its env (Claude Code's settings locations)", async () => {
+    const requests: SpawnRequest[] = [];
+    const late = {
+      exitCode: 2,
+      stderr: "jev-cops: judge unreachable (ECONNREFUSED); settings change blocked (fail closed)",
+    };
+    const answers: Partial<SpawnResult>[] = [
+      {},
+      {
+        exitCode: 2,
+        stdout: '{"continue":false,"hookSpecificOutput":{"permissionDecision":"deny"}}',
+      },
+      late,
+    ];
+    const spawn = async (req: SpawnRequest): Promise<SpawnResult> => {
+      requests.push(req);
+      return {
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        error: null,
+        ...(answers.shift() ?? {}),
+      };
+    };
+    const secretEnv = { PATH: "/p", ANTHROPIC_API_KEY: "sk-x", CLAUDE_CONFIG_DIR: "/c" };
+    const config = { filePath: "/c/settings.json" };
+    const r = await runOfflineCanary({
+      hook,
+      home,
+      cwd: "/w",
+      env: secretEnv,
+      spawn,
+      nonce: "n1",
+      config,
+    });
+    expect(r.status).toBe("unreachable");
+    expect(requests[2]?.env).toEqual({
+      PATH: "/p",
+      HOME: home,
+      CLAUDE_PROJECT_DIR: "/w",
+      CLAUDE_CONFIG_DIR: "/c",
+    });
+    expect(JSON.parse(requests[2]?.stdin ?? "{}")).toEqual(
+      JSON.parse(configChangePayload("/w", "n1", config)),
+    );
+  });
+
+  test("the ConfigChange probe runs in its own project (install: the project, not the home)", async () => {
+    const requests: SpawnRequest[] = [];
+    const answers: Partial<SpawnResult>[] = [
+      {},
+      {
+        exitCode: 2,
+        stdout: '{"continue":false,"hookSpecificOutput":{"permissionDecision":"deny"}}',
+      },
+      {},
+    ];
+    const spawn = async (req: SpawnRequest): Promise<SpawnResult> => {
+      requests.push(req);
+      return {
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        error: null,
+        ...(answers.shift() ?? {}),
+      };
+    };
+    const config = { filePath: "/h/.claude/settings.json", projectDir: "/proj" };
+    const r = await runOfflineCanary({
+      hook,
+      home: "/h",
+      env: { PATH: "/p" },
+      spawn,
+      config,
+      nonce: "n",
+    });
+    expect(r.status).toBe("ok");
+    expect(requests.map((q) => q.cwd)).toEqual(["/h", "/h", "/proj"]);
+    expect(requests[2]?.env).toEqual({ PATH: "/p", HOME: "/h", CLAUDE_PROJECT_DIR: "/proj" });
+    expect(JSON.parse(requests[2]?.stdin ?? "{}")).toMatchObject({ cwd: "/proj" });
+  });
+
+  test("a ConfigChange probe the hook answers with anything but exit 0 and silence fails", async () => {
+    const kill = '{"continue":false,"hookSpecificOutput":{"permissionDecision":"deny"}}';
+    const config = { filePath: "/h/.claude/settings.json" };
+    const chatty = await runOfflineCanary({
+      hook,
+      home,
+      env,
+      config,
+      spawn: stub([{}, { exitCode: 2, stdout: kill }, { stdout: '{"systemMessage":"x"}' }]),
+    });
+    expect(chatty.status).toBe("failed");
+    expect(chatty.probes[2]).toMatchObject({ name: "config-change", outcome: "failed" });
   });
 
   test("the hook gets HOME and PATH only, in the cwd, with the payload on stdin", async () => {
@@ -236,6 +371,21 @@ describe("canaryPayloads and registeredPreToolUse", () => {
       tool_input: { file_path: join(home, ".claude", "settings.json") },
     });
     expect(benign.session_id).not.toBe(write.session_id);
+  });
+
+  test("the ConfigChange payload: a throw-away session, the named file, user_settings by default", () => {
+    expect(JSON.parse(configChangePayload("/w", "abc", { filePath: "/h/s.json" }))).toEqual({
+      session_id: "jev-cops-canary-config-abc",
+      cwd: "/w",
+      permission_mode: "default",
+      hook_event_name: "ConfigChange",
+      source: "user_settings",
+      file_path: "/h/s.json",
+    });
+    const local = { filePath: "/p/.claude/settings.local.json", source: "local_settings" };
+    expect(JSON.parse(configChangePayload("/p", "x", local))).toMatchObject({
+      source: "local_settings",
+    });
   });
 
   test("the PreToolUse handler exactly as a settings object registers it", () => {

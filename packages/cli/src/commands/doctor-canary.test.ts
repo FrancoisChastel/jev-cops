@@ -9,10 +9,18 @@ import { join } from "node:path";
 import type { CanaryProbe, CanaryResult } from "@jev-cops/adapter-claude-code";
 import { hookCommand } from "../../../../adapters/claude-code/testing/setup.ts";
 import { startTestDaemon, type TestDaemon } from "../../../daemon/src/testing/daemon.ts";
-import { type DoctorFixture, doctorFixture, executable, REPO_POLICIES } from "../testing/doctor.ts";
+import {
+  type DoctorFixture,
+  doctorFixture,
+  executable,
+  installHook,
+  REPO_POLICIES,
+  userSettingsPath,
+} from "../testing/doctor.ts";
 import {
   BENIGN_CASE,
   type CanaryHook,
+  CONFIG_CHANGE_CASE,
   CONFIG_WRITE_CASE,
   canaryChecks,
   type DoctorCanaryOptions,
@@ -44,6 +52,7 @@ function options(hook: CanaryHook, td: TestDaemon): DoctorCanaryOptions {
     home: f.home,
     daemonHome: td.config.daemon.home,
     cwd: f.project,
+    settingsFile: userSettingsPath(f),
     env: { PATH: f.bin, HOME: f.home },
     run: spawnProcess,
   };
@@ -51,6 +60,7 @@ function options(hook: CanaryHook, td: TestDaemon): DoctorCanaryOptions {
 
 describe("doctor offline canary: the registered hook, spawned as Claude Code would", () => {
   test("enforce: the config write is killed (exit 2, deny, continue:false), a benign call proceeds", async () => {
+    installHook(f, enforce.config.daemon.socket);
     const hook = hookCommand(enforce.config.daemon.socket);
     const result = await doctorCanary(options(hook, enforce));
     expect(result.status).toBe("ok");
@@ -58,7 +68,9 @@ describe("doctor offline canary: the registered hook, spawned as Claude Code wou
     expect(checks.map((c) => [c.group, c.name, c.status])).toEqual([
       ["canary", BENIGN_CASE, "ok"],
       ["canary", CONFIG_WRITE_CASE, "ok"],
+      ["canary", CONFIG_CHANGE_CASE, "ok"],
     ]);
+    expect(checks[2]?.detail).toContain("finds itself registered on every required event");
     expect(checks[1]?.detail).toContain("observed exit 2, deny, continue:false");
     expect(checks[1]?.detail).toContain("config-tamper killed the write");
     const judged = enforce.audit().filter((l) => l.kind === "judge");
@@ -77,7 +89,16 @@ describe("doctor offline canary: the registered hook, spawned as Claude Code wou
     expect(requests.map((r) => [r.cwd, r.env.HOME, r.env.PATH])).toEqual([
       [f.project, f.home, f.bin],
       [f.project, f.home, f.bin],
+      [f.project, f.home, f.bin],
     ]);
+    const change = JSON.parse(requests[2]?.stdin ?? "{}") as Record<string, unknown>;
+    expect(change).toMatchObject({
+      hook_event_name: "ConfigChange",
+      source: "user_settings",
+      file_path: userSettingsPath(f),
+      cwd: f.project,
+    });
+    expect(requests[2]?.env.CLAUDE_PROJECT_DIR).toBe(f.project);
     const write = JSON.parse(requests[1]?.stdin ?? "{}") as { tool_input: { file_path: string } };
     expect(write.tool_input.file_path).toBe(
       join(enforce.config.daemon.home, ".claude", "settings.json"),
@@ -86,6 +107,7 @@ describe("doctor offline canary: the registered hook, spawned as Claude Code wou
   });
 
   test("observe: the hook cannot block, by design: a warning, not a failure", async () => {
+    installHook(f, observe.config.daemon.socket);
     const hook = hookCommand(observe.config.daemon.socket);
     const result = await doctorCanary(options(hook, observe));
     expect(result.status).toBe("observe");
@@ -113,7 +135,11 @@ describe("doctor offline canary: the registered hook, spawned as Claude Code wou
   test("a hook that cannot start or hangs past its registered timeout fails", async () => {
     const missing = { command: join(f.root, "nope"), args: [] };
     const gone = await doctorCanary(options(missing, enforce));
-    expect(gone.probes.map((p) => p.observed)).toEqual(["did not start", "did not start"]);
+    expect(gone.probes.map((p) => p.observed)).toEqual([
+      "did not start",
+      "did not start",
+      "did not start",
+    ]);
     const [, goneWrite] = canaryChecks(gone, missing);
     expect(goneWrite?.status).toBe("fail");
     expect(goneWrite?.detail).toContain("did not block as expected");
@@ -153,6 +179,23 @@ describe("canaryChecks: statuses and words for every outcome", () => {
     expect(c?.detail).toContain("could not reach copsd (jev-cops: judge unreachable");
     expect(c?.detail).not.toContain("more");
     expect(c?.detail).toContain("start copsd");
+  });
+
+  test("a settings change the hook blocks: fail, with the hook's own reason (its JSON, else stderr)", () => {
+    const reason = "jev-cops: settings change blocked: the cops hook entry is missing or altered";
+    const blocked = probe({
+      name: "config-change",
+      outcome: "failed",
+      observed: "exit 2, block",
+      stdout: JSON.stringify({ decision: "block", reason }),
+      stderr: "",
+    });
+    const plain = probe({ name: "config-change", outcome: "failed", stdout: "x", stderr: "boom" });
+    const [c, p] = canaryChecks(result([blocked, plain]), hook);
+    expect(c).toMatchObject({ name: CONFIG_CHANGE_CASE, status: "fail" });
+    expect(c?.detail).toContain("the hook's own ConfigChange check does not find it intact");
+    expect(c?.detail).toContain(reason);
+    expect(p?.detail).toContain("(boom)");
   });
 
   test("a failed benign call and a failure without stderr", () => {
