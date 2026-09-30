@@ -25,7 +25,8 @@
     "build:daemon": "bun build --compile packages/daemon/src/main.ts --outfile dist/copsd",
     "build:cli": "bun build --compile packages/cli/src/main.ts --outfile dist/cops",
     "build:hook": "bun build --compile adapters/claude-code/src/hook-main.ts --outfile dist/cops-hook",
-    "build": "bun run build:daemon && bun run build:cli && bun run build:hook"
+    "build": "bun run build:daemon && bun run build:cli && bun run build:hook",
+    "pack:smoke": "bun scripts/pack-smoke.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

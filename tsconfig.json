@@ -29,6 +29,12 @@
       "@jev-cops/adapter-claude-code/*": ["./adapters/claude-code/src/*"]
     }
   },
-  "include": ["packages/**/*.ts", "adapters/**/*.ts", "policies/**/*.ts", "tests/**/*.ts"],
+  "include": [
+    "packages/**/*.ts",
+    "adapters/**/*.ts",
+    "policies/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }
