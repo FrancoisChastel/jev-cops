@@ -10,6 +10,7 @@ import { runKeygenCommand } from "./commands/keygen.ts";
 import { OPENSHELL_USAGE, runOpenShellCommand } from "./commands/openshell.ts";
 import { runReplayCommand } from "./commands/replay.ts";
 import { runTestCommand } from "./commands/test.ts";
+import { commandHelp, wantsHelp } from "./help.ts";
 import { EXIT, type Io, PROCESS_IO } from "./io.ts";
 import { CLI_VERSION } from "./version.ts";
 
@@ -62,7 +63,8 @@ ${INSTALL_USAGE}
                                            RFC 5424/5425 syslog) agrees: a longer copy is a
                                            local truncation (no daemon needed)
 ${OPENSHELL_USAGE}
-  help                                     this text
+  help [command]                           this text, or one command's help
+                                           (also: cops <command> --help | -h)
 
 Exit codes:
   0  success (test: every fixture passed; replay: ran, whatever the delta count;
@@ -90,9 +92,28 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   openshell: runOpenShellCommand,
 };
 
+/**
+ * Prints `name`'s help. `hook` is the exception to exit 0: a hook that exits 0 lets the
+ * tool call proceed, so its help goes to stderr with the blocking exit code 2.
+ */
+function printHelp(name: string, io: Io): number {
+  const help = commandHelp(name, CLI_USAGE);
+  if (help === null) {
+    io.err(`jev-cops: unknown command "${name}"\n\n${CLI_USAGE}`);
+    return EXIT.usage;
+  }
+  if (name === "hook") {
+    io.err(help);
+    return EXIT.usage;
+  }
+  io.out(help);
+  return EXIT.ok;
+}
+
 /** Runs `jev-cops` with `argv` (without the binary name); resolves with the exit code. */
 export async function main(argv: readonly string[], io: Io = PROCESS_IO): Promise<number> {
   const [name, ...rest] = argv;
+  if (name === "help" && rest[0] !== undefined) return printHelp(rest[0], io);
   if (name === undefined || name === "help" || name === "--help" || name === "-h") {
     io.out(CLI_USAGE);
     return name === undefined ? EXIT.usage : EXIT.ok;
@@ -106,6 +127,7 @@ export async function main(argv: readonly string[], io: Io = PROCESS_IO): Promis
     io.err(`jev-cops: unknown command "${name}"\n\n${CLI_USAGE}`);
     return EXIT.usage;
   }
+  if (wantsHelp(rest)) return printHelp(name, io);
   return command(rest, io);
 }
 
