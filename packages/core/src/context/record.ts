@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { canonicalTool } from "../normalizer/normalize.ts";
+import { PATCH_VERB } from "../normalizer/patch.ts";
 import type { NormalizedCommand, NormalizedEvent } from "../normalizer/types.ts";
 import type { ContextConfig } from "./config.ts";
 import { isSecretPath } from "./secrets.ts";
@@ -78,7 +79,7 @@ function makesExecutable(c: NormalizedCommand): boolean {
   });
 }
 
-/** An edit's replacement text: `new_string` (Claude Code) or `newText` (Pi). */
+/** An edit's replacement text in Pi's `edits`: `new_string` or `newText`. */
 function newStringOf(edit: unknown): string {
   if (typeof edit !== "object" || edit === null) return "";
   const key = ["new_string", "newText"].find((k) => Object.hasOwn(edit, k));
@@ -94,10 +95,15 @@ function toolContent(n: NormalizedEvent): { text: string; full: boolean } {
   };
   const edits: unknown = Object.hasOwn(input, "edits") ? input.edits : undefined;
   const editText = Array.isArray(edits) ? edits.map(newStringOf).join("\n") : "";
-  const text = [str("content"), str("new_string"), str("new_source"), editText].join("\n");
+  const replacements = [str("new_string"), str("newString"), str("new_source")];
+  const text = [str("content"), ...replacements, editText].join("\n");
   return { text, full: canonicalTool(n.event.call.tool) === "Write" && str("content") !== "" };
 }
 
+/**
+ * The text a command writes: its arguments and heredoc bodies. A patch command (an
+ * `apply_patch` tool's file operation, patch.ts) carries the lines it adds as its body.
+ */
 function commandContent(c: NormalizedCommand): { text: string; full: boolean } {
   const truncates = c.redirects.some((r) => r.op === ">" || r.op === ">|");
   const full = c.heredocs.length > 0 && truncates;
@@ -120,7 +126,8 @@ function commandWrites(
 ): FileWrite[] {
   const writes = c.pathRefs.filter((r) => r.access === "write");
   if (writes.length === 0) return [];
-  const content = canonicalTool(n.event.call.tool) === "Bash" ? commandContent(c) : toolContent(n);
+  const fromCommand = c.verbs[0] === PATCH_VERB || canonicalTool(n.event.call.tool) === "Bash";
+  const content = fromCommand ? commandContent(c) : toolContent(n);
   const sourceTaint = c.pathRefs
     .filter((r) => r.access !== "write")
     .reduce((max, r) => Math.max(max, base.files.get(r.path)?.taint ?? 0), 0);
@@ -139,7 +146,10 @@ function commandWrites(
 /**
  * Files the event writes. A write's taint is the max of the event's own taint, the
  * taint of any tainted string in the written content, and the taint of self-written
- * files the same command reads (`cp`, `cat a > b`): laundering keeps its taint (T10).
+ * files the same command reads (`cp`, `cat a > b`, a patch's move source): laundering
+ * keeps its taint (T10). The content is the shell command's text, a patch file
+ * operation's added lines, or the tool input's `content`, `new_string` (Claude Code),
+ * `newString` (OpenCode), `new_source` (NotebookEdit) or `edits` (Pi).
  */
 export function fileWrites(
   n: NormalizedEvent,
