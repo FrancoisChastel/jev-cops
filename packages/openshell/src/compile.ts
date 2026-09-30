@@ -133,73 +133,100 @@ function commentMap(
   return out;
 }
 
-/** Compiles `input`; see the module comment. */
-export function compilePolicy(input: CompileInput): CompiledPolicy {
+/** The three fragments of one input. */
+function fragmentsOf(input: CompileInput, judgeHosts: readonly string[]) {
   const { harness, layout } = input;
-  const judgeHosts = judgeHostsOf(input);
-  const protection = protectionFragment({
-    harness,
-    layout,
-    protectedPaths: input.protectedPaths ?? [],
-    privatePaths: input.privatePaths ?? [],
-    extraReadWrite: input.extraReadWrite ?? [],
-  });
-  const judge = judgeRouteFragment(harness, layout, input.judge);
-  const task = taskAllowlistFragment({
-    task: input.task,
-    repo: input.repo,
-    binaries: layout.agentBinaries,
-    judgeHosts,
-  });
-  const policy: OpenShellPolicy = {
+  return {
+    protection: protectionFragment({
+      harness,
+      layout,
+      protectedPaths: input.protectedPaths ?? [],
+      privatePaths: input.privatePaths ?? [],
+      extraReadWrite: input.extraReadWrite ?? [],
+    }),
+    judge: judgeRouteFragment(harness, layout, input.judge),
+    task: taskAllowlistFragment({
+      task: input.task,
+      repo: input.repo,
+      binaries: layout.agentBinaries,
+      judgeHosts,
+    }),
+  };
+}
+
+type Fragments = ReturnType<typeof fragmentsOf>;
+
+function assemble({ protection, judge, task }: Fragments): OpenShellPolicy {
+  return {
     version: 1,
     filesystem_policy: protection.filesystem,
     landlock: protection.landlock,
     ...(protection.process === undefined ? {} : { process: protection.process }),
     network_policies: { ...judge.rules, ...task.rules },
   };
+}
+
+function refusalsOf(f: Fragments, policy: OpenShellPolicy, judgeHosts: readonly string[]) {
   const parsed = parsePolicy(policy);
-  const refusals = [
-    ...protection.refusals,
-    ...judge.refusals,
-    ...task.refusals,
+  return [
+    ...f.protection.refusals,
+    ...f.judge.refusals,
+    ...f.task.refusals,
     ...(parsed.ok ? [] : parsed.error.map((p) => `schema: ${p}`)),
     ...t13Refusals(policy, judgeHosts),
   ];
+}
+
+/** The parts of the result that do not depend on a refusal. */
+function reportOf(
+  input: CompileInput,
+  f: Fragments,
+  backs: { protection: string[]; task: string[] },
+) {
+  return {
+    fragments: [
+      { name: "protection", section: "filesystem", backs: backs.protection },
+      { name: "judge-route", section: "network", backs: [JUDGE_ROUTE_BACKS] },
+      { name: "task-allowlist", section: "network", backs: backs.task },
+    ] as const,
+    absent: [
+      ...f.protection.absent,
+      ...f.judge.absent,
+      ...f.task.absent,
+      ...policyAbsent(input.policies),
+      PROVIDER_RULES,
+    ],
+    gaps: [
+      ...f.protection.gaps,
+      SHARED_IDENTITY,
+      PROVIDER_T13,
+      ...(input.harness === "pi" ? [PI_JUDGE_ROUTE] : []),
+    ],
+  };
+}
+
+/** Compiles `input`; see the module comment. */
+export function compilePolicy(input: CompileInput): CompiledPolicy {
+  const judgeHosts = judgeHostsOf(input);
+  const f = fragmentsOf(input, judgeHosts);
+  const policy = assemble(f);
+  const refusals = refusalsOf(f, policy, judgeHosts);
   const backs = {
     protection: backsOf(input.policies, "protection"),
     task: backsOf(input.policies, "task-allowlist"),
   };
   const hash = inputsHash(normalized(input));
+  const meta = {
+    version: COMPILER_VERSION,
+    inputsHash: hash,
+    backs: commentMap(policy, backs.protection, backs.task),
+  };
   const refused = refusals.length > 0;
   return {
     policy: refused ? null : policy,
-    yaml: refused
-      ? null
-      : emitPolicy(policy, {
-          version: COMPILER_VERSION,
-          inputsHash: hash,
-          backs: commentMap(policy, backs.protection, backs.task),
-        }),
-    updates: refused ? [] : task.updates,
-    fragments: [
-      { name: "protection", section: "filesystem", backs: backs.protection },
-      { name: "judge-route", section: "network", backs: [JUDGE_ROUTE_BACKS] },
-      { name: "task-allowlist", section: "network", backs: backs.task },
-    ],
-    absent: [
-      ...protection.absent,
-      ...judge.absent,
-      ...task.absent,
-      ...policyAbsent(input.policies),
-      PROVIDER_RULES,
-    ],
-    gaps: [
-      ...protection.gaps,
-      SHARED_IDENTITY,
-      PROVIDER_T13,
-      ...(harness === "pi" ? [PI_JUDGE_ROUTE] : []),
-    ],
+    yaml: refused ? null : emitPolicy(policy, meta),
+    updates: refused ? [] : f.task.updates,
+    ...reportOf(input, f, backs),
     refusals,
     judgeHosts,
     inputsHash: hash,

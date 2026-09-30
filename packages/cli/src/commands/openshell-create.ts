@@ -90,7 +90,11 @@ export async function runOpenShellCreate(argv: readonly string[], io: Io): Promi
   io.out(`policy: ${policyFile}`);
   for (const line of planned(options))
     io.out(`${v["dry-run"] === true ? "would run" : "run"}: ${line}`);
-  if (v["dry-run"] === true) return EXIT.ok;
+  return v["dry-run"] === true ? EXIT.ok : create(v, options, io);
+}
+
+/** Runs the planned calls when `openshell` is found. */
+async function create(v: Values, options: CreateOptions, io: Io): Promise<number> {
   const binary = openShellBinary(v);
   if (binary === null) {
     io.err(
