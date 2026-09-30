@@ -38,8 +38,9 @@ harness ◀──allow/deny/rewrite/ask── adapter ◀─verdict────�
 - **Pluggable semantic judge.** TypeSafe Jev, OpenRouter, or any Vercel AI SDK provider,
   all behind one typed interface and mocked in tests. Off by default.
 - **Thin adapters.** Claude Code, Codex, OpenCode, Pi — each under 150 lines, zero policy logic.
-- **Audit trail.** Append-only JSONL with a hash chain; `cops explain <event-id>` shows
-  the features, policies and answers behind any verdict.
+- **Audit trail.** Append-only JSONL with a hash chain and Ed25519-signed checkpoints,
+  shipped off-box over syslog; `cops explain <event-id>` shows the features, policies and
+  answers behind any verdict.
 
 jev-cops is not a sandbox and not the last line of defence. Anything that must never
 happen belongs to a kernel-enforced policy such as [OpenShell](https://github.com/NVIDIA/openshell);
@@ -79,19 +80,47 @@ Start the daemon, register jev-cops with the harness, then check the whole chain
 ./dist/cops install claude-code --dry-run    # the settings diff, nothing written
 ./dist/cops install claude-code              # ~/.claude/settings.json; --project, --local, --managed
 ./dist/cops install pi                       # ~/.pi/agent/extensions/jev-cops.ts; --project
-./dist/cops doctor                           # daemon, audit chain, hooks, canary, gaps
+./dist/cops doctor                           # daemon, audit log, hooks, canary, gaps
 ```
 
 `cops install claude-code` merges the hook into Claude Code's settings (with a backup),
 refuses on a bare `Bash` allow rule (the spec's rule) or `disableAllHooks` (`--force`
 overrides), records the hook binary in `cops.toml`, and runs a canary through the installed
 hook. Both installers print every known gap, and `--uninstall` removes only what they
-added. `cops doctor` checks copsd on both sockets, the audit chain, each harness's install
+added. `cops doctor` checks copsd on both sockets, the audit log, each harness's install
 (hook in force on every event, binary, socket, risky settings, workspace trust), runs the
 same canary through the registered hook, and prints every gap it cannot close; it exits 1
 on any failure. It writes no configuration; the canary leaves audit lines and latches a
 throw-away session in copsd. Details: [adapters/claude-code/README.md](adapters/claude-code/README.md),
 [adapters/pi/README.md](adapters/pi/README.md).
+
+## Audit log
+
+copsd writes every decision to a hash-chained JSONL log (`~/.jev-cops/audit.jsonl`), signs
+checkpoints of the chain with an Ed25519 key kept outside the sandbox, and can ship each
+line off the box over syslog (RFC 5424 over TLS):
+
+```sh
+./dist/cops keygen                  # ~/.jev-cops/keys/audit-ed25519.key (0600) + the .pub for the team
+./dist/cops keygen --rotate         # next key, announced in the log by the old one
+./dist/cops audit verify ~/.jev-cops/audit.jsonl --pubkey audit-ed25519.pub [--remote copy]
+```
+
+```toml
+[audit]
+checkpoint_every = 100
+require_signing = true              # copsd refuses to start without a key
+
+[audit.forward]
+kind = "syslog"                     # or "file"
+target = "siem.example:6514"
+ca_file = "/etc/jev-cops/siem-ca.pem"
+required = false                    # true: past the lag limit, deny-class calls are refused
+```
+
+Without the private key nobody can edit, drop or recompute a line up to the last checkpoint
+unnoticed; a tail cut at a checkpoint shows against the off-box copy (`--remote`, or `cops
+doctor --audit-remote`). Formats and guarantees: [docs/audit.md](docs/audit.md).
 
 ## Writing a policy
 
@@ -125,8 +154,8 @@ described in [packages/judge/README.md](packages/judge/README.md).
 packages/core       event schema, normalizer, context engine, judge interface, policy engine
 packages/sdk        definePolicy, question builders, fixture runner  (@jev-cops/sdk)
 packages/judge      semantic judge providers: TypeSafe Jev, OpenRouter, Vercel AI SDK
-packages/daemon     copsd: socket + loopback HTTP, SQLite stores, hash-chained audit log
-packages/cli        cops test | explain | replay | budget | install | doctor | hook
+packages/daemon     copsd: socket + loopback HTTP, SQLite stores, signed audit log + forwarder
+packages/cli        cops test | explain | replay | budget | install | doctor | hook | keygen | audit
 adapters/           pi (M0) · claude-code command hook (M1) · codex, opencode (M3)
 policies/           starter policy set, one *.fixtures.json per policy
 tests/tamper        T1–T13 anti-tamper acceptance tests (see tests/tamper/README.md)
@@ -137,6 +166,7 @@ docs/               SPEC.md (source of truth), PLAN-M0.md, DECISIONS.md, STATUS.
 
 - [Spec](docs/SPEC.md) — architecture, context model, verdict ladder, policy DSL, threat model
 - [M0 plan](docs/PLAN-M0.md) — modules, interfaces, test list
+- [Audit log](docs/audit.md) — line and syslog message formats, signing, verification
 - [Decisions](docs/DECISIONS.md) — choices the spec left open
 - [Status](docs/STATUS.md) — done / next / blocked
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
