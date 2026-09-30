@@ -65,6 +65,23 @@
         "zod": "^4.6.5",
       },
     },
+    "packages/jev-cops": {
+      "name": "jev-cops",
+      "version": "0.1.0",
+      "bin": {
+        "cops": "./bin/cops.ts",
+        "copsd": "./bin/copsd.ts",
+        "cops-hook": "./bin/cops-hook.ts",
+      },
+      "dependencies": {
+        "@jev-cops/adapter-claude-code": "workspace:*",
+        "@jev-cops/adapter-pi": "workspace:*",
+        "@jev-cops/cli": "workspace:*",
+        "@jev-cops/daemon": "workspace:*",
+        "@jev-cops/policies": "workspace:*",
+        "@jev-cops/sdk": "workspace:*",
+      },
+    },
     "packages/judge": {
       "name": "@jev-cops/judge",
       "version": "0.1.0",
@@ -149,6 +166,8 @@
     "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
     "eventsource-parser": ["eventsource-parser@3.1.1", "", {}, "sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ=="],
+
+    "jev-cops": ["jev-cops@workspace:packages/jev-cops"],
 
     "json-schema": ["json-schema@0.4.0", "", {}, "sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA=="],
 

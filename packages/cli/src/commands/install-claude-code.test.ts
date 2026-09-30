@@ -4,7 +4,7 @@
  * on PATH. Every write is confined to the temp root (install-world.ts) and checked after.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isUnder } from "../../../../adapters/claude-code/testing/fs-guard.ts";
 import { startTestDaemon, type TestDaemon } from "../../../daemon/src/testing/daemon.ts";
@@ -375,6 +375,22 @@ describe("cops install claude-code: other scopes and transports", () => {
     ];
     expect(await runInstallCommand(argv, io, ctx)).toBe(0);
     expect(io.stdout.join("\n")).toContain(`hook ${w.hook} (version ${CLI_VERSION})`);
+    expect(io.stdout.join("\n")).not.toContain("writable by other users");
+  });
+
+  test("a hook other users may write (Bun installs bins 0777) is installed with a warning", async () => {
+    const io = captureIo();
+    chmodSync(w.hook, 0o777);
+    const ctx = w.ctx({ runtime: { execPath: join(w.bin, "cops"), main: "/$bunfs/root/cops" } });
+    const argv = ["claude-code", "--home", w.home, "--socket", enforce.config.daemon.socket];
+    try {
+      expect(await runInstallCommand([...argv, "--dry-run"], io, ctx)).toBe(0);
+    } finally {
+      chmodSync(w.hook, 0o755);
+    }
+    expect(io.stdout.join("\n")).toContain(
+      `${w.hook} is writable by other users (Bun installs package bins mode 0777)`,
+    );
   });
 
   test("no hook binary anywhere", async () => {

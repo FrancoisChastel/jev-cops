@@ -4,7 +4,8 @@
  * path is checked before it is written, and its `--version` must be the CLI's).
  */
 import { accessSync, constants, existsSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, extname, isAbsolute, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Spawn } from "./spawn.ts";
 
 /** The compiled hook's file name (`bun run build:hook`). */
@@ -21,16 +22,44 @@ function isCompiled(main: string): boolean {
   return main.startsWith("/$bunfs/") || main.startsWith("B:/~BUN/");
 }
 
+/** This adapter's own `cops-hook` bin (its package.json `bin`), next to this module. */
+export const OWN_HOOK_ENTRY = fileURLToPath(new URL("./hook-main.ts", import.meta.url));
+
+function isUnderNodeModules(path: string): boolean {
+  return path.split(sep).includes("node_modules");
+}
+
 /**
- * The default hook binary: `cops-hook` next to a compiled `cops` (both in `dist/`), the
- * repo's `dist/cops-hook` when `cops` runs from source (`packages/cli/src/main.ts`), else
- * `cops-hook` on `pathEnv`; null when none exists.
+ * Where `cops-hook` sits for the running `cops`, most specific first:
+ * - compiled `cops`: `cops-hook` next to it (both in `dist/`);
+ * - `cops` from source: a `cops-hook` bin next to its entry file, same extension (the
+ *   `jev-cops` package's `bin/cops.ts` → `bin/cops-hook.ts`), then the repo's
+ *   `dist/cops-hook` (`packages/cli/src/main.ts` → `dist/`).
  */
-export function defaultHookBinary(runtime: CliRuntime, pathEnv: string): string | null {
-  const sibling = isCompiled(runtime.main)
-    ? join(dirname(runtime.execPath), HOOK_BINARY_NAME)
-    : resolve(dirname(runtime.main), "..", "..", "..", "dist", HOOK_BINARY_NAME);
-  if (existsSync(sibling)) return sibling;
+function siblingHooks(runtime: CliRuntime): string[] {
+  if (isCompiled(runtime.main)) return [join(dirname(runtime.execPath), HOOK_BINARY_NAME)];
+  const entryDir = dirname(runtime.main);
+  return [
+    join(entryDir, `${HOOK_BINARY_NAME}${extname(runtime.main)}`),
+    resolve(entryDir, "..", "..", "..", "dist", HOOK_BINARY_NAME),
+  ];
+}
+
+/**
+ * The default hook binary: the `cops-hook` shipped with the running `cops` (see
+ * {@link siblingHooks}), else this adapter's own bin when it is installed from npm (under
+ * `node_modules`: what `@jev-cops/cli` installed without the `jev-cops` package brings,
+ * always the same version), else `cops-hook` on `pathEnv`; null when none exists.
+ * `ownHook` is injectable for tests.
+ */
+export function defaultHookBinary(
+  runtime: CliRuntime,
+  pathEnv: string,
+  ownHook: string = OWN_HOOK_ENTRY,
+): string | null {
+  const sibling = siblingHooks(runtime).find((p) => existsSync(p));
+  if (sibling !== undefined) return sibling;
+  if (isUnderNodeModules(ownHook) && existsSync(ownHook)) return ownHook;
   return Bun.which(HOOK_BINARY_NAME, { PATH: pathEnv });
 }
 
@@ -59,6 +88,19 @@ export function isWritableByMe(path: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * True when users other than the owner may write `path` (group or world write bit, after
+ * symlinks): Bun installs package bins mode 0777, and a hook anyone can rewrite is a hook
+ * anyone can disable.
+ */
+export function isSharedWritable(path: string): boolean {
+  try {
+    return (statSync(path).mode & 0o022) !== 0;
+  } catch {
+    return false; // unreadable: nothing to report here, hookBinaryProblem covers it
   }
 }
 

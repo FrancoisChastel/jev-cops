@@ -18,6 +18,7 @@ import {
   type InstallResult,
   installClaudeCodeHooks,
   isRootLocked,
+  isSharedWritable,
   readSettingsFile,
   registeredPreToolUse,
   restoreSettings,
@@ -52,7 +53,7 @@ export async function checkHookBinary(
   if (path === null) {
     return {
       error:
-        "no cops-hook found next to cops or on PATH: build it (bun run build:hook) or pass --hook-binary",
+        "no cops-hook found next to cops, in its npm install or on PATH: install the jev-cops package, build it (bun run build:hook) or pass --hook-binary",
     };
   }
   const problem = hookBinaryProblem(path);
@@ -168,6 +169,14 @@ function managedWarnings(a: ClaudeInstallArgs, hookBinary: string): string[] {
   ];
 }
 
+/** A non-managed hook that other users may write (Bun installs package bins mode 0777). */
+function sharedWritableWarnings(a: ClaudeInstallArgs, hookBinary: string): string[] {
+  if (a.scope === "managed" || !isSharedWritable(hookBinary)) return [];
+  return [
+    `${hookBinary} is writable by other users (Bun installs package bins mode 0777): anyone on this machine could rewrite the hook; run \`chmod go-w ${hookBinary}\``,
+  ];
+}
+
 /** After the settings are written: cops.toml, state, canary, rollback on a wrong answer. */
 async function finish(
   base: ClaudeReport,
@@ -214,7 +223,12 @@ export async function installClaudeCode(
     ...base,
     hookBinary,
     hookVersion: CLI_VERSION,
-    warnings: [...base.warnings, ...configDirWarnings(s), ...managedWarnings(a, hookBinary)],
+    warnings: [
+      ...base.warnings,
+      ...configDirWarnings(s),
+      ...managedWarnings(a, hookBinary),
+      ...sharedWritableWarnings(a, hookBinary),
+    ],
   };
   const settings = installClaudeCodeHooks(settingsOptions(a, s, ctx, hookBinary));
   const report = { ...withBinary, settings };

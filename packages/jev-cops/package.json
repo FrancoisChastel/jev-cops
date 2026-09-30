@@ -1,0 +1,62 @@
+{
+  "name": "jev-cops",
+  "version": "0.1.0",
+  "description": "Context-aware policing for coding agents: the cops CLI, the copsd judging daemon, the cops-hook Claude Code hook, the Pi extension and the starter policies",
+  "keywords": [
+    "jev-cops",
+    "coding-agents",
+    "ai-agents",
+    "agent-security",
+    "guardrails",
+    "bun",
+    "claude-code",
+    "pi",
+    "hooks",
+    "policy-engine",
+    "audit-log"
+  ],
+  "homepage": "https://github.com/FrancoisChastel/jev-cops#readme",
+  "bugs": {
+    "url": "https://github.com/FrancoisChastel/jev-cops/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "François Chastel (https://github.com/FrancoisChastel)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FrancoisChastel/jev-cops.git",
+    "directory": "packages/jev-cops"
+  },
+  "type": "module",
+  "bin": {
+    "cops": "./bin/cops.ts",
+    "copsd": "./bin/copsd.ts",
+    "cops-hook": "./bin/cops-hook.ts"
+  },
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./bin/cops.ts",
+    "./bin/copsd.ts",
+    "./bin/cops-hook.ts"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "publishConfig": {
+    "provenance": true
+  },
+  "dependencies": {
+    "@jev-cops/adapter-claude-code": "workspace:*",
+    "@jev-cops/adapter-pi": "workspace:*",
+    "@jev-cops/cli": "workspace:*",
+    "@jev-cops/daemon": "workspace:*",
+    "@jev-cops/policies": "workspace:*",
+    "@jev-cops/sdk": "workspace:*"
+  }
+}

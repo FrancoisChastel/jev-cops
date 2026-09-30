@@ -74,7 +74,8 @@ function targetDir(opts: InstallOptions): string {
 }
 
 /**
- * Where the extension source can be: next to this module (source checkout), or, for the
+ * Where the extension source can be: next to this module (a source checkout, or the
+ * installed `@jev-cops/adapter-pi` package, which ships `jev-cops.ts`), or, for the
  * compiled `dist/cops`, in the repository the binary was built in (`dist/../adapters/pi`).
  * It is not embedded: Bun keys its module cache by path, so a text import of `jev-cops.ts`
  * collides with the module import of the same file.
@@ -95,7 +96,7 @@ function readExtension(candidates: readonly string[]): string {
     }
   }
   throw new Error(
-    `the Pi extension source was not found (${candidates.join(", ")}); run cops from the jev-cops checkout`,
+    `the Pi extension source was not found (${candidates.join(", ")}); reinstall the jev-cops package or run cops from the jev-cops checkout`,
   );
 }
 
