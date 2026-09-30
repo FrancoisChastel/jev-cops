@@ -74,6 +74,15 @@
         "zod": "^4.6.5",
       },
     },
+    "packages/openshell": {
+      "name": "@jev-cops/openshell",
+      "version": "0.0.0",
+      "dependencies": {
+        "@jev-cops/core": "workspace:*",
+        "@jev-cops/judge": "workspace:*",
+        "zod": "^4.6.5",
+      },
+    },
     "packages/sdk": {
       "name": "@jev-cops/sdk",
       "version": "0.0.0",
@@ -119,6 +128,8 @@
     "@jev-cops/daemon": ["@jev-cops/daemon@workspace:packages/daemon"],
 
     "@jev-cops/judge": ["@jev-cops/judge@workspace:packages/judge"],
+
+    "@jev-cops/openshell": ["@jev-cops/openshell@workspace:packages/openshell"],
 
     "@jev-cops/sdk": ["@jev-cops/sdk@workspace:packages/sdk"],
 
