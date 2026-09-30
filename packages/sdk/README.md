@@ -1,7 +1,8 @@
 # @jev-cops/sdk — policy author guide
 
 A policy is one file `policies/<name>.ts` whose default export is `definePolicy({...})`, next
-to a `policies/<name>.fixtures.json`. Import only from `@jev-cops/sdk`.
+to a `policies/<name>.fixtures.json`. Import only from `@jev-cops/sdk` and the shared helpers
+in `policies/_lib/` (see **Helpers**).
 
 ```ts
 import { definePolicy, jev } from "@jev-cops/sdk";
@@ -39,6 +40,16 @@ judge's own inputs) and `config.privatePaths` (`[policy] privatePaths` plus the 
 records: audit log, store, `~/.jev-cops/`; absolute, and a `!` entry exempts a path such as a
 socket or the policies dir; the longest matching entry decides). A read of a private path is
 what `config-tamper` holds: those files carry the scores agent channels never do (T6).
+
+**Helpers.** Code shared by policies lives in `policies/_lib/`; import it relatively
+(`import { pathTier, placeTrees } from "./_lib/config-trees.ts"`). Any `_`-prefixed entry of
+the policies directory (`_lib/`, `_shared.ts`) is a helper, never a policy: the loader,
+`cops test` and `policies/policies.test.ts` skip it and its fixture files. Only
+`@jev-cops/sdk` and `./_lib/*` imports are allowed in a policy file, and only `@jev-cops/sdk`
+and its siblings in a `_lib/` module (`policies.test.ts` checks both). `_lib/` sits inside the
+policies directory, so the daemon protects it the same way (an agent's write there is a
+`kill`). Hot reload re-imports changed policy files only: after editing a helper, restart
+copsd. `_lib/config-trees.ts` holds the harness and judge tier trees `config-tamper` uses.
 
 **Fixtures.** `{ "policy": "<name>", "cases": [{ "name", "event": <pre event>, "history"?:
 [pre|post events], "task"?, "answers"?: { "<question>": Answer }, "config"?: { "context"?,
