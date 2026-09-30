@@ -5,6 +5,7 @@ import { runDoctorCommand } from "./commands/doctor.ts";
 import { runExplainCommand } from "./commands/explain.ts";
 import { runHookCommand } from "./commands/hook.ts";
 import { INSTALL_USAGE, runInstallCommand } from "./commands/install.ts";
+import { runKeygenCommand } from "./commands/keygen.ts";
 import { runReplayCommand } from "./commands/replay.ts";
 import { runTestCommand } from "./commands/test.ts";
 import { EXIT, type Io, PROCESS_IO } from "./io.ts";
@@ -41,6 +42,13 @@ Commands:
                                            audit lines and latches a throw-away session
                                            in copsd
 ${INSTALL_USAGE}
+  keygen [--rotate] [--config path] [--admin-socket path] [--json]
+                                           create the Ed25519 key copsd signs audit
+                                           checkpoints with ([audit] key, 0600) and its
+                                           public key for the cyber team; --rotate leaves
+                                           the next key pending and asks a running copsd
+                                           to switch (a rotation checkpoint signed by the
+                                           old key), else it switches at its next start
   help                                     this text
 
 Exit codes:
@@ -62,6 +70,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   hook: runHookCommand,
   install: runInstallCommand,
   doctor: runDoctorCommand,
+  keygen: runKeygenCommand,
 };
 
 /** Runs `jev-cops` with `argv` (without the binary name); resolves with the exit code. */
