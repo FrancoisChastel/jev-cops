@@ -164,8 +164,12 @@ and every transport but https turned off, `--depth 1`, 20 s, 100 MiB, pinned to 
 `bun test packages/scanner` runs the contract suite (11 checks over `none`, `skillspector`
 and `command`) against a fake `skillspector` that the tests compile once with
 `bun build --compile`. Nothing touches the network or the real home directory. The real
-tool runs only on request:
+tool runs only on request, and only inside a container, never against the host's own
+install:
 
 ```bash
-JEV_COPS_SCANNER_LIVE=1 bun test packages/scanner/src/live.test.ts   # needs skillspector on PATH
+# SkillSpector in its own image (docker build -t skillspector <clone of NVIDIA/SkillSpector>):
+JEV_COPS_SCANNER_LIVE_IMAGE=skillspector bun test packages/scanner/src/live.test.ts
+# or, with the test itself running in a container that has skillspector on PATH:
+JEV_COPS_SCANNER_LIVE=1 bun test packages/scanner/src/live.test.ts
 ```
