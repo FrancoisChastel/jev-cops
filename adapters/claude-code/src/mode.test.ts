@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   detectMode,
   isClaude,
@@ -107,6 +110,30 @@ describe("process readers", () => {
     expect(readProc(2 ** 22 + 12_345)).toBeNull();
     expect(readProc(0)).toBeNull();
     if (process.platform !== "linux") expect(readProc(process.pid, "/nonexistent/ps")).toBeNull();
+  });
+
+  test("readProc never runs a `ps` found on PATH: an agent-writable PATH entry cannot fake the parent", () => {
+    // Found by the M1 live capture: `/opt/homebrew/bin` is user-writable on Apple-silicon
+    // Homebrew and precedes /bin, so a planted `ps` could make a headless run look
+    // interactive. The hook starts with Claude Code's PATH, so the reader runs in a child
+    // process started with the planted directory first.
+    const dir = mkdtempSync(join(tmpdir(), "jvcc-ps-"));
+    const fake = join(dir, "ps");
+    writeFileSync(fake, "#!/bin/sh\necho '1 claude'\n");
+    chmodSync(fake, 0o755);
+    const mode = join(import.meta.dir, "mode.ts");
+    const code = `const { readProc } = await import(${JSON.stringify(mode)}); console.log(JSON.stringify(readProc(process.pid)));`;
+    try {
+      const run = Bun.spawnSync([process.execPath, "-e", code], {
+        env: { PATH: `${dir}:${process.env.PATH ?? "/usr/bin:/bin"}` },
+        stdout: "pipe",
+      });
+      const seen = JSON.parse(run.stdout.toString()) as ProcInfo | null;
+      expect(seen?.args).not.toEqual(["claude"]);
+      expect(seen?.args.join(" ")).toContain("readProc");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("parsePsLine: `ps -o ppid= -o args=`", () => {

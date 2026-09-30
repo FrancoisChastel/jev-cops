@@ -33,6 +33,12 @@ const CLAUDE_PACKAGE = /[\\/]claude-code[\\/]/i;
 /** A cluster of short flags (`-cp`) that includes `p`. */
 const SHORT_CLUSTER = /^-[A-Za-z]*p[A-Za-z]*$/;
 const PS_TIMEOUT_MS = 1_000;
+/**
+ * `ps` by absolute path, never from `PATH`: the hook inherits Claude Code's `PATH`, whose
+ * entries before `/bin` (e.g. Homebrew's `/opt/homebrew/bin`) may be writable by the agent,
+ * and a planted `ps` could make a headless run look interactive (found by the M1 live run).
+ */
+export const PS_PATH = "/bin/ps";
 
 function isPrint(flag: string): boolean {
   return flag === "--print" || SHORT_CLUSTER.test(flag);
@@ -129,8 +135,8 @@ function readPs(pid: number, ps: string): ProcInfo | null {
   }
 }
 
-/** Reads a process: `/proc` on Linux, `ps` elsewhere (macOS); `ps` names the binary to run. */
-export function readProc(pid: number, ps = "ps"): ProcInfo | null {
+/** Reads a process: `/proc` on Linux, `ps` elsewhere (macOS); `ps` is the binary to run. */
+export function readProc(pid: number, ps = PS_PATH): ProcInfo | null {
   if (!Number.isInteger(pid) || pid <= 0) return null;
   return process.platform === "linux" ? readLinux(pid) : readPs(pid, ps);
 }
