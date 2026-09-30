@@ -173,11 +173,19 @@ function nestedCode(ctx: CommandContext): string[] {
   return [...ctx.raw.heredocs, ...(readsPipe(ctx) ? piped : [])];
 }
 
-function argRefs(raw: RawCommand, c: Classification, cwd: string): PathRef[] {
+const LEADING_TILDE = /^~(?=\/|$)/;
+
+/**
+ * Resolved path arguments: only from literal words; a `tilde` value gets the configured
+ * home for its leading `~`; an `implicit` path (not a word of its own) has an empty `raw`.
+ */
+function argRefs(raw: RawCommand, c: Classification, scope: CommandOptions): PathRef[] {
   return c.paths.flatMap((p) => {
     const word = raw.words[p.index];
-    const path = word?.literal === true ? absolutize(p.value, cwd) : null;
-    return path === null ? [] : [{ raw: word?.raw ?? p.value, path, access: p.access }];
+    if (word?.literal !== true) return [];
+    const value = p.tilde === true ? p.value.replace(LEADING_TILDE, scope.home) : p.value;
+    const path = absolutize(value, scope.cwd);
+    return path === null ? [] : [{ raw: p.implicit ? "" : word.raw, path, access: p.access }];
   });
 }
 
@@ -198,7 +206,7 @@ function unique(values: ReadonlyArray<string>): string[] {
 
 function buildCommand(ctx: CommandContext, scope: Scope, redirects: PathRef[]): NormalizedCommand {
   const { raw, c } = ctx;
-  const pathRefs = [...argRefs(raw, c, scope.cwd), ...redirects];
+  const pathRefs = [...argRefs(raw, c, scope), ...redirects];
   return {
     argv: argvOf(raw),
     env: { ...raw.env, ...c.env },

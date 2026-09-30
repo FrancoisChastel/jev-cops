@@ -79,6 +79,8 @@ describe("classifyArgv: file verbs", () => {
         ["a", "read"],
         ["b", "read"],
         ["dst", "write"],
+        ["dst/a", "write"],
+        ["dst/b", "write"],
       ],
     ],
     [
@@ -86,6 +88,7 @@ describe("classifyArgv: file verbs", () => {
       [
         ["a", "delete"],
         ["dst", "write"],
+        ["dst/a", "write"],
       ],
     ],
     [["chmod", "755", "f"], [["f", "write"]]],

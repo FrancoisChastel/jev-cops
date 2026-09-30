@@ -3,15 +3,15 @@ import type { PathAccess, PathArg } from "./types.ts";
 
 /**
  * How a file verb's positionals map to paths: `valueOpts` consume a value, `patternOpts`
- * (when absent) mean the first positional is a pattern or script, `skip` drops leading
- * positionals (a chmod mode), and `last` is the access of the final one (a cp target).
+ * (when absent) mean the first positional is a pattern or script, and `skip` drops leading
+ * positionals (a chmod mode). Copy-like verbs (`cp`, `mv`, `ln`, `install`) have their own
+ * rule (`copyPaths` in writers.ts).
  */
 export interface FileRule {
   access: PathAccess;
   valueOpts?: ReadonlyArray<string>;
   patternOpts?: ReadonlyArray<string>;
   skip?: number;
-  last?: PathAccess;
 }
 
 const GREP_VALUE = ["-e", "-f", "-m", "-A", "-B", "-C", "--regexp", "--file", "--max-count"];
@@ -40,9 +40,6 @@ export const FILE_RULES: Readonly<Record<string, FileRule>> = {
   awk: { access: "read", valueOpts: ["-F", "-v", "-f"], patternOpts: ["-f"] },
   sed: { access: "read", valueOpts: SED_VALUE, patternOpts: SED_PATTERN },
   tee: { access: "write" },
-  cp: { access: "read", valueOpts: ["-t", "--target-directory", "-S"], last: "write" },
-  mv: { access: "delete", valueOpts: ["-t", "--target-directory", "-S"], last: "write" },
-  ln: { access: "read", valueOpts: ["-t", "--target-directory", "-S"], last: "write" },
   touch: { access: "write", valueOpts: ["-t", "-d", "-r", "--date", "--reference"] },
   mkdir: { access: "write", valueOpts: ["-m", "--mode"] },
   chmod: { access: "write", valueOpts: ["--reference"], skip: 1 },
@@ -69,14 +66,11 @@ export function filePaths(
   const parsed = parseArgs(args, new Set(rule.valueOpts ?? []));
   const needsPattern = rule.patternOpts !== undefined && !hasOption(parsed, rule.patternOpts);
   const files = parsed.positionals.slice((needsPattern ? 1 : 0) + (rule.skip ?? 0));
-  return files.map((p, i) => {
-    const isLast = rule.last !== undefined && files.length > 1 && i === files.length - 1;
-    return {
-      value: p.value,
-      index: base + p.index,
-      access: isLast && rule.last ? rule.last : (access ?? rule.access),
-    };
-  });
+  return files.map((p) => ({
+    value: p.value,
+    index: base + p.index,
+    access: access ?? rule.access,
+  }));
 }
 
 /** `["rm", "recursive"?, "force"?]` from rm's flags. */

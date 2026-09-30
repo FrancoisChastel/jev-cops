@@ -2,6 +2,7 @@ import type { CallKind } from "../schema/event.ts";
 import { scpHost } from "./net.ts";
 import { hasOption, lookup, type ParsedArgs, parseArgs } from "./options.ts";
 import type { PathAccess, PathArg } from "./types.ts";
+import { lastOption, pathArg, workDir } from "./writers.ts";
 
 /** git subcommand → kind; subcommands not listed are `exec`. */
 export const GIT_SUBCOMMAND_KINDS: Readonly<Record<string, CallKind>> = {
@@ -33,6 +34,7 @@ const SUB_VALUE_OPTS: Readonly<Record<string, ReadonlySet<string>>> = {
   restore: new Set(["-s", "--source"]),
   push: new Set(["-o", "--push-option", "--repo"]),
   clone: new Set(["-b", "--branch", "--depth", "-o", "--origin", "--reference"]),
+  apply: new Set(["-p", "-C", "--directory", "--exclude", "--include", "--whitespace"]),
 };
 const PATH_SUBCOMMANDS: Readonly<Record<string, PathAccess>> = {
   add: "write",
@@ -127,6 +129,24 @@ function subcommandPaths(
   return named.map((p) => ({ value: p.value, index: base + p.index, access }));
 }
 
+const APPLY_READ_ONLY = ["--check", "--stat", "--numstat", "--summary"];
+
+/**
+ * `git apply`: the patches are read; the files they name are written under the work tree,
+ * which the normalizer cannot list: `unknown` access to the `-C` dir, else the cwd. Only
+ * `--check`/`--stat`/`--numstat`/`--summary` without `--apply` stay reads.
+ */
+function applyPaths(global: ParsedArgs, parsed: ParsedArgs, base: number, subBase: number) {
+  const patches = parsed.positionals.map((p) => pathArg(p, subBase, "read"));
+  const readOnly = hasOption(parsed, APPLY_READ_ONLY) && !hasOption(parsed, ["--apply"]);
+  if (readOnly) return patches;
+  const chdir = lastOption(global, ["-C"]);
+  return [
+    chdir === undefined ? workDir(base, "unknown") : pathArg(chdir, base, "unknown"),
+    ...patches,
+  ];
+}
+
 /** What a git invocation does: kind, verbs (with force/hard/irreversible), paths, hosts. */
 export interface GitReading {
   kind: CallKind;
@@ -157,7 +177,10 @@ export function readGit(args: ReadonlyArray<string>, base: number): GitReading {
   const subArgs = args.slice(first.index + 1);
   const subBase = base + first.index + 1;
   const parsed = parseArgs(subArgs, lookup(SUB_VALUE_OPTS, sub) ?? new Set());
-  const paths = subcommandPaths(sub, parsed, subArgs, subBase);
+  const paths =
+    sub === "apply"
+      ? applyPaths(global, parsed, base, subBase)
+      : subcommandPaths(sub, parsed, subArgs, subBase);
   const hosts = NET_SUBCOMMANDS.has(sub)
     ? parsed.positionals.map((p) => scpHost(p.value)).filter((h): h is string => h !== null)
     : [];

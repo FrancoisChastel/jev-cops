@@ -125,4 +125,15 @@ export interface PathArg {
   value: string;
   index: number;
   access: PathAccess;
+  /**
+   * A leading `~` in `value` is the home directory. Bash expands it after the `=` of an
+   * assignment-shaped word (`dd of=~/x`); the word evaluator only expands a leading one.
+   */
+  tilde?: true;
+  /**
+   * Not a word of the command but a path it implies: the directory `tar -x` extracts into,
+   * where a copy lands (`cp x/.claude ~` writes `~/.claude`). `index` is the word it derives
+   * from (dropped when that word is dynamic); its `raw` is empty, so it is no taint token.
+   */
+  implicit?: true;
 }

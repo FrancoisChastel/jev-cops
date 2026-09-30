@@ -199,9 +199,14 @@ export const SSH_VALUE_OPTS: ReadonlySet<string> = new Set(
   ]),
 );
 const NC_VALUE_OPTS = new Set(["-p", "-s", "-w", "-i", "-x", "-X", "-q", "-e", "-c", "-I", "-O"]);
-/** rsync options that take a value. */
+/** rsync options that take a value (when not written `--opt=value`). */
 export const RSYNC_VALUE_OPTS: ReadonlySet<string> = new Set([
-  ...["-e", "--rsh", "--rsync-path", "--exclude", "--include", "-f", "--filter"],
+  ...["-e", "--rsh", "--rsync-path", "--exclude", "--include", "-f", "--filter", "-T"],
+  ...["--files-from", "--exclude-from", "--include-from", "--backup-dir", "--suffix"],
+  ...["--log-file", "--password-file", "--partial-dir", "--temp-dir", "--link-dest"],
+  ...["--compare-dest", "--copy-dest", "--chmod", "--chown", "--port", "--timeout"],
+  ...["--bwlimit", "--max-size", "--min-size", "-B", "--block-size", "-M", "--remote-option"],
+  ...["--out-format", "--info", "--debug", "--iconv", "--usermap", "--groupmap"],
 ]);
 
 function firstPositional(args: ReadonlyArray<string>, valueOpts: ReadonlySet<string>): string[] {

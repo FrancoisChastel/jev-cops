@@ -10,12 +10,31 @@ import { loadEventFixture } from "../../../../tests/fixtures/events/index.ts";
 import { parseEvent } from "../schema/event.ts";
 import { normalizeCommand } from "./command.ts";
 import { normalize } from "./normalize.ts";
-import type { NormalizedScript } from "./types.ts";
+import type { NormalizedScript, PathAccess } from "./types.ts";
 
 const FIXTURES = loadCommandFixtures();
 
 function sorted(values: ReadonlyArray<string>): string[] {
   return [...values].sort();
+}
+
+const ACCESS_RANK: Readonly<Record<PathAccess, number>> = {
+  read: 0,
+  unknown: 1,
+  exec: 2,
+  write: 3,
+  delete: 4,
+};
+
+/** Each path's most severe access, as `e.fs.access` reports it to policies. */
+function accessOf(n: NormalizedScript): Record<string, PathAccess> {
+  const worst = new Map<string, PathAccess>();
+  for (const r of n.commands.flatMap((c) => c.pathRefs)) {
+    const prev = worst.get(r.path);
+    if (prev === undefined || ACCESS_RANK[r.access] > ACCESS_RANK[prev])
+      worst.set(r.path, r.access);
+  }
+  return Object.fromEntries(worst);
 }
 
 /** A bash row through `normalizeCommand`; a tool row as a whole pre event through `normalize`. */
@@ -42,7 +61,7 @@ describe("tests/fixtures/commands/commands.json", () => {
     const n = await normalizeRow(row);
 
     // Assert
-    const { kind, verbs, hosts, paths, opaque } = row.expect;
+    const { kind, verbs, hosts, paths, opaque, access } = row.expect;
     expect(n.kind).toBe(kind as never);
     if (verbs !== undefined) {
       expect(n.commands.flatMap((c) => c.verbs)).toEqual(expect.arrayContaining(verbs));
@@ -52,5 +71,6 @@ describe("tests/fixtures/commands/commands.json", () => {
     if (opaque !== undefined) {
       expect(sorted([...new Set(n.opaque.map((o) => o.reason))])).toEqual(sorted(opaque));
     }
+    if (access !== undefined) expect(accessOf(n)).toMatchObject(access);
   });
 });

@@ -9,7 +9,8 @@ export const FIXTURE_HOME = "/home/dev";
  * What a row asserts about its normalization. Only the keys present are checked: `kind`
  * is the event-level kind; `verbs` must all appear among the commands' verbs; `hosts`,
  * `paths` and `opaque` (the distinct reasons) must match exactly, in any order. An empty
- * list asserts "none".
+ * list asserts "none". `access` maps listed paths to their most severe access
+ * (delete > write > exec > unknown > read, as policies see it in `e.fs.access`).
  */
 export interface CommandExpectation {
   kind: string;
@@ -17,6 +18,7 @@ export interface CommandExpectation {
   hosts?: string[];
   paths?: string[];
   opaque?: string[];
+  access?: Record<string, string>;
 }
 
 /**

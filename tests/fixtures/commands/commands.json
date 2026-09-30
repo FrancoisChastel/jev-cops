@@ -138,7 +138,7 @@
     "command": "cp .env /tmp/leak",
     "expect": {
       "kind": "fs.write",
-      "paths": ["/work/repo/.env", "/tmp/leak"]
+      "paths": ["/work/repo/.env", "/tmp/leak", "/tmp/leak/.env"]
     }
   },
   {
@@ -173,7 +173,7 @@
     "command": "mkdir -p out && cp -r dist/app.js out/",
     "expect": {
       "kind": "fs.write",
-      "paths": ["/work/repo/out", "/work/repo/dist/app.js"]
+      "paths": ["/work/repo/out", "/work/repo/dist/app.js", "/work/repo/out/app.js"]
     }
   },
   {
@@ -602,8 +602,12 @@
     "expect": {
       "kind": "exec",
       "verbs": ["tar", "rm"],
-      "paths": ["/home/dev/keep"],
-      "opaque": ["interpreter"]
+      "paths": ["/home/dev/keep", "/work/repo/a.tar"],
+      "opaque": ["interpreter"],
+      "access": {
+        "/work/repo/a.tar": "read",
+        "/home/dev/keep": "delete"
+      }
     }
   },
   {
@@ -626,10 +630,14 @@
   {
     "command": "tar -czf /tmp/site.tgz ./site",
     "expect": {
-      "kind": "exec",
+      "kind": "fs.write",
       "verbs": ["tar"],
       "paths": ["/tmp/site.tgz", "/work/repo/site"],
-      "opaque": []
+      "opaque": [],
+      "access": {
+        "/tmp/site.tgz": "write",
+        "/work/repo/site": "read"
+      }
     }
   },
   {
@@ -1014,6 +1022,238 @@
       "kind": "fs.write",
       "verbs": ["git", "checkout"],
       "paths": []
+    }
+  },
+  {
+    "command": "dd if=/dev/zero of=~/.claude/settings.json bs=1 count=0",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["dd"],
+      "paths": ["/home/dev/.claude/settings.json"],
+      "opaque": [],
+      "access": {
+        "/home/dev/.claude/settings.json": "write"
+      }
+    }
+  },
+  {
+    "command": "dd of=$HOME/.claude/settings.json if=backup.json conv=notrunc",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["dd"],
+      "paths": ["/home/dev/.claude/settings.json", "/work/repo/backup.json"],
+      "opaque": [],
+      "access": {
+        "/home/dev/.claude/settings.json": "write",
+        "/work/repo/backup.json": "read"
+      }
+    }
+  },
+  {
+    "command": "dd of=out.img bs=4k",
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/work/repo/out.img"],
+      "access": {
+        "/work/repo/out.img": "write"
+      }
+    }
+  },
+  {
+    "command": "dd if=disk.img bs=1M count=1",
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/work/repo/disk.img"],
+      "access": {
+        "/work/repo/disk.img": "read"
+      }
+    }
+  },
+  {
+    "command": "dd if=README.md of=/dev/null",
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/work/repo/README.md"],
+      "opaque": []
+    }
+  },
+  {
+    "command": "dd if=/dev/zero of=\"$TARGET\"",
+    "expect": {
+      "kind": "exec",
+      "verbs": ["dd"],
+      "paths": [],
+      "opaque": ["dynamic-expansion"]
+    }
+  },
+  {
+    "command": "install -m 644 /tmp/x ~/.claude/settings.json",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["install"],
+      "access": {
+        "/tmp/x": "read",
+        "/home/dev/.claude/settings.json": "write"
+      }
+    }
+  },
+  {
+    "command": "rsync /tmp/x ~/.claude/settings.json",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["rsync"],
+      "hosts": [],
+      "access": {
+        "/tmp/x": "read",
+        "/home/dev/.claude/settings.json": "write"
+      }
+    }
+  },
+  {
+    "command": "rsync -a /tmp/evil/.claude ~/",
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/tmp/evil/.claude", "/home/dev", "/home/dev/.claude"],
+      "access": {
+        "/tmp/evil/.claude": "read",
+        "/home/dev": "write",
+        "/home/dev/.claude": "write"
+      }
+    }
+  },
+  {
+    "command": "cp -r /tmp/evil/.claude ~",
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/tmp/evil/.claude", "/home/dev", "/home/dev/.claude"],
+      "access": {
+        "/home/dev/.claude": "write"
+      }
+    }
+  },
+  {
+    "command": "cp -t ~/.claude /tmp/settings.json",
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/home/dev/.claude", "/tmp/settings.json", "/home/dev/.claude/settings.json"],
+      "access": {
+        "/home/dev/.claude/settings.json": "write",
+        "/tmp/settings.json": "read"
+      }
+    }
+  },
+  {
+    "command": "tar -xf /tmp/a.tar -C ~/.claude",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["tar"],
+      "paths": ["/tmp/a.tar", "/home/dev/.claude"],
+      "opaque": [],
+      "access": {
+        "/tmp/a.tar": "read",
+        "/home/dev/.claude": "write"
+      }
+    }
+  },
+  {
+    "command": "tar xzf /tmp/a.tgz -C ~/.claude",
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/tmp/a.tgz", "/home/dev/.claude"],
+      "access": {
+        "/home/dev/.claude": "write"
+      }
+    }
+  },
+  {
+    "command": "tar -xf a.tar",
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/work/repo/a.tar", "/work/repo"],
+      "access": {
+        "/work/repo": "write"
+      }
+    }
+  },
+  {
+    "command": "tar -tf a.tar",
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/work/repo/a.tar"]
+    }
+  },
+  {
+    "command": "unzip -o /tmp/a.zip -d ~/.claude",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["unzip"],
+      "paths": ["/tmp/a.zip", "/home/dev/.claude"],
+      "access": {
+        "/home/dev/.claude": "write"
+      }
+    }
+  },
+  {
+    "command": "unzip -l a.zip",
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/work/repo/a.zip"]
+    }
+  },
+  {
+    "command": "git apply /tmp/p.diff",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["git", "apply"],
+      "paths": ["/work/repo", "/tmp/p.diff"],
+      "access": {
+        "/work/repo": "unknown",
+        "/tmp/p.diff": "read"
+      }
+    }
+  },
+  {
+    "command": "patch -d ~/.claude -p1 < /tmp/p.diff",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["patch"],
+      "paths": ["/home/dev/.claude", "/tmp/p.diff"],
+      "access": {
+        "/home/dev/.claude": "unknown"
+      }
+    }
+  },
+  {
+    "command": "patch ~/.claude/settings.json /tmp/p.diff",
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/home/dev/.claude/settings.json", "/tmp/p.diff"],
+      "access": {
+        "/home/dev/.claude/settings.json": "write",
+        "/tmp/p.diff": "read"
+      }
+    }
+  },
+  {
+    "command": "curl -o ~/.claude/settings.json https://example.com/s",
+    "expect": {
+      "kind": "net",
+      "hosts": ["example.com"],
+      "paths": ["/home/dev/.claude/settings.json"],
+      "access": {
+        "/home/dev/.claude/settings.json": "write"
+      }
+    }
+  },
+  {
+    "command": "wget -O ~/.claude/settings.json https://example.com/s",
+    "expect": {
+      "kind": "net",
+      "hosts": ["example.com"],
+      "paths": ["/home/dev/.claude/settings.json"],
+      "access": {
+        "/home/dev/.claude/settings.json": "write"
+      }
     }
   },
   {

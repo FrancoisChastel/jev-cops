@@ -1,5 +1,6 @@
 import { posix } from "node:path";
 import type { CallKind } from "../schema/event.ts";
+import { classifyPatch, classifyUnzip } from "./archives.ts";
 import {
   classifyRsync,
   classifySsh,
@@ -17,6 +18,7 @@ import { readCurl, readWget, urlHost, verbHosts } from "./net.ts";
 import { hasOption, lookup, optionValue, type Positional, parseArgs } from "./options.ts";
 import { looksLikePath } from "./paths.ts";
 import type { PathArg } from "./types.ts";
+import { COPY_RULES, classifyDd, copyPaths } from "./writers.ts";
 
 export {
   type CarriedCode,
@@ -35,13 +37,15 @@ function kinds(kind: CallKind, verbs: ReadonlyArray<string>): Record<string, Cal
 
 /**
  * Verb → kind for commands classified by name alone; anything absent is `exec`.
- * `sed`, `rsync`, `git`, `npm`, `pip`, `docker`, wrappers and interpreters have their
- * own rules (sed -n reads / -i writes, rsync is net only with a remote).
+ * `sed`, `rsync`, `tar`, `dd`, `git`, `npm`, `pip`, `docker`, wrappers and interpreters
+ * have their own rules (sed -n reads / -i writes, rsync is net only with a remote, dd
+ * writes with `of=`, tar and unzip list or extract).
  */
 export const VERB_KINDS: Readonly<Record<string, CallKind>> = {
   ...kinds("fs.read", ["cat", "head", "tail", "less", "more", "awk", "grep", "rg", "find"]),
   ...kinds("fs.read", ["ls", "stat", "file", "wc", "strings"]),
   ...kinds("fs.write", ["tee", "cp", "mv", "touch", "mkdir", "chmod", "chown", "ln"]),
+  ...kinds("fs.write", ["install", "patch"]),
   ...kinds("fs.delete", ["rm", "unlink", "rmdir", "shred", "truncate"]),
   ...kinds("net", ["curl", "wget", "ssh", "scp", "sftp", "nc", "ncat", "telnet", "ftp"]),
   ...kinds("spawn", ["tmux", "screen"]),
@@ -239,9 +243,15 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
     case "rm":
       return plain("fs.delete", rmVerbs(args), { paths: filePaths("rm", args, base) });
     case "rsync":
-      return classifyRsync(args);
+      return classifyRsync(args, base);
     case "tar":
-      return classifyTar(args);
+      return classifyTar(args, base);
+    case "dd":
+      return classifyDd(args, base);
+    case "unzip":
+      return classifyUnzip(args, base);
+    case "patch":
+      return classifyPatch(args, base);
     case "ssh":
       return classifySsh(args);
     case "scp":
@@ -258,8 +268,9 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
   const harness = classifyHarness(name, args);
   if (harness !== null) return harness;
   if (lookup(SUBCOMMAND_KINDS, name) !== undefined) return classifySubcommand(name, args);
+  const copies = lookup(COPY_RULES, name) !== undefined;
   return plain(lookup(VERB_KINDS, name) ?? "exec", [name], {
-    paths: filePaths(name, args, base),
+    paths: copies ? copyPaths(name, args, base) : filePaths(name, args, base),
     hosts: verbHosts(name, args),
   });
 }
@@ -269,15 +280,16 @@ function unique(values: ReadonlyArray<string>): string[] {
 }
 
 /**
- * Adds path-shaped words no rule claimed and URL hosts. A command name is an `exec`
- * path only when it contains a slash (`./x.sh`), so the `.` builtin is not a path.
+ * Adds path-shaped words no rule claimed (an implicit path claims no word) and URL hosts.
+ * A command name is an `exec` path only when it contains a slash (`./x.sh`), so the `.`
+ * builtin is not a path.
  */
 function withGenericArgs(
   c: Classification,
   argv: ReadonlyArray<string>,
   base: number,
 ): Classification {
-  const claimed = new Set(c.paths.map((p) => p.index));
+  const claimed = new Set(c.paths.filter((p) => p.implicit !== true).map((p) => p.index));
   const extra = argv.flatMap((value, i): PathArg[] => {
     if (claimed.has(base + i) || value.startsWith("-") || !looksLikePath(value)) return [];
     if (i === 0 && !value.includes("/")) return [];

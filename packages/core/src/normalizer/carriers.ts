@@ -1,7 +1,9 @@
 import type { CallKind } from "../schema/event.ts";
+import { readTar } from "./archives.ts";
 import { type CarriedCode, type Classification, plain } from "./classification.ts";
 import { RSYNC_VALUE_OPTS, SSH_VALUE_OPTS, verbHosts } from "./net.ts";
 import { type ParsedArgs, type ParsedOption, parseArgs } from "./options.ts";
+import { rsyncPaths } from "./writers.ts";
 
 /**
  * Commands that carry another command in an argument (M3 of the M0 gate review): the
@@ -68,15 +70,21 @@ const CHECKPOINT_EXEC = /^exec=(.*)$/s;
 /**
  * `tar`: the programs of `--to-command`, `--use-compress-program`/`-I`, `--info-script`
  * /`--new-volume-script`/`-F`, `--rsh-command` and `--checkpoint-action=exec=…` are
- * carried code (local, opaque). Kind stays `exec`; paths come from the generic rule.
+ * carried code (local, opaque). Kind and paths from {@link readTar} (what it reads and
+ * writes by mode); `base` is the argv index of `args[0]`.
  */
-export function classifyTar(args: ReadonlyArray<string>): Classification {
+export function classifyTar(args: ReadonlyArray<string>, base: number): Classification {
   const parsed = parseArgs(args, TAR_VALUE_OPTS);
   const checkpoints = values(parsed, ["--checkpoint-action"])
     .map((v) => CHECKPOINT_EXEC.exec(v)?.[1])
     .filter((c): c is string => c !== undefined && c !== "");
   const codes = [...values(parsed, TAR_CODE_OPTS), ...checkpoints];
-  return plain("exec", ["tar"], codes.length === 0 ? {} : { carried: codes.map(local) });
+  const { kind, paths } = readTar(args, base, TAR_VALUE_OPTS);
+  return plain(
+    kind,
+    ["tar"],
+    codes.length === 0 ? { paths } : { paths, carried: codes.map(local) },
+  );
 }
 
 const SSH_CONFIG = /^\s*([A-Za-z]+)\s*(?:=\s*|\s+)(.*)$/s;
@@ -127,9 +135,10 @@ export function sshConfigCode(args: ReadonlyArray<string>): CarriedCode[] {
 /**
  * `rsync`: `-e`/`--rsh` is the transport command rsync runs locally, carried without an
  * `interpreter` flag of its own (a plain `ssh -p 2222` stays a plain net call; shell code
- * in it is flagged by its own parse); `--rsync-path` runs on the remote side.
+ * in it is flagged by its own parse); `--rsync-path` runs on the remote side. Local paths
+ * from {@link rsyncPaths}; `base` is the argv index of `args[0]`.
  */
-export function classifyRsync(args: ReadonlyArray<string>): Classification {
+export function classifyRsync(args: ReadonlyArray<string>, base: number): Classification {
   const parsed = parseArgs(args, RSYNC_VALUE_OPTS);
   const carried: CarriedCode[] = [
     ...values(parsed, ["-e", "--rsh"]).map((code) => ({ code, remote: false, opaque: false })),
@@ -137,5 +146,10 @@ export function classifyRsync(args: ReadonlyArray<string>): Classification {
   ];
   const hosts = verbHosts("rsync", args);
   const kind: CallKind = hosts.length > 0 ? "net" : "fs.write";
-  return plain(kind, ["rsync"], carried.length === 0 ? { hosts } : { hosts, carried });
+  const paths = rsyncPaths(args, base, RSYNC_VALUE_OPTS);
+  return plain(
+    kind,
+    ["rsync"],
+    carried.length === 0 ? { hosts, paths } : { hosts, paths, carried },
+  );
 }
