@@ -4,6 +4,7 @@
  * or starts the real `claude`.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CLAUDE_CODE_GAPS } from "@jev-cops/adapter-claude-code";
 import { PI_GAPS } from "@jev-cops/adapter-pi/install";
@@ -148,6 +149,26 @@ describe("cops doctor", () => {
     expect(text).toContain("\nclaude-code gaps\n  • ");
     expect(text).toContain("  ! judge");
     expect(text).toMatch(/\d+ ok · \d+ warn · 0 fail · \d+ gap → exit 0$/);
+  });
+
+  test("a hook on another socket: the socket check fails and no canary runs through it", async () => {
+    healthy();
+    installHook(f, join(f.root, "other.sock"));
+    const { code, report } = await doctorJson(["--harness", "claude-code"]);
+    expect(code).toBe(1);
+    expect(report.checks.find((c) => c.name === "socket")?.status).toBe("fail");
+    const canary = report.checks.filter((c) => c.group === "canary");
+    expect(canary).toHaveLength(1);
+    expect(canary[0]).toMatchObject({ status: "warn" });
+    expect(canary[0]?.detail).toContain("not run through");
+  });
+
+  test("a repo .cops.toml that tries to loosen is reported", async () => {
+    writeFileSync(join(f.project, ".cops.toml"), '[judge]\nprovider = "mock"\n');
+    const { report } = await doctorJson(["--harness", "pi"]);
+    const config = report.checks.find((c) => c.name === "cops.toml");
+    expect(config?.status).toBe("warn");
+    expect(config?.detail).toContain("may only tighten");
   });
 
   test("a bad config file fails the config check", async () => {
