@@ -35,6 +35,16 @@ export {
 } from "./materialize.ts";
 export { oneLine, promptLikeOf, UNREADABLE_OUTPUT } from "./parse.ts";
 export {
+  type FetchedSource,
+  fetchGitSource,
+  GIT_CLONE_GUARD,
+  isPrivateHost,
+  REMOTE_DEADLINE_MS,
+  REMOTE_MAX_BYTES,
+  type RemoteDeps,
+  remoteUrlProblem,
+} from "./remote.ts";
+export {
   absolutePath,
   MAX_STDOUT_BYTES,
   type RunOutcome,
