@@ -8,13 +8,18 @@
  * line or a cut line breaks the chain at that seq. Live at the hook: the daemon appends its
  * audit log (and its directory) to `protectedPaths`, so through a real copsd running the
  * starter set an agent that writes, appends to, truncates or deletes the log is killed by
- * `config-tamper` before the command runs; reading it is not. Shipping off-box (the
- * syslog/S3 forwarder) and `cops doctor` verifying the chain are M2.
+ * `config-tamper` before the command runs; reading it is not. Live in `cops doctor` (M1
+ * step 7): it verifies the chain and fails on a break. Shipping off-box (the syslog/S3
+ * forwarder), which alone catches tail truncation or a full recompute (L6), is M2.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { VerdictResponse } from "@jev-cops/core";
+import { runDoctorCommand } from "../../packages/cli/src/commands/doctor.ts";
+import { offlineCanary } from "../../packages/cli/src/commands/doctor-canary.ts";
+import { captureIo } from "../../packages/cli/src/io.ts";
+import { copsToml, doctorEnv, doctorFixture } from "../../packages/cli/src/testing/doctor.ts";
 import { verifyChain } from "../../packages/daemon/src/audit.ts";
 import {
   startTestDaemon,
@@ -72,6 +77,31 @@ describe("T12 log tampering", () => {
     const l = lines();
     writeFileSync(path, `${[l[0], l[1], (l[2] ?? "").slice(0, 40)].join("\n")}\n`);
     expect(verifyChain(path)).toMatchObject({ ok: false, brokenAt: 3 });
+  });
+
+  test("a chain break is an alert: cops doctor fails on the tampered log (exit 1)", async () => {
+    const f = doctorFixture();
+    const doctor = async () => {
+      const io = captureIo();
+      const deps = { env: doctorEnv(f), canary: offlineCanary, notice: () => {} };
+      const argv = ["--json", "--config", copsToml(f, td.config)];
+      const code = await runDoctorCommand(argv, io, { deps: () => deps, tty: false });
+      const report = JSON.parse(io.stdout.join("\n")) as {
+        checks: { name: string; status: string; detail: string }[];
+      };
+      return { code, chain: report.checks.find((c) => c.name === "chain") };
+    };
+    try {
+      expect(await doctor()).toMatchObject({ code: 0, chain: { status: "ok" } });
+      const l = lines();
+      l[1] = (l[1] ?? "").replace('"verdict":"allow"', '"verdict":"deny"');
+      writeFileSync(path, `${l.join("\n")}\n`);
+      const after = await doctor();
+      expect(after).toMatchObject({ code: 1, chain: { status: "fail" } });
+      expect(after.chain?.detail).toContain("broken at seq 2");
+    } finally {
+      f.dispose();
+    }
   });
 
   test.todo(
