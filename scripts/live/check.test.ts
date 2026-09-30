@@ -39,12 +39,22 @@ const audit = [
   "not json",
   JSON.stringify([1]),
   JSON.stringify({ kind: "judge" }),
+  JSON.stringify({
+    seq: 9,
+    kind: "judge",
+    payload: {
+      event: { call: { tool: "bash", input: { command: "ls" } } },
+      latched: { root: "sess_a" },
+      returned: { verdict: "kill", reason: "session terminated" },
+    },
+  }),
 ].join("\n");
 
 describe("audit checks", () => {
   test("judged reads payload.event, decision and returned", () => {
     const all = judged(audit);
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(5);
+    expect(all[4]).toMatchObject({ seq: 9, verdict: "kill", policies: ["latched"] });
     expect(all[1]).toEqual({
       seq: 5,
       eventId: "evt_5",
@@ -61,6 +71,7 @@ describe("audit checks", () => {
 
   test("findJudged by tool and input substring; the evidence line", () => {
     expect(findJudged(audit, "*", "push").map((j) => j.seq)).toEqual([5]);
+    expect(findJudged(audit, "bash", "ls").map((j) => j.seq)).toEqual([9]);
     expect(findJudged(audit, "Write", "").map((j) => j.seq)).toEqual([6]);
     expect(judgedLine(findJudged(audit, "Bash", "ls")[0] as never)).toBe(
       'seq 3 evt_3 headless Bash {"command":"ls"} → allow (no policy) "why 3"',

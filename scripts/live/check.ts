@@ -60,7 +60,10 @@ export function judged(auditText: string): Judged[] {
       const event = obj(p.event);
       const call = obj(event.call);
       const decision = obj(p.decision);
+      const returned = obj(p.returned);
       const policies = decision.policies;
+      // A call of a latched session is answered from the latch: no decision, no policy.
+      const latched = p.latched !== undefined;
       return {
         seq: typeof l.seq === "number" ? l.seq : -1,
         eventId: str(l.event_id),
@@ -68,9 +71,9 @@ export function judged(auditText: string): Judged[] {
         mode: str(obj(event.session).mode),
         tool: str(call.tool),
         input: str(call.input),
-        verdict: str(decision.verdict),
-        policies: Array.isArray(policies) ? policies.map(str) : [],
-        reason: str(obj(p.returned).reason),
+        verdict: str(decision.verdict ?? returned.verdict),
+        policies: latched ? ["latched"] : Array.isArray(policies) ? policies.map(str) : [],
+        reason: str(returned.reason),
       };
     });
 }
