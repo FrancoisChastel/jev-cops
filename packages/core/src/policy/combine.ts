@@ -20,7 +20,13 @@ import {
 } from "./contribute.ts";
 import type { Decision, DecisionFlags, JudgeStatus } from "./decision.ts";
 import type { PolicyMatch } from "./evaluate.ts";
-import { contextNoteFor, detailFor, type ExplainInput, reasonFor } from "./explain.ts";
+import {
+  confirmLinesFor,
+  contextNoteFor,
+  detailFor,
+  type ExplainInput,
+  reasonFor,
+} from "./explain.ts";
 import { bandVerdict, type FloorResult, floorRisk, roundRisk } from "./floor.ts";
 import type { QuestionPlan } from "./questions.ts";
 import { jevEntries, routeScopeAnswer, type ScopeRouting } from "./routing.ts";
@@ -234,6 +240,7 @@ export function combine(input: CombineInput): Decision {
     floor: r.step.floor.risk,
     reason: reasonFor(explain),
     detail: detailFor(explain, facts),
+    confirmLines: confirmLinesFor(explain),
     updated_input: r.verdict === "rewrite" ? r.payload : null,
     context_note: contextNoteFor(explain),
     policies: input.matches.filter((m) => m.matched).map((m) => m.key),

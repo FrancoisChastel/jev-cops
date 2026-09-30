@@ -1,6 +1,6 @@
 import { createBudget } from "../../../packages/core/src/context/budget.ts";
 import { DEFAULT_CONTEXT_CONFIG } from "../../../packages/core/src/context/config.ts";
-import type { Features } from "../../../packages/core/src/context/features.ts";
+import type { FeatureExplanation, Features } from "../../../packages/core/src/context/features.ts";
 import type { Answer, JudgeResult } from "../../../packages/core/src/judge/types.ts";
 import { combine } from "../../../packages/core/src/policy/combine.ts";
 import {
@@ -84,6 +84,8 @@ export interface Scenario {
   spent?: number;
   precedent?: PrecedentMatch | null;
   config?: PolicyConfig;
+  /** Feature evidence; default: none. */
+  why?: FeatureExplanation;
 }
 
 /** Plans and combines one event the way the engine does. */
@@ -115,7 +117,7 @@ export function runCombine(s: Scenario): { decision: Decision; plan: QuestionPla
     event: e,
     ctx,
     features: s.features,
-    why: { taint: [], scope: [], sequence: [], environment: [], reversibility: [] },
+    why: s.why ?? { taint: [], scope: [], sequence: [], environment: [], reversibility: [] },
     matches,
     plan,
     judged,

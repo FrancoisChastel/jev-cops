@@ -61,6 +61,11 @@ export interface Decision {
   readonly reason: string;
   /** For the human only; stripped before anything reaches a harness. */
   readonly detail: string;
+  /**
+   * The hold confirm prompt's summary (`confirmLinesFor`): the policies' plain-language
+   * lines, no score. Shown to the human in files the agent may read; never in a verdict.
+   */
+  readonly confirmLines: readonly string[];
   /** Set exactly when `verdict` is `rewrite`. */
   readonly updated_input: Record<string, unknown> | null;
   readonly context_note: string | null;

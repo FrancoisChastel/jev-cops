@@ -75,6 +75,14 @@ export function contextNoteFor(input: ExplainInput): string | null {
   return input.annotatedByBudget ? texts.budgetNote : texts.annotateNote;
 }
 
+/** `name@version detail: …` for each of `cs` whose policy has a `detail` that returns text. */
+function policyDetailLines(cs: ReadonlyArray<Contribution>, input: ExplainInput): string[] {
+  return cs.flatMap((c) => {
+    const text = safely(() => c.match.policy.detail?.(input.e, input.ctx, c.answers));
+    return typeof text === "string" ? [`${c.match.key} detail: ${text}`] : [];
+  });
+}
+
 function traceLine(t: PolicyTrace): string {
   const marks = [
     t.fallbackUsed ? "fallback" : null,
@@ -110,12 +118,10 @@ export interface DetailFacts {
  */
 export function detailFor(input: ExplainInput, facts: DetailFacts): string {
   const { flags } = input;
-  const policyDetails = input.contributions
-    .filter((c) => c.match.matched && c.match.policy.detail !== undefined)
-    .flatMap((c) => {
-      const text = safely(() => c.match.policy.detail?.(input.e, input.ctx, c.answers));
-      return typeof text === "string" ? [`${c.match.key} detail: ${text}`] : [];
-    });
+  const policyDetails = policyDetailLines(
+    input.contributions.filter((c) => c.match.matched),
+    input,
+  );
   const lines = [
     `verdict ${input.verdict} · risk ${facts.risk.toFixed(2)} · ${facts.floorWhy.join(", ")}`,
     ...featureLines(facts.features, facts.why),
@@ -127,4 +133,50 @@ export function detailFor(input: ExplainInput, facts: DetailFacts): string {
     ...(flags.rewriteWithoutInput ? ["rewrite without a single updated_input raised to hold"] : []),
   ];
   return clip(lines.join("\n"), input.config.texts.maxDetailChars);
+}
+
+/** The budget's one-step raise, in words (the detail says "raised one step"). */
+const BUDGET_RAISED = "most of the session's risk budget is spent; the verdict was raised one step";
+
+/**
+ * What set the verdict when no matched policy returned it: the missing-rewrite or budget
+ * sentence, the budget's one-step raise, or the risk band's sentence. Null when a policy
+ * did. Words only: the band and the budget are named, never their figures.
+ */
+function causeLine(input: ExplainInput): string | null {
+  const { flags, verdict } = input;
+  const { reasons } = input.config.texts;
+  if (flags.rewriteWithoutInput) return `rewrite: ${reasons.missingRewrite}`;
+  if (input.heldByBudget) return `risk budget: ${reasons.budget}`;
+  if (input.contributions.some((c) => c.verdict === verdict)) return null;
+  if (flags.budgetRaised) return `risk budget: ${BUDGET_RAISED}`;
+  return `risk band: ${reasons[verdict]}`;
+}
+
+/** `name@version: verdict` of one matched policy; a precedent's waiver is named. */
+function summaryLine(c: Contribution): string {
+  if (c.trace.waived) return `${c.match.key}: ${c.trace.verdict ?? "none"} (waived by precedent)`;
+  return `${c.match.key}: ${c.verdict ?? "none"}`;
+}
+
+/**
+ * The human confirm prompt's summary of a decision, one line each: every matched policy
+ * as `name@version: verdict`, the `detail` of each matched policy whose contribution is
+ * the final verdict, and {@link causeLine} when the band, the budget or a missing rewrite
+ * set the verdict. Nothing scored: no feature value or its evidence (taint included), no
+ * floor, risk, judge answer or budget figure; those stay in {@link detailFor}, which
+ * `cops explain` shows. The prompt lands where the agent can read it (Claude Code keeps an
+ * ask's text in its session transcript), so a policy's `detail` must be plain language
+ * too. Control characters in a policy's text cannot start another line.
+ */
+export function confirmLinesFor(input: ExplainInput): string[] {
+  const matched = input.contributions.filter((c) => c.match.matched);
+  const atVerdict = matched.filter((c) => c.verdict === input.verdict);
+  const cause = causeLine(input);
+  const lines = [
+    ...matched.map(summaryLine),
+    ...policyDetailLines(atVerdict, input),
+    ...(cause === null ? [] : [cause]),
+  ];
+  return lines.map((line) => oneLine(line, input.config.texts.maxDetailChars));
 }
