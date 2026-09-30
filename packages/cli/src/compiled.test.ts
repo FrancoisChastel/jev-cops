@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { PI_GAPS } from "@jev-cops/adapter-pi/install";
 import { startTestDaemon } from "../../daemon/src/testing/daemon.ts";
 import { policyModule } from "../../daemon/src/testing/policies.ts";
+import { CLI_VERSION } from "./version.ts";
 
 /**
  * The compiled binary must carry the tree-sitter WASM and the SDK itself: it is built into
@@ -90,7 +91,7 @@ describe("compiled jev-cops", () => {
     const home = join(dir, "home");
     mkdirSync(home, { recursive: true });
     const hook = join(dir, "cops-hook");
-    writeFileSync(hook, "#!/bin/sh\necho 0.0.0\n");
+    writeFileSync(hook, `#!/bin/sh\necho ${CLI_VERSION}\n`);
     chmodSync(hook, 0o755);
     const argv = ["install", "claude-code", "--dry-run", "--home", home, "--hook-binary", hook];
     const run = Bun.spawn([join(dir, "cops"), ...argv, "--socket", join(dir, "d.sock")], {

@@ -10,6 +10,7 @@ import { isUnder } from "../../../../adapters/claude-code/testing/fs-guard.ts";
 import { startTestDaemon, type TestDaemon } from "../../../daemon/src/testing/daemon.ts";
 import { captureIo } from "../io.ts";
 import { type InstallWorld, installWorld } from "../testing/install-world.ts";
+import { CLI_VERSION } from "../version.ts";
 import { runInstallCommand } from "./install.ts";
 
 const REPO_POLICIES = join(import.meta.dir, "..", "..", "..", "..", "policies");
@@ -182,7 +183,7 @@ describe("cops install claude-code: the canary's other answers", () => {
     const stateBefore = readFileSync(statePath(), "utf8");
     const liar = w.script(
       "liar-hook",
-      'if [ "$1" = --version ]; then echo 0.0.0; exit 0; fi\ncat >/dev/null',
+      `if [ "$1" = --version ]; then echo ${CLI_VERSION}; exit 0; fi\ncat >/dev/null`,
     );
     const io = captureIo();
     const argv = [
@@ -373,7 +374,7 @@ describe("cops install claude-code: other scopes and transports", () => {
       "--dry-run",
     ];
     expect(await runInstallCommand(argv, io, ctx)).toBe(0);
-    expect(io.stdout.join("\n")).toContain(`hook ${w.hook} (version 0.0.0)`);
+    expect(io.stdout.join("\n")).toContain(`hook ${w.hook} (version ${CLI_VERSION})`);
   });
 
   test("no hook binary anywhere", async () => {
