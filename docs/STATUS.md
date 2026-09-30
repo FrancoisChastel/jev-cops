@@ -164,9 +164,26 @@ clone → check → gate → build all green. Fixes before M1:
 | config-tamper policy live | done (tiered, 48 fixture cases) |
 | Gate: `tests/tamper` subset for M1 | green on Pi and Claude Code; remaining 6 todos are M2 (OpenShell) |
 
+## M1 gate review (Fable 5.1, 2026-09-30): yes-with-fixes
+
+No critical or high findings. Fail-closed held on every crafted path against the compiled
+hook (malformed/partial/huge input, daemon down/slow/garbage/wrong id, slow stdin, env
+tricks); tighten-only held even against a spoofed daemon answering `allow`; ConfigChange,
+kill latch, mode detection (incl. a planted `ps`), installer, doctor and tighten-only repo
+config all behaved as specified; fresh clone → check → gate → build green.
+
+| # | Sev | Finding | Status |
+|---|---|---|---|
+| M1 | medium | `dd of=<kill-tier path>` is `allow`: the normalizer does not know `dd`, so config-tamper never sees the write (hook binary, store, Codex config) | in progress |
+| M2 | medium | `cat ~/.jev-cops/audit.jsonl` is `allow`: the full scored decisions (the T6 oracle kept off agent channels by D-066/D-096) are readable, and no gap line says so | in progress |
+| L1 | low | `pkill -f copsd` / `cops-hook` is `allow` (DoS only: the hook fails closed); symlink and `$VAR`-built write paths uncaught (documented normalizer gaps) | in progress |
+| L2 | low | `cops doctor` says "read-only" but its canary appends audit lines and latches throw-away sessions | in progress |
+| L3 | note | SIGUSR1 to the hook panics Bun (exit 133, no output → the tool proceeds); same class as PLAN-M1 §5 residual #2 (SIGKILL/OOM), closed only by OpenShell | documented |
+| T | low | `adapters/claude-code/testing/pre-decision.ts` (the fake Claude Code's precedence oracle) has no unit test | in progress |
+
 ## In progress
 
-- M1 gate review (Fable 5.1).
+- Fixing the M1 gate review findings above.
 
 ## Next
 
