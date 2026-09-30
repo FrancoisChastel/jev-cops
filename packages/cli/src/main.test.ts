@@ -25,10 +25,16 @@ describe("jev-cops", () => {
     expect(CLI_USAGE).toContain("hook --harness claude-code");
   });
 
-  test.each(["doctor"])("%s is not yet available (M1) and exits 2", async (name) => {
+  test("every command of the usage is available: none is left as a milestone stub", () => {
+    expect(CLI_USAGE).not.toContain("not yet available");
+  });
+
+  test("doctor is a command, listed in the usage; a usage error exits 2 before any check", async () => {
+    expect(CLI_USAGE).toContain("doctor [--harness claude-code|pi|all]");
     const io = captureIo();
-    expect(await main([name], io)).toBe(2);
-    expect(io.stderr).toEqual([`jev-cops ${name}: not yet available (M1)`]);
+    expect(await main(["doctor", "--harness", "codex"], io)).toBe(2);
+    expect(io.stderr[0]).toContain("cops doctor: --harness must be one of");
+    expect(io.stdout).toEqual([]);
   });
 
   test("the binary runs as a process", async () => {

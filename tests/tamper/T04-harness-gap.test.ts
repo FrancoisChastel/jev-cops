@@ -9,16 +9,30 @@
  * installer must refuse to run when `Bash` is on the allow list") and `disableAllHooks`,
  * installs past them only with `--force` (recording the gap), and always prints that without
  * OpenShell every deny is best-effort and that `--dangerously-skip-permissions` is out of
- * scope for the hook. Todo: the compiled OpenShell fragment (M2); the Codex and OpenCode
+ * scope for the hook. The doctor half is live (M1 step 7): `cops doctor` fails when the hook
+ * is missing from the effective Claude Code settings, warns on a bare `Bash` allow rule, and
+ * prints every known gap. Todo: the compiled OpenShell fragment (M2); the Codex and OpenCode
  * installers (M3).
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { CLAUDE_CODE_GAPS } from "../../adapters/claude-code/src/gaps.ts";
 import { isUnder } from "../../adapters/claude-code/testing/fs-guard.ts";
+import { offlineCanary } from "../../packages/cli/src/commands/doctor-canary.ts";
+import { runDoctor } from "../../packages/cli/src/commands/doctor-run.ts";
 import { runInstallCommand } from "../../packages/cli/src/commands/install.ts";
 import { captureIo } from "../../packages/cli/src/io.ts";
+import {
+  copsToml,
+  type DoctorFixture,
+  doctorEnv,
+  doctorFixture,
+  installHook,
+  REPO_POLICIES,
+} from "../../packages/cli/src/testing/doctor.ts";
 import { type InstallWorld, installWorld } from "../../packages/cli/src/testing/install-world.ts";
+import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { pending } from "./pending.ts";
 
 const REQUIRED_OUTCOME =
@@ -96,4 +110,50 @@ describe("T4 harness gap", () => {
     `OpenShell: ${REQUIRED_OUTCOME}`,
     pending("M2 (OpenShell compiler); M3 installers for Codex and OpenCode"),
   );
+});
+
+/** Live since M1 step 7: `cops doctor` reports the Claude Code gap (the installer half is `cops install`). */
+describe("T4 Claude Code: cops doctor reports the gap when present and unmitigated", () => {
+  let td: TestDaemon;
+  let f: DoctorFixture;
+  beforeAll(async () => {
+    td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
+  });
+  afterAll(async () => {
+    await td.stop();
+  });
+  beforeEach(() => {
+    f = doctorFixture();
+  });
+  afterEach(() => f.dispose());
+
+  const doctor = () =>
+    runDoctor(
+      { harness: "claude-code", live: false, config: copsToml(f, td.config) },
+      { env: doctorEnv(f), canary: offlineCanary, notice: () => {} },
+    );
+
+  test("the jev-cops hook missing from the effective settings is a failure", async () => {
+    const none = (await doctor()).find((c) => c.name === "registered");
+    expect(none?.status).toBe("fail");
+    expect(none?.detail).toContain("every tool runs unjudged");
+    installHook(f, td.config.daemon.socket, { disableAllHooks: true });
+    const checks = await doctor();
+    const registered = checks.find((c) => c.name === "registered");
+    expect(registered?.status).toBe("fail");
+    expect(registered?.detail).toContain("disableAllHooks");
+    expect(checks.find((c) => c.name === "disableAllHooks")?.status).toBe("fail");
+  });
+
+  test("a bare Bash allow rule (the permissions.allow gap) is reported present and unmitigated", async () => {
+    installHook(f, td.config.daemon.socket, { permissions: { allow: ["Bash"] } });
+    const allow = (await doctor()).find((c) => c.name === "permissions.allow");
+    expect(allow?.status).toBe("warn");
+    expect(allow?.detail).toContain("present and unmitigated");
+  });
+
+  test("every known gap it cannot close is printed as a gap, never silent", async () => {
+    const gaps = (await doctor()).filter((c) => c.status === "gap").map((c) => c.detail);
+    expect(gaps).toEqual([...CLAUDE_CODE_GAPS]);
+  });
 });

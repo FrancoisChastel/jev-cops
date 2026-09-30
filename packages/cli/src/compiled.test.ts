@@ -11,6 +11,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PI_GAPS } from "@jev-cops/adapter-pi/install";
+import { startTestDaemon } from "../../daemon/src/testing/daemon.ts";
+import { policyModule } from "../../daemon/src/testing/policies.ts";
 
 /**
  * The compiled binary must carry the tree-sitter WASM and the SDK itself: it is built into
@@ -101,5 +104,42 @@ describe("compiled jev-cops", () => {
     expect(out).toContain("dry run, nothing written");
     expect(out).toContain("Without OpenShell, every deny is best-effort");
     expect(existsSync(join(home, ".claude"))).toBe(false);
+  }, 30_000);
+
+  // --harness pi: this machine's own Claude Code managed settings are never read here.
+  test("doctor runs from the binary (read-only; PATH holds no claude or pi)", async () => {
+    const td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    try {
+      const [home, bin, project] = ["doctor-home", "doctor-bin", "doctor-project"].map((d) => {
+        mkdirSync(join(dir, d));
+        return join(dir, d);
+      }) as [string, string, string];
+      const toml = join(dir, "doctor.toml");
+      const { socket, adminSocket } = td.config.daemon;
+      const lines = ["[daemon]", `socket = ${JSON.stringify(socket)}`];
+      lines.push(`admin_socket = ${JSON.stringify(adminSocket)}`, "[audit]");
+      lines.push(`path = ${JSON.stringify(td.config.audit.path)}`);
+      writeFileSync(toml, `${lines.join("\n")}\n`);
+      const flags = ["--harness", "pi", "--json", "--config", toml, "--home", home];
+      const env = { PATH: bin, HOME: home };
+      const run = Bun.spawn([join(dir, "cops"), "doctor", ...flags], {
+        cwd: project,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const out = await new Response(run.stdout).text();
+      expect(await run.exited).toBe(1); // no Pi extension installed: a failure, as asked
+      const report = JSON.parse(out) as {
+        counts: Record<string, number>;
+        checks: { name: string; status: string }[];
+      };
+      expect(report.checks.find((c) => c.name === "agent socket")?.status).toBe("ok");
+      expect(report.checks.find((c) => c.name === "chain")?.status).toBe("ok");
+      expect(report.checks.find((c) => c.name === "extension")?.status).toBe("fail");
+      expect(report.counts.gap).toBe(PI_GAPS.length);
+    } finally {
+      await td.stop();
+    }
   }, 30_000);
 });
