@@ -5,6 +5,7 @@
  * and why it would refuse; `OpenShellCli` and `sandbox.ts` drive the `openshell` binary.
  */
 export * from "./argv.ts";
+export * from "./cli.ts";
 export * from "./compile.ts";
 export * from "./diff.ts";
 export * from "./emit.ts";
@@ -22,5 +23,6 @@ export * from "./layout.ts";
 export * from "./prover.ts";
 export * from "./repo.ts";
 export * from "./report.ts";
+export * from "./sandbox.ts";
 export * from "./schema.ts";
 export type { Absent, PolicyUpdate } from "./types.ts";
