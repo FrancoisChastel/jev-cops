@@ -7,6 +7,7 @@ import { runExplainCommand } from "./commands/explain.ts";
 import { runHookCommand } from "./commands/hook.ts";
 import { INSTALL_USAGE, runInstallCommand } from "./commands/install.ts";
 import { runKeygenCommand } from "./commands/keygen.ts";
+import { OPENSHELL_USAGE, runOpenShellCommand } from "./commands/openshell.ts";
 import { runReplayCommand } from "./commands/replay.ts";
 import { runTestCommand } from "./commands/test.ts";
 import { EXIT, type Io, PROCESS_IO } from "./io.ts";
@@ -60,6 +61,7 @@ ${INSTALL_USAGE}
                                            with --remote, that the off-box copy (JSONL or
                                            RFC 5424/5425 syslog) agrees: a longer copy is a
                                            local truncation (no daemon needed)
+${OPENSHELL_USAGE}
   help                                     this text
 
 Exit codes:
@@ -69,7 +71,8 @@ Exit codes:
      an unknown session or an unreachable daemon; doctor: a check failed)
   2  usage error; hook: the call is blocked
   install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage
-  audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage`;
+  audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage
+  openshell: 0 ok, 1 refused or failed, 2 usage, 3 changes (compile or apply --dry-run)`;
 
 type Command = (argv: readonly string[], io: Io) => Promise<number>;
 
@@ -84,6 +87,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   doctor: runDoctorCommand,
   keygen: runKeygenCommand,
   audit: runAuditCommand,
+  openshell: runOpenShellCommand,
 };
 
 /** Runs `jev-cops` with `argv` (without the binary name); resolves with the exit code. */

@@ -1,0 +1,111 @@
+import { describe, expect, test } from "bun:test";
+import { type CompileInput, compilePolicy } from "./compile.ts";
+import { policyFragmentsFor, STARTER_POLICY_REFS } from "./findings.ts";
+import { defaultLayout } from "./layout.ts";
+import { parsePolicy, parsePolicyYaml } from "./schema.ts";
+
+const INPUT: CompileInput = {
+  harness: "claude-code",
+  layout: defaultLayout("claude-code"),
+  policies: STARTER_POLICY_REFS,
+  task: "Fix the flaky test",
+  repo: {
+    lockfiles: ["package-lock.json"],
+    remote: { host: "github.com", transport: "https", port: 443 },
+  },
+  judge: { port: 17_681 },
+};
+
+describe("compilePolicy", () => {
+  const out = compilePolicy(INPUT);
+
+  test("emits one valid policy with the three fragments", () => {
+    expect(out.refusals).toEqual([]);
+    expect(out.policy).not.toBeNull();
+    expect(parsePolicy(out.policy).ok).toBe(true);
+    expect(Object.keys(out.policy?.network_policies ?? {}).sort()).toEqual([
+      "jev_cops_judge",
+      "jev_cops_task_registries",
+      "jev_cops_task_remote",
+    ]);
+    const yaml = parsePolicyYaml(out.yaml ?? "");
+    expect(yaml.ok).toBe(true);
+    expect(out.fragments.map((f) => [f.name, f.section, f.backs])).toEqual([
+      ["protection", "filesystem", ["config-tamper@2"]],
+      ["judge-route", "network", ["judge route (D-105)"]],
+      ["task-allowlist", "network", ["exfil-after-secrets@3"]],
+    ]);
+  });
+
+  test("the YAML carries the inputs hash and backs comments", () => {
+    expect(out.yaml).toContain(`# inputs: sha256:${out.inputsHash}`);
+    expect(out.yaml).toContain("# backs: config-tamper@2\nfilesystem_policy:");
+    expect(out.yaml).toContain("  # backs: exfil-after-secrets@3\n  jev_cops_task_remote:");
+  });
+
+  test("pure and deterministic: same input, same bytes; policy order does not matter", () => {
+    const again = compilePolicy({ ...INPUT, policies: [...STARTER_POLICY_REFS].reverse() });
+    expect(again.yaml).toBe(out.yaml);
+    expect(compilePolicy({ ...INPUT, task: "other" }).inputsHash).not.toBe(out.inputsHash);
+  });
+
+  test("absent records the policies with no kernel equivalent and the provider rules", () => {
+    const whys = out.absent.map((a) => a.why).join("\n");
+    expect(whys).toContain("tainted-destructive@1: no kernel equivalent");
+    expect(whys).toContain("default-branch-guard@2");
+    expect(whys).toContain("_provider_");
+    expect(out.absent.some((a) => a.path === "/home/agent/.jev-cops")).toBe(true);
+  });
+
+  test("gaps: shared network identity; Pi's judge route is node's", () => {
+    expect(out.gaps.join("\n")).toContain("every process the agent starts");
+    const pi = compilePolicy({ ...INPUT, harness: "pi", layout: defaultLayout("pi") });
+    expect(pi.refusals).toEqual([]);
+    expect(pi.gaps.join("\n")).toContain("D-111");
+  });
+
+  test("a refusal means no policy and no YAML", () => {
+    const refused = compilePolicy({ ...INPUT, extraReadWrite: ["/home/agent"] });
+    expect(refused.refusals.length).toBeGreaterThan(0);
+    expect(refused.policy).toBeNull();
+    expect(refused.yaml).toBeNull();
+    expect(refused.updates).toEqual([]);
+  });
+
+  test("T13 assertion: an endpoint reaching a judge host refuses the whole policy", () => {
+    const refused = compilePolicy({ ...INPUT, judgeHosts: ["openshell.internal"] });
+    expect(refused.refusals.join("\n")).toContain("(T13)");
+    expect(refused.yaml).toBeNull();
+  });
+
+  test("task hosts become live updates", () => {
+    const withHosts = compilePolicy({ ...INPUT, task: "Use https://docs.example.com" });
+    expect(withHosts.updates.map((u) => u.addEndpoint)).toEqual([
+      "docs.example.com:443:read-only:rest:enforce",
+    ]);
+  });
+
+  test("a schema problem in the assembled policy is a refusal", () => {
+    const bad = compilePolicy({
+      ...INPUT,
+      layout: { ...INPUT.layout, runAs: { user: "0", group: "0" } },
+    });
+    expect(bad.refusals.join("\n")).toContain("schema");
+  });
+});
+
+describe("policyFragmentsFor (D-106)", () => {
+  test("starter policies and unknown ones", () => {
+    expect(policyFragmentsFor({ name: "exfil-after-secrets", version: 3 }).kind).toBe(
+      "task-allowlist",
+    );
+    expect(policyFragmentsFor({ name: "config-tamper", version: 2 }).section).toBe("filesystem");
+    expect(policyFragmentsFor({ name: "x", version: 1, range: ["hold", "deny"] }).why).toContain(
+      "hook",
+    );
+    expect(policyFragmentsFor({ name: "x", version: 1, range: ["allow", "hold"] }).why).toBe(
+      "not deny-class",
+    );
+    expect(policyFragmentsFor({ name: "x", version: 1 }).why).toContain("hook");
+  });
+});

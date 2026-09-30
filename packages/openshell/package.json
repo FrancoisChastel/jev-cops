@@ -1,0 +1,24 @@
+{
+  "name": "@jev-cops/openshell",
+  "version": "0.0.0",
+  "description": "jev-cops OpenShell compiler: harness protection, task allowlist and judge route as one OpenShell policy, plus the openshell CLI wrapper",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./testing/fake-openshell.ts"
+  },
+  "files": [
+    "src",
+    "testing",
+    "goldens",
+    "README.md"
+  ],
+  "dependencies": {
+    "@jev-cops/core": "workspace:*",
+    "@jev-cops/judge": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

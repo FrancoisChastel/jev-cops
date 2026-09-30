@@ -621,3 +621,91 @@ _Not yet built (M3)._
 ## OpenCode
 
 _Not yet built (M3)._
+
+## OpenShell
+
+_Draft (M2 steps 1–2). The compiler and the `openshell` wrapper are built and tested
+against a fake binary; no gateway has run them yet. Live verification is step 9._
+
+jev-cops compiles what the judge knows into an OpenShell v0.1.2 sandbox policy
+(`packages/openshell`, [its README](../packages/openshell/README.md)): a protection set
+derived from `config-tamper`'s trees, a judge route that only the hook (or Pi's node) may
+use, and a task allowlist, with judge provider hosts asserted absent (T13). The commands
+are `cops openshell compile|apply|create`. OpenShell is allow-only, so a "deny" is an
+omission: each one is listed in the compile report with its reason.
+
+### Docs versus the spec
+
+"Spec" is `docs/SPEC.md` (2026-09-29); "docs" is OpenShell v0.1.2 / `main` at `7caff12` on
+2026-09-30 (PLAN-M2 §2). The docs win.
+
+| # | Fact | Spec says | Docs say today (source, quote) | Consequence |
+|---|---|---|---|---|
+| 1 | Deny primitives | step 2: "a deterministic fragment where one exists: a host deny, a path deny, a binary deny" | policies/overview: "OpenShell denies anything the policy does not allow." schema: `filesystem_policy` has only `read_only` and `read_write` ("Paths that are not listed are inaccessible"); `network_policies` are allow rules with `binaries` ("An empty list matches no binary"); `deny_rules` exist only inside an inspected endpoint ("Deny rules, which take precedence over allow rules", REST/WebSocket/GraphQL/MCP matchers). | There is no host, path or binary *deny*. A "deny fragment" is an omission from the allowlist, plus L7 `deny_rules` on hosts we do allow. The compiler emits allowlists and asserts what is absent (D-106). |
+| 2 | Landlock is grant-only | "marks the four harness config directories … as read-only" | landlock.rst §Layers of file path access rights: "One policy layer grants access to a file path if at least one of its rules encountered on the path grants the access." best-practices: "Paths listed in `read_write` receive full access." | A `read_only` entry under a `read_write` ancestor (a repo's `.claude/`, a `~/.claude/` under a writable home) stays writable. Protected dirs must sit outside every writable tree; the compiler refuses otherwise (D-106, D-107). Project-level `.claude/settings.json` inside a writable repo cannot be kernel-protected: the hook is installed as **managed** under `/etc` (read-only baseline) so nothing in the repo can remove it. |
+| 3 | Filesystem rules are fixed at start | step 3 JIT grants "when a hold is resolved with allow and the action needs new network or filesystem access" | manage-policies#how-changes-take-effect: "Added filesystem paths: The saved policy can change, but the running workload keeps its existing filesystem permissions. Recreate the sandbox."; "Removed filesystem paths, or changed `include_workdir`, Landlock, or process settings: OpenShell rejects the change after the workload starts." overview table: `filesystem_policy` "Takes effect: At sandbox startup." | JIT grants are network-only in M2 (D-110). A hold on a filesystem action resolved allow runs the tool; a path outside the policy fails at the kernel and shows in the post event. |
+| 4 | Network rules hot-reload | step 1 "applies them with `openshell policy set <sandbox> --policy <file>`" | overview: `network_policies` "Takes effect: While the sandbox runs." manage-policies: "When new network rules take effect, OpenShell closes connections that were opened under the previous rules, including HTTP keep-alive connections". `openshell policy update` "changes only the `network_policies` section"; `policy set` "replaces the whole policy … start from the current base policy". | Task allowlists and JIT grants go through `policy update` (incremental, no need to carry the enriched base). `policy set` is used only at creation-time repair. Every apply closes the agent's open connections: apply at the first prompt, not mid-call. |
+| 5 | `--wait` semantics | — | manage-policies#verify-a-change: "With `--wait`, the CLI also waits for the sandbox to report a result. It exits with status `1` if the sandbox rejects the revision, and with status `124` if the wait times out."; "A successful exit does not always mean your change is active." | The wrapper always passes `--wait --timeout 20`, then reads `policy list` for `Loaded`; 1/124 are apply failures (§8). |
+| 6 | Policy validation failure mode | — | configuration: `policy_validation_failure_mode` "The default, `fail_closed`, deactivates the previous network policy … and denies new egress until a valid generation loads." | A rejected revision blacks out the sandbox's network: the compiler validates locally first (schema mirror, prover) so a bad YAML never reaches the gateway. |
+| 7 | `--dry-run` | step 4: the compiler "runs with `--dry-run` in CI and prints the diff" | main.rs `PolicyCommands::Set` has `--policy`, `--global`, `--yes`, `--wait`, `--timeout` and **no `--dry-run`**; `Update` has `dry_run` ("Preview the merged policy without sending it to the gateway"). | `cops openshell compile --dry-run` is jev-cops's: compile locally, diff against `openshell policy get --base --output json | jq .policy` when a gateway is reachable, else against the golden fixture; exit 3 when there are changes (D-108). |
+| 8 | The mounted socket | "The sandbox reaches it only through one mounted Unix socket" | runtimes#docker-mounts: "Bind mounts expose gateway-host files to the sandbox and can bypass workspace isolation and filesystem policy. They require `enable_bind_mounts = true` and disabling resource admission". schema: "Network policy never authorizes an outbound endpoint whose destination is loopback … A rule for `host.openshell.internal` can still reach services on the gateway host." architecture: the supervisor "opens approved connections and relays traffic". | No Unix socket mount. The hook reaches copsd's loopback HTTP listener through the supervisor at `http.host.openshell.internal:<port>` under a `jev_cops_judge` rule listing only the hook binary (D-105). Docker: "Docker Desktop must have host networking enabled". |
+| 9 | Binary identity and inheritance | "the agent cannot signal or restart it" (daemon); "adapter binary as read-only" | network-rules#binary-matching: "A rule also applies to processes that a listed binary starts."; "OpenShell records a hash of each executable the first time it takes part in a connection, and denies later connections if the file at that path changes." best-practices: "Command-line paths remain diagnostic context and never authorize access." | Claude Code: a rule for `cops-hook` does not extend to `claude`'s other children (they are not cops-hook's descendants), so the agent's `curl` has no route to copsd; a replaced hook loses its route (hash pin). Pi: the extension runs inside `node`, so every tool Pi spawns inherits node's rule — the socket cannot be kept from Pi's tools by OpenShell alone (D-111). |
+| 10 | `kill` stops the sandbox | verdict table: "Deny plus session terminated and OpenShell sandbox stopped" | sandboxes/overview#stop-and-start-sandboxes: "`openshell sandbox stop my-sandbox` … stops local background forwards and waits for the `Stopped` phase. … While stopped, you cannot connect, execute commands". | copsd runs `openshell sandbox stop <name>` after latching a `kill` (D-112): the process residual of PLAN-M1 §5 row 13 is closed for sandboxed sessions. |
+| 11 | Policy precedence and the global policy | — | policies/overview: global > "The sandbox's saved policy. At creation, `--policy` takes precedence over `OPENSHELL_SANDBOX_POLICY`" > image `/etc/openshell/policy.yaml` > default; "While [a global policy] is active, OpenShell blocks sandbox policy changes and proposal approvals". | jev-cops applies per-sandbox policies; a global policy makes every apply fail → §8 row 3 (net events held). |
+| 12 | Baseline paths | "the `policies/` directory … read-only" | default-policy#baseline-filesystem-paths: with any network rule OpenShell adds `/usr, /lib, /etc, /app, /var/log, /proc, /dev/urandom` read-only and `/tmp, /dev/null` read-write; "`/.openshell` … cannot expose". schema: "A policy can list at most 256 paths", "`read_write` cannot contain `/`", "must not contain `..`". | `policies/` is on the host, never in the sandbox: nothing to protect there. The image's `/etc/claude-code/managed-settings.d/50-jev-cops.json` is read-only by the baseline. The compiler counts paths (≤ 256) and rejects `..`. |
+| 13 | Advisor and auto-approval | — | advisor: "OpenShell also drafts proposals on its own from connections that it blocks, in every sandbox"; automatic mode "approves such proposals, including OpenShell's own drafts from blocked connections, so turn it on only if you accept that binaries in the sandbox can gain access to public hosts without your review." | `cops openshell create` sets `agent_policy_proposals_enabled=false`, `proposal_approval_mode=manual`; doctor fails when auto-approval is on for the judged sandbox (D-119): otherwise an exfil host could be self-granted around the judge. |
+| 14 | Prover | — | prover: "`openshell-prover check candidate.yaml --boundary boundary.yaml`"; "result: within_boundary / coverage: domains=filesystem,network_l4,network_rest,process,landlock"; v0.1.2 ships `openshell-prover-aarch64-apple-darwin.tar.gz`. | A deterministic, gateway-free check for CI and this Mac: the emitted policy must stay within `boundary/no-judge-hosts.yaml` and `boundary/config-read-only.yaml` (T13, T1). |
+| 15 | Logs | T1/T4 "the write also fails at the kernel" | logging: OCSF shorthand `NET:OPEN [MED] DENIED /usr/bin/curl(64) -> api.github.com:443 [policy:- engine:opa] [reason:…]`; proxy answers `403` `{"error":"policy_denied", …}`; `openshell logs <name> --source sandbox`; Landlock denials are `EACCES` in the workload, startup logs `Landlock ruleset built [rules_applied:5 skipped:1]`. | The live tests assert these lines; the post event of a kernel-denied tool shows `EACCES`/`policy_denied` in `stdout_head`. |
+| 16 | Landlock best effort | — | schema#landlock: `best_effort` "The sandbox runs without the filesystem rules and logs a high-severity finding"; `hard_requirement` "The sandbox fails to start." | The compiler emits `landlock: { compatibility: hard_requirement }` (D-106): a kernel that cannot enforce the protection set does not run the agent. |
+| 17 | Images | — | sandboxes/overview: "`--from` does not expand catalog aliases and does not build local Dockerfiles"; default image "does not bundle agent CLIs"; run-pi tutorial builds `pi-agent:local` from `node:24-bookworm-slim` with `PI_CODING_AGENT_DIR=/tmp/pi-agent`. providers/claude-code.yaml allows `api.anthropic.com`, `statsig.anthropic.com`, `sentry.io` for `binaries: [/usr/bin/claude, /usr/local/bin/claude]`. | The live step builds its own image (`docker build`) with the harness, a `linux/arm64` `cops-hook` and the managed install; the model endpoint comes from a provider profile (rules keyed `_provider_*`, which the compiler never touches). |
+| 18 | Docker on macOS | "laptops … where OpenShell is not yet deployed" | runtimes#docker-driver: "Docker Desktop must have host networking enabled, and it cannot use Enhanced Container Isolation. Set `grpc_endpoint` when sandboxes cannot reach the gateway on host loopback." | Prerequisite for the live step (§1); host networking is off here today. |
+| 19 | Codex execpolicy (M3, note only) | "`.codex/rules` execpolicy prefix rules generated by the OpenShell compiler" | codex/exec-policy: "Rules are experimental and may change."; `.rules` files under `rules/` next to a config layer (`~/.codex/rules/default.rules`; `<repo>/.codex/rules/` "load only when the project `.codex/` layer is trusted"); `prefix_rule(pattern=[…], decision="allow"|"prompt"|"forbidden", justification, match, not_match)`; "Codex applies the most restrictive decision when more than one rule matches"; `bash -lc` linear chains are split with tree-sitter, anything else "is treated as … a single invocation". | The M3 emitter is a separate `codex/` module (Starlark-like text, not YAML); `forbidden`/`prompt` prefixes for the deny class. `config-tamper` already kills writes to `~/.codex/rules` (D-073). |
+
+### Where the OpenShell source differs from PLAN-M2
+
+Found while building steps 1–2 against the cloned repo (the source wins):
+
+- **One endpoint per `policy update` with `--rule-name`.** The plan applies all task hosts
+  in one call. `policy_update.rs:82-86` refuses `--rule-name` with more than one
+  `--add-endpoint`, so the compiler emits one `policy update` per host, all into
+  `jev_cops_task_hosts`.
+- **`--add-endpoint` cannot set `allow_encoded_slash` or `tls: skip`.** Its options are only
+  `allowed-ip=`, `allow-uninspected-credentials` and the two credential-rewrite flags
+  (`policy_update.rs:487-531`). So the npm registry and an ssh remote exist only in the
+  creation policy (`sandbox create --policy`), never as live updates, and so does the judge
+  route (a `rules`-based endpoint).
+- **The prover compares filesystem paths one by one.** "Comparing different paths returns
+  `unsupported`" (prover.mdx:174-185). A static `boundary/config-read-only.yaml` or
+  `boundary/no-judge-hosts.yaml` cannot fit every candidate, and a boundary is a superset,
+  not a list of what is missing. The boundary is therefore built per candidate: the same
+  paths, `hard_requirement` Landlock, and the network rules without any judge-host
+  endpoint. No `boundary/` directory is shipped.
+- **`settings get` takes `--json`, not `--output json`** (main.rs:2236-2250).
+  `openshell logs` has no JSON output; its line count is `-n` (main.rs:533-560).
+- **`sandbox create` has no `--wait`.** It "returns after the workload is ready"; non-interactive
+  creation uses `--detach` (sandboxes/overview.mdx:29-33, main.rs:1535-1536).
+- **The OpenShell baseline also includes `/app` and `/dev/null`** (default-policy.mdx:56-59).
+  The plan's layout lists neither; the compiler repeats the whole baseline.
+- **Rule keys.** The docs reserve only the `_provider_` prefix (schema.mdx:116-117). The
+  plan's `/^[a-z0-9_]+$/` key pattern is jev-cops's own naming (`jev_cops_*`), not a schema
+  rule.
+- **The judge route has four routes, not six.** D-105 lists `resolve` and `budget/*` for
+  both harnesses. Claude Code's client calls judge, observe, session and explain, and Pi's
+  calls judge, observe, resolve and explain. Each harness gets its four, which matches the
+  T13 gate's "four paths" (PLAN-M2 §1).
+- **The registries in `@jev-cops/core` are domains, not hosts.** For example `npmjs.org` and
+  `pypi.org` are matched with their subdomains, while OpenShell endpoints are exact hosts.
+  The compiler maps each domain to its download hosts (`REGISTRY_HOSTS`).
+- **T13 and provider rules.** The gateway composes `_provider_*` rules into the effective
+  policy. A provider profile for a judge host (OpenRouter as both Pi's model provider and
+  the judge) opens that route, whatever the base policy says. The compiler can only assert
+  T13 on the base policy, so step 7's doctor must check `policy get --full`.
+
+### Gaps (printed by `cops openshell compile`)
+
+- `~/.claude.json` stays kernel-writable (Claude Code rewrites it). Project config inside
+  the writable workspace stays kernel-writable. `config-tamper` keeps both kill tier.
+- Every process the agent starts shares its network rules. The allowlist limits where data
+  can go, not which tool sends it.
+- Pi's judge route belongs to node, so any tool Pi spawns can reach copsd's four routes
+  (D-111).
