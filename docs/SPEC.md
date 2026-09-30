@@ -371,11 +371,11 @@ Each gate is a command that must pass: `jevdict test` for M0, `tests/tamper` sub
 
 Six choices change the code and are not Claude Code's to make. Tick each once decided and note the answer inline.
 
-- [ ] Name and namespaces: confirm `jevdict` is free on npm, PyPI, GitHub and as a `.dev` domain, or pick the fallback (`jevcop`, `jevelin`).
-- [ ] Jev data path: is sending normalized command text and case-file summaries to TypeSafe's hosted API acceptable to the cyber team, and is there an on-prem or VPC option? If not, M0 ships with the scope feature deterministic-only and Jev behind a feature flag.
-- [ ] Headless `hold`: default to `defer` (pause and resume) or `deny`? Codex and OpenCode have no defer, so the fallback there must be chosen too.
-- [ ] Budget and thresholds: keep the defaults in this spec (100 points, 0.3 / 0.5 / 0.8 bands) for the pilot, or start with team-specific values?
-- [ ] Audit log destination: syslog, S3, or the team's SIEM, and who holds the key that verifies the hash chain.
+- [x] Name and namespaces: confirm `jevdict` is free on npm, PyPI, GitHub and as a `.dev` domain, or pick the fallback (`jevcop`, `jevelin`). **Decided 2026-09-29: renamed `jev-cops`, free on npm, PyPI and GitHub (D-088).**
+- [x] Jev data path: is sending normalized command text and case-file summaries to TypeSafe's hosted API acceptable to the cyber team, and is there an on-prem or VPC option? If not, M0 ships with the scope feature deterministic-only and Jev behind a feature flag. **Decided at kickoff: the judge is behind a flag (off by default) and provider-pluggable (D-004); the hosted-API question stays with the cyber team.**
+- [x] Headless `hold`: default to `defer` (pause and resume) or `deny`? Codex and OpenCode have no defer, so the fallback there must be chosen too. **Decided 2026-09-29: `deny` everywhere; `defer` never emitted (D-008, D-070).**
+- [x] Budget and thresholds: keep the defaults in this spec (100 points, 0.3 / 0.5 / 0.8 bands) for the pilot, or start with team-specific values? **Decided 2026-09-29: spec defaults (D-009).**
+- [x] Audit log destination: syslog, S3, or the team's SIEM, and who holds the key that verifies the hash chain. **Decided 2026-09-30: syslog (RFC 5424, TCP+TLS) behind a pluggable forwarder; Ed25519-signed checkpoints, public key held by the cyber team (D-103, D-104).**
 - [ ] Pilot scope: which repos and which users run the two-week observe-only phase, and who reviews false positives weekly.
 
 **Sources**
