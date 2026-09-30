@@ -6,7 +6,12 @@
  */
 
 import { join, resolve } from "node:path";
-import { type InstallOptions, managedDirFor, writeFileAtomic } from "@jev-cops/adapter-claude-code";
+import {
+  DEFAULT_SOCKET_RELATIVE,
+  type InstallOptions,
+  managedDirFor,
+  writeFileAtomic,
+} from "@jev-cops/adapter-claude-code";
 import { ConfigError, type HttpBind, loadConfig } from "@jev-cops/daemon";
 import { setDaemonHookBinary } from "../toml-key.ts";
 import type { ClaudeInstallArgs, CommonInstallArgs } from "./install-args.ts";
@@ -82,9 +87,32 @@ export function resolveSetup(a: ClaudeInstallArgs, ctx: InstallContext): Resolve
     });
   } catch (cause) {
     const why = cause instanceof ConfigError ? cause.message : String(cause);
-    return { ok: false, error: `cannot read the jev-cops config: ${why}` };
+    if (!a.uninstall) return { ok: false, error: `cannot read the jev-cops config: ${why}` };
+    // Removing the hook must not depend on a config the removal does not use.
+    const warnings = [...base.warnings, `the jev-cops config was not read (${why})`];
+    const fallback = { socket: join(base.home, DEFAULT_SOCKET_RELATIVE), http: null };
+    return finishSetup(a, ctx, { ...base, warnings }, { ...fallback, mode: "observe" }, configPath);
   }
-  const socket = a.socket === null ? loaded.config.daemon.socket : resolve(ctx.cwd, a.socket);
+  const { daemon, enforcement } = loaded.config;
+  const found = { socket: daemon.socket, http: daemon.http, mode: enforcement.mode };
+  return finishSetup(a, ctx, base, found, configPath);
+}
+
+/** What the setup takes from the daemon config. */
+interface DaemonFacts {
+  readonly socket: string;
+  readonly http: HttpBind | null;
+  readonly mode: "observe" | "enforce";
+}
+
+function finishSetup(
+  a: ClaudeInstallArgs,
+  ctx: InstallContext,
+  base: BaseSetup,
+  daemon: DaemonFacts,
+  configPath: string,
+): Resolved {
+  const socket = a.socket === null ? daemon.socket : resolve(ctx.cwd, a.socket);
   const bad = socketProblem(socket);
   if (bad !== null) return { ok: false, error: bad };
   const managedDir = ctx.managedDir !== undefined ? ctx.managedDir : managedDirFor(ctx.platform);
@@ -93,8 +121,8 @@ export function resolveSetup(a: ClaudeInstallArgs, ctx: InstallContext): Resolve
     configDir: base.env.CLAUDE_CONFIG_DIR || null,
     managedDir,
     socket,
-    httpUrl: httpUrlOf(loaded.config.daemon.http),
-    enforcement: loaded.config.enforcement.mode,
+    httpUrl: httpUrlOf(daemon.http),
+    enforcement: daemon.mode,
     configPath,
   };
   return { ok: true, setup };
@@ -144,4 +172,14 @@ export function writeHookBinaryToml(s: Setup, hookBinary: string, ctx: InstallCo
     backup: false,
   });
   return { path: s.configPath, previous, changed: true };
+}
+
+/** What {@link writeHookBinaryToml} would do (dry run): change the file, or why it cannot. */
+export function plannedHookBinaryToml(s: Setup, hookBinary: string, ctx: InstallContext) {
+  const previous = ctx.fs.readFile(s.configPath);
+  try {
+    return { changed: setDaemonHookBinary(previous, hookBinary) !== previous, problem: null };
+  } catch (cause) {
+    return { changed: false, problem: cause instanceof Error ? cause.message : String(cause) };
+  }
 }

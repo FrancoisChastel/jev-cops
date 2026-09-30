@@ -30,7 +30,12 @@ import { CLI_VERSION } from "../version.ts";
 import type { ClaudeInstallArgs } from "./install-args.ts";
 import type { InstallContext } from "./install-context.ts";
 import { type ClaudeReport, emptyReport } from "./install-report.ts";
-import { type Setup, settingsOptions, writeHookBinaryToml } from "./install-setup.ts";
+import {
+  plannedHookBinaryToml,
+  type Setup,
+  settingsOptions,
+  writeHookBinaryToml,
+} from "./install-setup.ts";
 
 type Checked = { readonly hookBinary: string; readonly error: null } | { readonly error: string };
 
@@ -192,8 +197,11 @@ export async function installClaudeCode(
   const report = { ...withBinary, settings };
   if (settings.status === "refused" || settings.status === "printed") return report;
   if (settings.status === "dry-run") {
+    const toml = plannedHookBinaryToml(s, hookBinary, ctx);
+    const warnings = toml.problem === null ? report.warnings : [...report.warnings, toml.problem];
     const statePath = claudeCodeStatePath(s.home);
-    return { ...report, ok: true, configPath: s.configPath, statePath };
+    const planned = { configPath: s.configPath, configChanged: toml.changed, statePath };
+    return { ...report, ...planned, ok: toml.problem === null, warnings };
   }
   return finish(report, settings, hookBinary, s, ctx);
 }

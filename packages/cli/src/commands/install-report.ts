@@ -113,7 +113,7 @@ function installLines(r: ClaudeReport): string[] {
     `${TAG} hook ${r.hookBinary} (version ${r.hookVersion ?? "?"}), socket ${r.socket ?? "?"}, transport ${r.transport}`,
   ];
   if (r.configPath !== null) {
-    const verb = r.dryRun ? "would record" : r.configChanged ? "recorded" : "already recorded";
+    const verb = !r.configChanged ? "already recorded" : r.dryRun ? "would record" : "recorded";
     lines.push(
       `${TAG} ${verb} [daemon] hook_binary in ${r.configPath} (copsd protects it from its next start)`,
     );
@@ -140,10 +140,25 @@ function canaryLines(r: ClaudeReport): string[] {
   return lines;
 }
 
+/**
+ * The report for `--json`: the settings file's text is left out (settings can hold
+ * secrets in `env`), except the diff of a dry run and the content of a printed drop-in.
+ */
+function jsonOf(r: ClaudeReport): Record<string, unknown> {
+  if (r.settings === null) return { ...r, exitCode: exitCodeOf(r) };
+  const { before: _before, after, diff, ...settings } = r.settings;
+  const shown = {
+    ...settings,
+    ...(r.settings.status === "printed" ? { after } : {}),
+    ...(r.settings.status === "dry-run" ? { diff } : {}),
+  };
+  return { ...r, settings: shown, exitCode: exitCodeOf(r) };
+}
+
 /** The report as lines (warnings and gaps included) or as one JSON object. */
 export function printClaudeReport(r: ClaudeReport, io: Io, json: boolean): void {
   if (json) {
-    io.out(JSON.stringify({ ...r, exitCode: exitCodeOf(r) }));
+    io.out(JSON.stringify(jsonOf(r)));
     return;
   }
   for (const e of r.errors) io.err(`${TAG} error: ${e}`);

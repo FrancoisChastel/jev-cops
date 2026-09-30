@@ -111,6 +111,27 @@ describe("cops install claude-code: user scope, enforce daemon", () => {
     expect(report).toMatchObject({ harness: "claude-code", ok: true, exitCode: 0, scope: "user" });
     expect(report.canary).toMatchObject({ status: "ok" });
     expect(report.settings).toMatchObject({ status: "installed", path: settingsPath() });
+    expect(report.settings).not.toHaveProperty("before");
+    expect(report.settings).not.toHaveProperty("after");
+  }, 30_000);
+
+  test("--dry-run --json carries the diff; a cops.toml it could not edit is reported", async () => {
+    mkdirSync(join(w.home, ".config", "jev-cops"), { recursive: true });
+    writeFileSync(tomlPath(), "daemon.judge_deadline_ms = 12000\n");
+    const r = await install(["--dry-run", "--json"]);
+    expect(r.code).toBe(1);
+    const report = JSON.parse(r.out) as { settings: Json; warnings: string[] };
+    expect(report.settings.diff).toContain("+++");
+    expect(report.warnings.some((x) => x.includes("edit it by hand"))).toBe(true);
+  });
+
+  test("--uninstall works with an unreadable cops.toml (the removal does not need it)", async () => {
+    await install([]);
+    writeFileSync(tomlPath(), "= = =\n");
+    const r = await install(["--uninstall"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("the jev-cops config was not read");
+    expect(existsSync(settingsPath())).toBe(false);
   }, 30_000);
 
   test("--dry-run writes nothing and prints the diff", async () => {

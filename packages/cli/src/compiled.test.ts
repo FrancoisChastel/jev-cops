@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -73,4 +82,24 @@ describe("compiled jev-cops", () => {
     expect(await run.exited).toBe(0);
     expect(out).toContain("0 failed · 0 problems → PASS");
   }, 60_000);
+
+  test("install claude-code --dry-run runs from the binary and writes nothing", async () => {
+    const home = join(dir, "home");
+    mkdirSync(home, { recursive: true });
+    const hook = join(dir, "cops-hook");
+    writeFileSync(hook, "#!/bin/sh\necho 0.0.0\n");
+    chmodSync(hook, 0o755);
+    const argv = ["install", "claude-code", "--dry-run", "--home", home, "--hook-binary", hook];
+    const run = Bun.spawn([join(dir, "cops"), ...argv, "--socket", join(dir, "d.sock")], {
+      cwd: dir,
+      env: { PATH: "/usr/bin:/bin", HOME: home },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const out = await new Response(run.stdout).text();
+    expect(await run.exited).toBe(0);
+    expect(out).toContain("dry run, nothing written");
+    expect(out).toContain("Without OpenShell, every deny is best-effort");
+    expect(existsSync(join(home, ".claude"))).toBe(false);
+  }, 30_000);
 });

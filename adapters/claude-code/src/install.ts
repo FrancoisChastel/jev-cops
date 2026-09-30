@@ -200,7 +200,12 @@ function write(o: InstallOptions, path: string, text: string): string | null {
 /** Refusals and warnings for this install; forced refusals become warnings. */
 function assess(o: InstallOptions, view: SettingsView) {
   const fs = o.fs ?? NODE_INSTALL_FS;
-  const check: InstallCheck = { ...o, projectDir: o.projectDir };
+  const check: InstallCheck = {
+    scope: o.scope,
+    transport: o.transport,
+    httpUrl: o.httpUrl,
+    projectDir: o.projectDir,
+  };
   const found = refusals(view, check);
   const warnings = installWarnings(view, check, (p) => fs.exists(p));
   const unforceable = o.transport === "http" && o.httpUrl === null;
