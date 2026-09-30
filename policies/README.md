@@ -23,7 +23,9 @@ copsd        # judges with these policies; its boot line names the directory it 
 
 To run your own set, copy that directory, edit it, check it with `cops test <dir>`, and
 point `[policies] dir` at it. `_lib/` holds helpers shared by the policies; any
-`_`-prefixed entry is a helper, never a policy. Author guide:
+`_`-prefixed entry is a helper, never a policy. `@jev-cops/policies/_lib/config-trees`
+(the harness and judge config trees behind `config-tamper`) is also exported for
+`@jev-cops/openshell`, which compiles the same trees into a sandbox policy. Author guide:
 [`@jev-cops/sdk`](https://github.com/FrancoisChastel/jev-cops/blob/master/packages/sdk/README.md).
 
 Runs on [Bun](https://bun.sh) ≥ 1.3 only. Licensed under Apache-2.0.

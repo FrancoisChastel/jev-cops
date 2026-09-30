@@ -104,7 +104,7 @@ function judgeOf(v: Values): { port: number } | null | string {
     : `--judge-port must be a TCP port, got "${text}"`;
 }
 
-/** The configured policies directory (as copsd reads it), else `./policies`. */
+/** The policies directory as copsd resolves it (by default the installed starter set). */
 function policiesDir(v: Values): string {
   const given = str(v, "policies");
   if (given !== null) return resolve(given);

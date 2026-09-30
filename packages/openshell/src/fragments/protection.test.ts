@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CONFIG_TREES, treeEntries } from "../../../../policies/_lib/config-trees.ts";
+import { CONFIG_TREES, treeEntries } from "@jev-cops/policies/_lib/config-trees";
 import { defaultLayout, type Harness, type SandboxLayout } from "../layout.ts";
 import { parsePolicy } from "../schema.ts";
 import { BASELINE_READ_ONLY, BASELINE_READ_WRITE, protectionFragment } from "./protection.ts";

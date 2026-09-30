@@ -79,6 +79,7 @@
         "@jev-cops/adapter-pi": "workspace:*",
         "@jev-cops/cli": "workspace:*",
         "@jev-cops/daemon": "workspace:*",
+        "@jev-cops/openshell": "workspace:*",
         "@jev-cops/policies": "workspace:*",
         "@jev-cops/sdk": "workspace:*",
       },
@@ -95,10 +96,11 @@
     },
     "packages/openshell": {
       "name": "@jev-cops/openshell",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@jev-cops/core": "workspace:*",
         "@jev-cops/judge": "workspace:*",
+        "@jev-cops/policies": "workspace:*",
         "zod": "^4.6.5",
       },
     },

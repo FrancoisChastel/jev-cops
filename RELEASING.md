@@ -1,6 +1,6 @@
 # Releasing jev-cops
 
-jev-cops ships to npm as nine packages that move in lockstep: one version for all of them.
+jev-cops ships to npm as ten packages that move in lockstep: one version for all of them.
 Users install one of them:
 
 ```bash
@@ -13,6 +13,7 @@ bun add -g jev-cops        # or: npm install -g jev-cops, with bun on PATH
 | `@jev-cops/sdk` | `packages/sdk` | `definePolicy`, typed questions, fixture runner (policy authors import it) |
 | `@jev-cops/judge` | `packages/judge` | semantic judge providers |
 | `@jev-cops/policies` | `policies` | the starter policies, their `_lib/` helpers and fixtures |
+| `@jev-cops/openshell` | `packages/openshell` | the OpenShell policy compiler and `openshell` wrapper (reads `@jev-cops/policies/_lib/config-trees`) |
 | `@jev-cops/daemon` | `packages/daemon` | `copsd`; defaults to the installed `@jev-cops/policies` |
 | `@jev-cops/adapter-claude-code` | `adapters/claude-code` | `cops-hook` |
 | `@jev-cops/adapter-pi` | `adapters/pi` | the Pi extension |
@@ -91,8 +92,8 @@ directory), checks the tarball (`scripts/pack-lib.ts`), then publishes it with
 has no provenance option. Provenance comes from each manifest's
 `publishConfig.provenance` and the job's `id-token: write`.
 
-**Publish order:** core → sdk → judge → policies → daemon → adapters (claude-code, pi) →
-cli → jev-cops. Each package goes after its dependencies, so a user never resolves a
+**Publish order:** core → sdk → judge → policies → openshell → daemon → adapters
+(claude-code, pi) → cli → jev-cops. Each package goes after its dependencies, so a user never resolves a
 version that is not on the registry yet. The order is `PUBLISH_ORDER` in
 `scripts/pack-lib.ts`; a test fails when a workspace package is missing from it or comes
 before a dependency.
@@ -103,7 +104,7 @@ and the version can never be reused); publish a fixed patch and deprecate the br
 `npm deprecate jev-cops@0.2.0 "broken hook; use 0.2.1"` (repeat for each package).
 
 **Dist-tags.** `latest` is what `bun add -g jev-cops` installs. Prereleases go out as
-`X.Y.Z-rc.N` on `next`. To move a tag, do it for all nine packages:
+`X.Y.Z-rc.N` on `next`. To move a tag, do it for all ten packages:
 `npm dist-tag add @jev-cops/core@0.2.0 latest` (and so on, then `jev-cops@0.2.0`).
 
 ## Known install caveats
@@ -122,7 +123,8 @@ and the version can never be reused); publish a fixed patch and deprecate the br
 
 ## Adding a package
 
-A new package (for example `@jev-cops/openshell` in `packages/openshell`) must:
+A new package (shown with `@jev-cops/openshell` in `packages/openshell`, the last one
+added) must:
 
 - use this manifest shape (the tarball rules in `scripts/pack-lib.ts` enforce it):
 

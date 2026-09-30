@@ -20,7 +20,7 @@
  * workspace.
  */
 import { posix } from "node:path";
-import { CONFIG_TREES, canon, treeEntries } from "../../../../policies/_lib/config-trees.ts";
+import { CONFIG_TREES, canon, treeEntries } from "@jev-cops/policies/_lib/config-trees";
 import {
   adapterPaths,
   HARNESS_WRITABLE,

@@ -61,12 +61,32 @@ describe("the packed tarballs", () => {
       "@jev-cops/adapter-pi": version,
       "@jev-cops/cli": version,
       "@jev-cops/daemon": version,
+      "@jev-cops/openshell": version,
       "@jev-cops/policies": version,
       "@jev-cops/sdk": version,
     });
     expect(byName("@jev-cops/daemon").unpacked.manifest.dependencies?.["@jev-cops/policies"]).toBe(
       version,
     );
+    expect(byName("@jev-cops/cli").unpacked.manifest.dependencies?.["@jev-cops/openshell"]).toBe(
+      version,
+    );
+  });
+
+  test("openshell reads config-tamper's trees through the policies package, not a path", () => {
+    const openshell = byName("@jev-cops/openshell").unpacked;
+    expect(openshell.manifest.dependencies?.["@jev-cops/policies"]).toBe(
+      releaseVersion(workspacePackages()),
+    );
+    expect(byName("@jev-cops/policies").unpacked.manifest.exports).toEqual({
+      "./_lib/config-trees": "./_lib/config-trees.ts",
+      "./package.json": "./package.json",
+    });
+    expect(openshell.files.filter((f) => !f.startsWith("src/"))).toEqual([
+      "LICENSE",
+      "README.md",
+      "package.json",
+    ]);
   });
 
   test("the policies ship with their fixtures and helpers, not their tests", () => {

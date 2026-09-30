@@ -23,6 +23,7 @@ export const PUBLISH_ORDER: readonly string[] = [
   "@jev-cops/sdk",
   "@jev-cops/judge",
   "@jev-cops/policies",
+  "@jev-cops/openshell",
   "@jev-cops/daemon",
   "@jev-cops/adapter-claude-code",
   "@jev-cops/adapter-pi",

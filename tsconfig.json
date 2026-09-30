@@ -26,7 +26,6 @@
       "@jev-cops/daemon": ["./packages/daemon/src/index.ts"],
       "@jev-cops/cli": ["./packages/cli/src/index.ts"],
       "@jev-cops/openshell": ["./packages/openshell/src/index.ts"],
-      "@jev-cops/openshell/testing": ["./packages/openshell/testing/fake-openshell.ts"],
       "@jev-cops/adapter-claude-code": ["./adapters/claude-code/src/index.ts"],
       "@jev-cops/adapter-claude-code/*": ["./adapters/claude-code/src/*"]
     }

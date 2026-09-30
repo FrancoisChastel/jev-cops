@@ -26,6 +26,7 @@
   },
   "type": "module",
   "exports": {
+    "./_lib/config-trees": "./_lib/config-trees.ts",
     "./package.json": "./package.json"
   },
   "files": [

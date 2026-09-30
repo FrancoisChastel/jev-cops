@@ -16,7 +16,7 @@ import {
   placeTrees,
   projectRoots,
   treeEntries,
-} from "../../../../policies/_lib/config-trees.ts";
+} from "@jev-cops/policies/_lib/config-trees";
 import { isUnder } from "../types.ts";
 
 /** A concrete kill-tier path in the sandbox. */

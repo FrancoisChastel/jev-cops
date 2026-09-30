@@ -56,6 +56,7 @@
     "@jev-cops/adapter-pi": "workspace:*",
     "@jev-cops/cli": "workspace:*",
     "@jev-cops/daemon": "workspace:*",
+    "@jev-cops/openshell": "workspace:*",
     "@jev-cops/policies": "workspace:*",
     "@jev-cops/sdk": "workspace:*"
   }

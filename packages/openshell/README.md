@@ -41,8 +41,8 @@ the policy (or `null` when refused), deterministic YAML, the `policy update` cal
 task's hosts, and a report.
 
 - **Protection set** (`filesystem_policy`, `landlock`, `process`). Derived from
-  `config-tamper`'s trees in `policies/_lib/config-trees.ts`, not from a second list. The
-  harness's own kill- and hold-tier config (for Claude Code, `~/.claude` with
+  `config-tamper`'s trees (`@jev-cops/policies/_lib/config-trees`), not from a second
+  list. The harness's own kill- and hold-tier config (for Claude Code, `~/.claude` with
   `settings.json`, `settings.local.json`, `hooks/` and `plugins/`, plus
   `/etc/claude-code`) is `read_only`. The data the harness must write (`~/.claude/projects`,
   `plans`, `todos`, `~/.claude.json`, caches; for Pi, `~/.pi/agent/sessions`), the workspace
@@ -121,16 +121,18 @@ applied, 1 rejected, 124 timed out. After an apply, the wrapper checks that the 
 `--no-auto-providers --approval-mode manual` and then pins the advisor settings. If that
 fails, it stops the sandbox.
 
-`testing/fake-openshell.ts` is the fake binary for tests. It records each call's argv and
-environment, answers with canned JSON and exit codes 0, 1 or 124 (optionally after a
-delay), and rejects a `--policy` file that the schema mirror rejects.
+`testing/fake-openshell.ts` (in the repository, not published) is the fake binary for
+tests. It records each call's argv and environment, answers with canned JSON and exit
+codes 0, 1 or 124 (optionally after a delay), and rejects a `--policy` file that the
+schema mirror rejects.
 
 ## Goldens and the prover
 
 `goldens/*.yaml` and `*.report.txt` are compared byte for byte. The scenarios in
 `goldens/scenarios.ts` are: Claude Code with npm and a GitHub remote, a baseline, task
-hosts with an ssh remote, Pi with PyPI, T13 judge hosts, and a refused layout. After a
-reviewed change, regenerate them with
+hosts with an ssh remote, Pi with PyPI, T13 judge hosts, and a refused layout. They are
+compiled with a pinned compiler version (`GOLDEN_VERSION`), so a lockstep version bump
+leaves them alone. After a reviewed change, regenerate them with
 `JEV_COPS_UPDATE_GOLDENS=1 bun test packages/openshell`. When `openshell-prover` is on PATH,
 each golden is also checked with `openshell-prover check --boundary` against a boundary
 built from it (same paths, no judge-host endpoint, `hard_requirement`). Without the prover,

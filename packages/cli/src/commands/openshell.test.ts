@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { COMPILER_VERSION, parsePolicyYaml } from "@jev-cops/openshell";
-import { CANNED, createFakeOpenShell } from "@jev-cops/openshell/testing";
+import { CANNED, createFakeOpenShell } from "../../../openshell/testing/fake-openshell.ts";
 import { captureIo } from "../io.ts";
 import { CLI_USAGE, main } from "../main.ts";
 import { CLI_VERSION } from "../version.ts";
