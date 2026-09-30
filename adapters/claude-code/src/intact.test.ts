@@ -125,6 +125,41 @@ describe("isJevCopsHandler: this hook, on every call of the event", () => {
     const http = { type: "http", url: "http://127.0.0.1:8791/v1/hooks/claude-code", timeout: 15 };
     expect(isJevCopsHandler("PostToolUse", {}, http, id)).toBe(false);
   });
+
+  describe("--transport http: the hook carries the daemon's URL (--http-url)", () => {
+    const URL_ = "http://127.0.0.1:8791";
+    const withUrl = (): HookIdentity => ({ ...id, httpUrl: URL_ });
+    const http = (over: Json = {}): Json => ({
+      type: "http",
+      url: `${URL_}/v1/hooks/claude-code`,
+      timeout: 15,
+      ...over,
+    });
+    const httpArgs = [...ARGS, "--http-url", URL_];
+
+    test("an HTTP post handler to that URL is intact on post events only", () => {
+      expect(isJevCopsHandler("PostToolUse", {}, http(), withUrl())).toBe(true);
+      expect(isJevCopsHandler("PostToolUseFailure", { matcher: "*" }, http(), withUrl())).toBe(
+        true,
+      );
+      expect(isJevCopsHandler("PreToolUse", {}, http(), withUrl())).toBe(false);
+    });
+
+    test.each([
+      ["a decoy port", { url: "http://127.0.0.1:9999/v1/hooks/claude-code" }],
+      ["another route", { url: `${URL_}/v1/observe` }],
+      ["a short timeout", { timeout: 1 }],
+      ["async", { async: true }],
+    ])("not with %s", (_name, over) => {
+      expect(isJevCopsHandler("PostToolUse", {}, http(over), withUrl())).toBe(false);
+    });
+
+    test("the command entries must carry the same --http-url as the running hook", () => {
+      expect(isJevCopsHandler("PreToolUse", {}, handler({ args: httpArgs }), withUrl())).toBe(true);
+      expect(isJevCopsHandler("PreToolUse", {}, handler(), withUrl())).toBe(false);
+      expect(isJevCopsHandler("PreToolUse", {}, handler({ args: httpArgs }), id)).toBe(false);
+    });
+  });
 });
 
 describe("registeredEvents", () => {

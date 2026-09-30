@@ -9,7 +9,13 @@ describe("parseHookArgs: `--harness claude-code [--socket path]`", () => {
       ok: true,
       harness: "claude-code",
       socket: `${HOME}/${DEFAULT_SOCKET_RELATIVE}`,
+      httpUrl: null,
     });
+  });
+
+  test("--http-url names the daemon's loopback URL (HTTP post transport)", () => {
+    const argv = ["--harness", "claude-code", "--http-url", "http://127.0.0.1:8787"];
+    expect(parseHookArgs(argv, HOME)).toMatchObject({ ok: true, httpUrl: "http://127.0.0.1:8787" });
   });
 
   test.each([
@@ -26,6 +32,8 @@ describe("parseHookArgs: `--harness claude-code [--socket path]`", () => {
     [["--harness", "claude-code", "--socket", "relative.sock"], "must be absolute"],
     [["--harness", "claude-code", "--verbose"], "Unknown option"],
     [["--harness", "claude-code", "extra"], "Unexpected argument"],
+    [["--harness", "claude-code", "--http-url", "http://10.0.0.1:80"], "loopback"],
+    [["--harness", "claude-code", "--http-url", "http://127.0.0.1:80/x"], "loopback"],
   ])("%p is refused: %s", (argv, message) => {
     const parsed = parseHookArgs(argv, HOME);
     expect(parsed.ok).toBe(false);

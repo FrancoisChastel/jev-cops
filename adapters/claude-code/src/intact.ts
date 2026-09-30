@@ -5,13 +5,15 @@
  * (absent, `""` or `"*"`; `UserPromptSubmit` has no matcher), a handler that is this very
  * hook: exec form, the same executable (after `${CLAUDE_PROJECT_DIR}`, PATH and symlinks),
  * the same leading arguments, `--harness claude-code`, the same socket, no `if`, not async,
- * and a timeout above the hook's own deadline; and nothing disables it (`disableAllHooks` anywhere for a
+ * and a timeout above the hook's own deadline (with `--transport http`, the post events may
+ * instead be an HTTP hook to the daemon URL this hook carries as `--http-url`); and nothing disables it (`disableAllHooks` anywhere for a
  * non-managed install, or in managed settings; `allowManagedHooksOnly` in managed settings
  * over a non-managed install). A changed file that is not valid JSON is not intact.
  */
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseHookArgs } from "./args.ts";
+import { CLAUDE_CODE_HOOK_PATH } from "./hook-entries.ts";
 import type { SettingsFile, SettingsRead } from "./settings.ts";
 
 /** The events jev-cops must stay registered on: the gate, its taint feed, its prompt and config guards. */
@@ -44,6 +46,11 @@ export interface HookIdentity {
   readonly projectDir: string;
   /** `PATH`, to resolve a bare command name as exec form does. */
   readonly path: string;
+  /**
+   * The daemon's loopback URL this hook was started with (`--http-url`, `--transport http`),
+   * or null/absent. Only then does an HTTP post handler count, and only to this URL.
+   */
+  readonly httpUrl?: string | null;
 }
 
 /** The outcome, with the reason (logged, and sent nowhere the agent reads). */
@@ -55,6 +62,7 @@ export interface IntactCheck {
 type Json = Record<string, unknown>;
 const MATCH_ALL: ReadonlySet<unknown> = new Set([undefined, "", "*"]);
 const NO_MATCHER: ReadonlySet<string> = new Set(["UserPromptSubmit"]);
+const HTTP_EVENTS: ReadonlySet<string> = new Set(["PostToolUse", "PostToolUseFailure"]);
 
 function isRecord(value: unknown): value is Json {
   return Object.prototype.toString.call(value) === "[object Object]";
@@ -97,7 +105,15 @@ function isOurCommand(h: Json, id: HookIdentity): boolean {
   if (self === null || commandFile(h.command, id) !== self) return false;
   if (!id.leading.every((mine, k) => sameArg(args[k] ?? "", mine, id))) return false;
   const flags = parseHookArgs(args.slice(id.leading.length), id.home);
-  return flags.ok && resolve(flags.socket) === resolve(id.socket);
+  if (!flags.ok || flags.httpUrl !== (id.httpUrl ?? null)) return false;
+  return resolve(flags.socket) === resolve(id.socket);
+}
+
+/** An HTTP post handler to the daemon URL this hook carries (never on the gate or guards). */
+function isOurHttp(event: RequiredEvent, h: Json, id: HookIdentity): boolean {
+  const url = id.httpUrl ?? null;
+  if (url === null || !HTTP_EVENTS.has(event)) return false;
+  return h.type === "http" && h.url === `${url}${CLAUDE_CODE_HOOK_PATH}`;
 }
 
 /** True when `handler`, in `group`, is this hook on every call of `event`. */
@@ -109,7 +125,7 @@ export function isJevCopsHandler(
 ): boolean {
   if (!NO_MATCHER.has(event) && !MATCH_ALL.has(group.matcher)) return false;
   if (!settled(event, handler)) return false;
-  return isOurCommand(handler, id);
+  return isOurCommand(handler, id) || isOurHttp(event, handler, id);
 }
 
 function registers(groups: unknown, event: RequiredEvent, id: HookIdentity): boolean {

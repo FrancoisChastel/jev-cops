@@ -18,6 +18,7 @@ import { failClosed, type HookOutput } from "./output.ts";
 import type { ConfigChangeInput } from "./payload.ts";
 import { managedDirFor, readSettingsFile, type SettingsFile, settingsFiles } from "./settings.ts";
 import { readHarnessVersion } from "./state.ts";
+import { HOOK_VERSION } from "./version.ts";
 
 /** What the hook needs from its process; tests pass a recording double. */
 export interface HookPort {
@@ -114,8 +115,14 @@ function once<T>(read: () => T): () => T {
   };
 }
 
+/** The daemon this hook talks to, from its own arguments. */
+interface Target {
+  readonly socket: string;
+  readonly httpUrl: string | null;
+}
+
 /** The ConfigChange check over the settings files on disk now (intact.ts). */
-function configCheckFor(socket: string, self: HookSelf, port: HookPort) {
+function configCheckFor(target: Target, self: HookSelf, port: HookPort) {
   return (i: ConfigChangeInput): IntactCheck => {
     const projectDir = port.env.CLAUDE_PROJECT_DIR || i.cwd;
     const location = {
@@ -129,12 +136,13 @@ function configCheckFor(socket: string, self: HookSelf, port: HookPort) {
       i.file_path === undefined ? [] : [{ scope: scopeOf(i.source), path: i.file_path }];
     const unique = [...files, ...changed.filter((c) => !files.some((f) => f.path === c.path))];
     const reads = unique.map((file) => ({ file, read: readSettingsFile(file.path) }));
-    const id = { ...self, socket, home: port.home, projectDir, path: port.env.PATH ?? "" };
+    const path = port.env.PATH ?? "";
+    const id = { ...self, ...target, home: port.home, projectDir, path };
     return checkIntact(reads, id, i.file_path ?? null);
   };
 }
 
-function depsFor(socket: string, self: HookSelf, port: HookPort): HookDeps {
+function depsFor(target: Target, self: HookSelf, port: HookPort): HookDeps {
   const logPath = hookLogPath(port.home);
   const log = (line: HookLogLine) => {
     try {
@@ -144,12 +152,12 @@ function depsFor(socket: string, self: HookSelf, port: HookPort): HookDeps {
     }
   };
   return {
-    client: createClient(socket),
+    client: createClient(target.socket),
     deadlines: deadlinesFrom(port.env),
     mode: once(() => detectMode(port.ppid, (pid) => readProc(pid))),
     harnessVersion: once(() => readHarnessVersion(port.home)),
     log,
-    configCheck: configCheckFor(socket, self, port),
+    configCheck: configCheckFor(target, self, port),
   };
 }
 
@@ -163,7 +171,7 @@ function emit(out: HookOutput, port: HookPort): 0 | 2 {
 async function outcome(argv: readonly string[], self: HookSelf, port: HookPort) {
   const args = parseHookArgs(argv, port.home);
   if (!args.ok) return failClosed(`cops hook: ${args.error}; blocking (fail closed)`);
-  const deps = depsFor(args.socket, self, port);
+  const deps = depsFor(args, self, port);
   const started = performance.now();
   const read = port.readStdin();
   const stdin = await withDeadline<string | null>(read, deps.deadlines.requestMs, () => null);
@@ -177,7 +185,8 @@ async function outcome(argv: readonly string[], self: HookSelf, port: HookPort) 
 
 /**
  * Runs the hook as this process: exit code 2 first, fatal handlers, arguments, stdin, the
- * run, the output, the exit. `subcommand` precedes the hook's flags in its argv (`["hook"]` for
+ * run, the output, the exit. `--version` alone prints {@link HOOK_VERSION} and exits 0
+ * (never as a hook: the ConfigChange check refuses an entry with it, like any unknown flag). `subcommand` precedes the hook's flags in its argv (`["hook"]` for
  * `cops hook`), for the ConfigChange identity check (see {@link selfOf}).
  * Resolves with the exit code (the real port has exited by then).
  */
@@ -191,6 +200,9 @@ export async function runHookProcess(
     port.write(2, `jev-cops: ${why}; blocking (fail closed)\n`);
     port.exit(2);
   });
+  if (argv.length === 1 && argv[0] === "--version") {
+    return emit({ exitCode: 0, stdout: HOOK_VERSION, stderr: null }, port);
+  }
   try {
     return emit(await outcome(argv, selfOf(subcommand), port), port);
   } catch (cause) {

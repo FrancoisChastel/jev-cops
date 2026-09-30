@@ -3,6 +3,7 @@
  * would register the compiled binary), and the settings block for every event.
  */
 import { join } from "node:path";
+import { HOOK_TIMEOUTS_S } from "../src/hook-entries.ts";
 import type { HookCommand } from "./hook-run.ts";
 
 /** The hook's source entry. */
@@ -16,25 +17,20 @@ export function hookCommand(socket: string, binary?: string): HookCommand {
     : { command: binary, args: flags };
 }
 
-const TIMEOUTS_S: Readonly<Record<string, number>> = {
-  PreToolUse: 30,
-  PostToolUse: 15,
-  PostToolUseFailure: 15,
-  UserPromptSubmit: 10,
-  ConfigChange: 10,
-  SessionStart: 10,
-  SessionEnd: 10,
-};
-
 /** A settings object registering the hook on every event, in exec form (PLAN-M1 §4.3). */
 export function jevCopsSettings(socket: string, binary?: string): Record<string, unknown> {
   const hook = hookCommand(socket, binary);
   const entry = (event: string) => [
     {
       hooks: [
-        { type: "command", command: hook.command, args: hook.args, timeout: TIMEOUTS_S[event] },
+        {
+          type: "command",
+          command: hook.command,
+          args: hook.args,
+          timeout: HOOK_TIMEOUTS_S[event as keyof typeof HOOK_TIMEOUTS_S],
+        },
       ],
     },
   ];
-  return { hooks: Object.fromEntries(Object.keys(TIMEOUTS_S).map((e) => [e, entry(e)])) };
+  return { hooks: Object.fromEntries(Object.keys(HOOK_TIMEOUTS_S).map((e) => [e, entry(e)])) };
 }

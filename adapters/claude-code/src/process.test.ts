@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Server } from "bun";
 import { claudeCodePayloadText } from "../../../tests/fixtures/claude-code/index.ts";
 import { type HookPort, processPort, runHookProcess, selfOf, writeAll } from "./process.ts";
+import { HOOK_VERSION } from "./version.ts";
 
 const dirs: string[] = [];
 const servers: Server<undefined>[] = [];
@@ -64,6 +65,22 @@ function daemon(reply: (body: { id: string }) => unknown): string {
 }
 
 const BASH = claudeCodePayloadText("pre-tool-use.bash");
+
+describe("runHookProcess --version (the installer and doctor check it)", () => {
+  test("prints the version and exits 0 without reading stdin", async () => {
+    const { port, rec } = fakePort(new Promise<string>(() => undefined));
+    expect(await runHookProcess(["--version"], [], port)).toBe(0);
+    expect(rec.out).toEqual([`${HOOK_VERSION}\n`]);
+    expect(rec.exitCodes[0]).toBe(2);
+    expect(rec.exits).toEqual([0]);
+  });
+
+  test("anything around --version is a bad argument and blocks", async () => {
+    const { port, rec } = fakePort(BASH);
+    expect(await runHookProcess(["--harness", "claude-code", "--version"], [], port)).toBe(2);
+    expect(rec.err.join("")).toContain("blocking (fail closed)");
+  });
+});
 
 describe("runHookProcess: the fail-closed shell", () => {
   test("the exit code is 2 before anything else, and a fatal error exits 2 with its reason", async () => {
