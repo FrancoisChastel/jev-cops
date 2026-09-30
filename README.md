@@ -43,7 +43,7 @@ can be undone*, and returns one of six verdicts:
 - [Features](#features) · [Supported agents](#supported-agents) · [Install](#install) ·
   [Quickstart](#quickstart) · [How it works](#how-it-works) · [Policies](#policies) ·
   [Semantic judge](#semantic-judge-optional) · [Configuration](#configuration) ·
-  [Commands](#commands) · [Security model](#security-model) · [Roadmap](#roadmap) ·
+  [Audit log](#audit-log) · [Commands](#commands) · [Security model](#security-model) · [Roadmap](#roadmap) ·
   [Development](#development) · [Contributing](#contributing)
 
 ## Features
@@ -63,7 +63,8 @@ can be undone*, and returns one of six verdicts:
 - **Policies as code.** TypeScript policies with typed questions and a fixtures file each;
   `cops test` fails the build on any mismatch; `cops replay` re-judges recorded sessions.
 - **Tamper-aware.** Editing the harness's hook settings, the policies or the judge's own
-  records ends the session. The audit log is append-only and hash-chained.
+  records ends the session. The audit log is append-only and hash-chained, with
+  Ed25519-signed checkpoints and an optional off-box copy over syslog.
 - **The human sees details, the agent sees reasons.** Scores and evidence never reach the
   agent; `cops explain <event-id>` shows the full decision to you.
 - **Observe first.** It starts in observe mode: every verdict is logged, nothing is
@@ -246,17 +247,52 @@ dir = "~/my-policies"        # default: the bundled starter set
 A repository may carry a `.cops.toml`, but it can only **tighten** the user's settings
 (for example switch to enforce), never loosen them.
 
+## Audit log
+
+copsd writes every decision to `~/.jev-cops/audit.jsonl`, one hash-chained JSON line each.
+Give it a key and it signs checkpoints of the chain with Ed25519; give it a receiver and it
+ships every line off the box as it writes it (syslog, RFC 5424 over TLS):
+
+```bash
+cops keygen             # private key in ~/.jev-cops/keys/ (0600); the .pub is for your security team
+cops keygen --rotate    # switch keys; the old key signs the handover in the log
+```
+
+```toml
+[audit]
+checkpoint_every = 100       # sign the chain every 100 lines, and at boot, session end, shutdown
+require_signing = true       # refuse to start without a key
+
+[audit.forward]
+kind = "syslog"              # or "file": a JSONL copy on another mount
+target = "siem.example:6514"
+ca_file = "/etc/jev-cops/siem-ca.pem"
+required = false             # true: once forwarding falls too far behind, risky calls are refused
+```
+
+Anyone holding the public key can check the log, and the off-box copy against it:
+
+```bash
+cops audit verify ~/.jev-cops/audit.jsonl --pubkey audit-ed25519.pub --remote siem-copy.log
+```
+
+Without the private key, nobody can edit, drop or recompute a line up to the last
+checkpoint unnoticed; a tail cut after it shows against the off-box copy. `cops doctor`
+runs the same checks. Formats, key rotation and exact guarantees: [docs/audit.md](docs/audit.md).
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `copsd [--enforce\|--observe]` | the judging daemon |
 | `cops install claude-code\|pi` | register jev-cops with a harness (`--dry-run`, `--uninstall`, `--project`, `--managed`, …) |
-| `cops doctor` | check the daemon, the audit chain, each harness install; run a canary; print every known gap |
+| `cops doctor` | check the daemon, the audit chain (signatures, forwarding), each harness install; run a canary; print every known gap |
 | `cops explain <event-id>` | the full decision behind a verdict: features, policies, judge answers, detail |
 | `cops test [dir]` | run every policy's fixtures, alone and with the whole set |
 | `cops replay <audit.jsonl>` | re-judge recorded sessions with the current policies and show verdict changes |
 | `cops budget <session-id> [--reset]` | show or reset a session's risk budget (reset needs the admin socket) |
+| `cops keygen [--rotate]` | create the audit signing key, or rotate it (a running copsd switches over the admin socket) |
+| `cops audit verify <audit.jsonl> --pubkey <file>` | verify the hash chain and signed checkpoints; `--remote <copy>` also checks the off-box copy |
 | `cops hook --harness claude-code` | the Claude Code hook itself (normally run by Claude Code, not by you) |
 
 `cops <command> --help` and `cops help` give every option and exit code.
@@ -279,7 +315,8 @@ What it guarantees today:
 - **Monotonic verdicts.** Policies and models can raise a verdict, never lower one
   another's; a precedent never bypasses `kill`.
 - **Anti-tamper.** Editing the hook settings, the policies or the judge's files ends the
-  session; the audit log is append-only and hash-chained.
+  session; the audit log is append-only, hash-chained and signed, and can be shipped off
+  the box.
 
 Thirteen threats (config tampering, daemon kill, hook timeout, harness gaps, obfuscation,
 judge injection, precedent farming, social engineering, TOCTOU, taint laundering, task
@@ -316,7 +353,7 @@ bun run build          # single-file binaries in dist/
 packages/core       event schema, bash normalizer, context engine, policy engine
 packages/sdk        definePolicy, typed question builders, fixture runner   (@jev-cops/sdk)
 packages/judge      semantic judge providers                               (@jev-cops/judge)
-packages/daemon     copsd: sockets, SQLite stores, hash-chained audit log   (@jev-cops/daemon)
+packages/daemon     copsd: sockets, SQLite stores, signed audit log         (@jev-cops/daemon)
 packages/cli        cops                                                    (@jev-cops/cli)
 adapters/           claude-code (command hook) · pi (extension)
 policies/           the starter policy set with fixtures                   (@jev-cops/policies)

@@ -146,7 +146,8 @@ export function handleUnlatch(rt: Runtime, body: unknown): Reply {
  * `POST /v1/session` (agent surface, D-071 proposal): validates a `jev-cops.session/1`
  * report, caches its facts on the root session (harness, version, model, mode,
  * permission mode), applies its kind (task once, close, config-change latch), appends a
- * `session` audit line and answers `{ ok, task, killed }`. `killed` tells the harness hook
+ * `session` audit line (a root session's end is followed by a signed checkpoint) and
+ * answers `{ ok, task, killed }`. `killed` tells the harness hook
  * to block the prompt of a latched session (plan §5 row 13).
  */
 export function handleSession(rt: Runtime, body: unknown): Reply {
@@ -174,5 +175,7 @@ export function handleSession(rt: Runtime, body: unknown): Reply {
     session_id: r.session.id,
     payload: { ...reportHead(r), ...applied, killed },
   });
+  // A root session's end is signed at once (D-104): its lines never sit in an unsigned tail.
+  if (r.kind === "end" && r.session.parent_id === null) rt.audit.checkpoint("session-end");
   return { status: 200, body: { ok: true, task: cf.task, killed } };
 }

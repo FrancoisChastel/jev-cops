@@ -1,5 +1,6 @@
 /**
- * `cops doctor` end to end (PLAN-M1 §4.4): config, copsd on both sockets, the audit chain,
+ * `cops doctor` end to end (PLAN-M1 §4.4, PLAN-M2 §6): config, copsd on both sockets, the
+ * audit log (chain, signed checkpoints, signing key, forwarding, the off-box copy),
  * then per harness its checks, the offline canary through the registered hook, the gated
  * live canary, and every known gap. It writes no configuration: it reads files and sockets,
  * and starts only `claude --version`, the registered hook (`--version`, the canary payloads,
@@ -11,6 +12,7 @@ import { join, resolve } from "node:path";
 import { CLAUDE_CODE_GAPS, CLAUDE_CODE_STATE_FILE } from "@jev-cops/adapter-claude-code";
 import { PI_GAPS } from "@jev-cops/adapter-pi/install";
 import { ConfigError, type LoadedConfig, loadConfig } from "@jev-cops/daemon";
+import { type AuditDoctorInput, auditChecks } from "./doctor-audit.ts";
 import { type CanaryHook, canaryChecks, doctorCanary } from "./doctor-canary.ts";
 import {
   claudeVersionChecks,
@@ -19,7 +21,7 @@ import {
   trustCheck,
 } from "./doctor-claude.ts";
 import { keyChecks } from "./doctor-claude-keys.ts";
-import { auditChecks, type DaemonProbe, daemonChecks, probeDaemon } from "./doctor-daemon.ts";
+import { type DaemonProbe, daemonChecks, healthOf, probeDaemon } from "./doctor-daemon.ts";
 import {
   binaryChecks,
   duplicatesCheck,
@@ -43,6 +45,10 @@ export interface DoctorOptions {
   readonly socket?: string;
   readonly adminSocket?: string;
   readonly config?: string;
+  /** `--audit-pubkey`: the public key to verify checkpoints with (default `[audit] public_key`). */
+  readonly auditPubkey?: string;
+  /** `--audit-remote`: the team's off-box copy to compare the local log with. */
+  readonly auditRemote?: string;
 }
 
 /** The process around a run: its view of the machine and where notices go. */
@@ -56,6 +62,10 @@ interface DaemonPaths {
   readonly socket: string;
   readonly adminSocket: string;
   readonly audit: string;
+  /** `[audit] key`, `public_key`, `require_signing`. */
+  readonly key: string;
+  readonly publicKey: string;
+  readonly requireSigning: boolean;
   /** copsd's home: the canary's config write targets `<home>/.claude/settings.json`. */
   readonly home: string;
 }
@@ -67,6 +77,9 @@ function defaultPaths(home: string): DaemonPaths {
     socket: join(dir, "copsd.sock"),
     adminSocket: join(dir, "copsd-admin.sock"),
     audit: join(dir, "audit.jsonl"),
+    key: join(dir, "keys", "audit-ed25519.key"),
+    publicKey: join(home, ".config", "jev-cops", "audit-ed25519.pub"),
+    requireSigning: false,
     home,
   };
 }
@@ -77,6 +90,9 @@ function loadedPart(loaded: LoadedConfig): { check: Check; paths: DaemonPaths } 
     socket: daemon.socket,
     adminSocket: daemon.adminSocket,
     audit: audit.path,
+    key: audit.key,
+    publicKey: audit.publicKey,
+    requireSigning: audit.requireSigning,
     home: daemon.home,
   };
   const from =
@@ -206,6 +222,23 @@ async function claudeCodeChecks(
   ];
 }
 
+/** The audit checks' input: config paths, `--audit-pubkey`/`--audit-remote`, copsd's health. */
+function auditInput(
+  o: DoctorOptions,
+  e: DoctorEnv,
+  p: DaemonPaths,
+  probe: DaemonProbe,
+): AuditDoctorInput {
+  return {
+    path: p.audit,
+    keyPath: p.key,
+    publicKey: o.auditPubkey === undefined ? p.publicKey : resolve(e.cwd, o.auditPubkey),
+    requireSigning: p.requireSigning,
+    remote: o.auditRemote === undefined ? null : resolve(e.cwd, o.auditRemote),
+    health: healthOf(probe)?.audit ?? null,
+  };
+}
+
 /** Runs every check `o` asks for, in report order. */
 export async function runDoctor(o: DoctorOptions, deps: DoctorDeps): Promise<Check[]> {
   const e = deps.env;
@@ -218,7 +251,7 @@ export async function runDoctor(o: DoctorOptions, deps: DoctorDeps): Promise<Che
   return [
     config.check,
     ...daemonChecks(probe),
-    ...auditChecks(config.paths.audit),
+    ...auditChecks(auditInput(o, e, config.paths, probe)),
     ...(claude ? await claudeCodeChecks(o, deps, probe, config.paths) : []),
     ...(pi ? piChecks(e, socket, o.harness === "pi") : []),
     ...(claude ? gapChecks("claude-code gaps", CLAUDE_CODE_GAPS) : []),

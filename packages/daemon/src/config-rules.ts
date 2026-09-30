@@ -59,8 +59,15 @@ const LOWER_IS_TIGHTER = new Set([
   "context.budget.holdAt",
 ]);
 
+/**
+ * Switches a repo may only turn on (D-103, D-104): signed checkpoints and fail-closed
+ * forwarding. Every other `[audit]` key (paths, keys, target, interval) is the user's.
+ */
+const TRUE_IS_TIGHTER = new Set(["audit.require_signing", "audit.forward.required"]);
+
 function tightens(dotted: string, value: unknown, base: unknown): boolean {
   if (dotted === "enforcement.mode") return value === "enforce";
+  if (TRUE_IS_TIGHTER.has(dotted)) return value === true;
   if (!LOWER_IS_TIGHTER.has(dotted)) return false;
   return typeof value === "number" && typeof base === "number" && value <= base;
 }

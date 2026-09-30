@@ -251,13 +251,13 @@ describe("binding", () => {
     const rt = await createRuntime(
       {
         ...td.config,
-        audit: { path: `${td.dir}/a2.jsonl`, forward: null },
+        audit: { ...td.config.audit, path: `${td.dir}/a2.jsonl`, forward: null },
         store: { path: `${td.dir}/s2.sqlite` },
       },
       { log: SILENT_LOGGER },
     );
     await expect(listen(rt)).rejects.toThrow(/already running/);
-    rt.close();
+    await rt.close();
   });
 });
 

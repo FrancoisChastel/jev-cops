@@ -12,6 +12,13 @@ import {
 } from "@jev-cops/core";
 import { z } from "zod";
 import {
+  type AuditConfig,
+  auditConfig,
+  auditFileSchema,
+  DEFAULT_AUDIT_TABLE,
+  resolveAuditPaths,
+} from "./config-audit.ts";
+import {
   coreShapeProblems,
   getIn,
   isTable,
@@ -21,6 +28,8 @@ import {
 } from "./config-rules.ts";
 import { DEFAULT_GIT_PROBE_TIMEOUT_MS } from "./git-probe.ts";
 import { DEFAULT_HOLD_TOKEN_TTL_MS } from "./hold-tokens.ts";
+
+export type { AuditConfig, AuditForward, SyslogSettings } from "./config-audit.ts";
 
 /** `observe`: log every verdict, return `allow` (spec M4 observe-only). `enforce`: return as is. */
 export type EnforcementMode = "observe" | "enforce";
@@ -32,12 +41,6 @@ export type JudgeProviderName = (typeof JUDGE_PROVIDERS)[number];
 export interface HttpBind {
   readonly host: string;
   readonly port: number;
-}
-
-/** Where every audit line is also copied (M2 ships syslog; only `file` is implemented). */
-export interface AuditForward {
-  readonly kind: "syslog" | "file";
-  readonly target: string;
 }
 
 /** The resolved `cops.toml`: absolute paths, camelCase, defaults filled in. */
@@ -69,7 +72,7 @@ export interface DaemonConfig {
   };
   readonly context: ContextConfigInput;
   readonly policy: PolicyConfigInput;
-  readonly audit: { readonly path: string; readonly forward: AuditForward | null };
+  readonly audit: AuditConfig;
   readonly store: { readonly path: string };
   readonly enforcement: { readonly mode: EnforcementMode };
 }
@@ -124,12 +127,7 @@ const fileSchema = z.strictObject({
     .optional(),
   context: table.optional(),
   policy: table.optional(),
-  audit: z
-    .strictObject({
-      path: text.optional(),
-      forward: z.strictObject({ kind: z.enum(["syslog", "file"]), target: text }).optional(),
-    })
-    .optional(),
+  audit: auditFileSchema.optional(),
   store: z.strictObject({ path: text.optional() }).optional(),
   enforcement: z.strictObject({ mode: z.enum(["observe", "enforce"]).optional() }).optional(),
 });
@@ -147,7 +145,7 @@ const DEFAULT_TABLE: Table = deepFreeze({
   judge: { provider: "off", timeout_ms: 10_000, cache_ttl_ms: 600_000 },
   context: {},
   policy: {},
-  audit: { path: "~/.jev-cops/audit.jsonl" },
+  audit: DEFAULT_AUDIT_TABLE,
   store: { path: "~/.jev-cops/cops.sqlite" },
   enforcement: { mode: "observe" },
 });
@@ -209,7 +207,6 @@ const PATH_KEYS: ReadonlyArray<readonly [string, string]> = [
   ["daemon", "home"],
   ["daemon", "hook_binary"],
   ["policies", "dir"],
-  ["audit", "path"],
   ["store", "path"],
 ];
 
@@ -223,10 +220,8 @@ function resolvePaths(t: Table, base: string, home: string): Table {
     }
   }
   const audit = withPaths.audit;
-  if (!isTable(audit) || !isTable(audit.forward)) return withPaths;
-  const fwd = audit.forward as { kind: string; target: string };
-  const target = fwd.kind === "file" ? expandPath(fwd.target, base, home) : fwd.target;
-  return { ...withPaths, audit: { ...audit, forward: { ...fwd, target } } };
+  if (!isTable(audit)) return withPaths;
+  return { ...withPaths, audit: resolveAuditPaths(audit, (p) => expandPath(p, base, home)) };
 }
 
 function validate(raw: unknown, source: string): Table {
@@ -325,10 +320,17 @@ function toConfig(t: Table, home: string, policiesDir: string): DaemonConfig {
     },
     context: (f.context ?? {}) as ContextConfigInput,
     policy: (f.policy ?? {}) as PolicyConfigInput,
-    audit: { path: f.audit?.path ?? "", forward: f.audit?.forward ?? null },
+    audit: resolvedAudit(f.audit),
     store: { path: f.store?.path ?? "" },
     enforcement: { mode: f.enforcement?.mode ?? "observe" },
   });
+}
+
+/** `[audit]` of the merged layers; a forward that cannot work is a {@link ConfigError}. */
+function resolvedAudit(t: z.output<typeof auditFileSchema> | undefined): AuditConfig {
+  const audit = auditConfig(t);
+  if (!audit.ok) throw new ConfigError(`invalid config: ${audit.error}`);
+  return audit.value;
 }
 
 function existing(path: string | undefined): string | null {

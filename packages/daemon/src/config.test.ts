@@ -54,7 +54,10 @@ describe("defaults", () => {
       gitProbeTimeoutMs: 300,
       hookBinary: null,
     });
-    expect(config.audit).toEqual({ path: join(home, ".jev-cops", "audit.jsonl"), forward: null });
+    expect(config.audit).toMatchObject({
+      path: join(home, ".jev-cops", "audit.jsonl"),
+      forward: null,
+    });
     expect(config.store.path).toBe(join(home, ".jev-cops", "cops.sqlite"));
     expect(config.policies.dir).toBe(join(cwd, "policies"));
   });
@@ -310,7 +313,7 @@ describe("validation", () => {
       join(root, "f.toml"),
       '[audit.forward]\nkind = "file"\ntarget = "copy.jsonl"\n',
     );
-    expect(load({ configPath: f }).config.audit.forward).toEqual({
+    expect(load({ configPath: f }).config.audit.forward).toMatchObject({
       kind: "file",
       target: join(root, "copy.jsonl"),
     });

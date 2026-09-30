@@ -11,7 +11,7 @@ import {
 } from "@jev-cops/core";
 import { registerSdkModule } from "@jev-cops/sdk/register";
 import { type AuditLine, readAudit } from "../audit.ts";
-import type { DaemonConfig, EnforcementMode, HttpBind } from "../config.ts";
+import type { AuditForward, DaemonConfig, EnforcementMode, HttpBind } from "../config.ts";
 import type { GitRunner } from "../git-run.ts";
 import { SILENT_LOGGER } from "../log.ts";
 import { type RunningDaemon, startDaemon } from "../server.ts";
@@ -37,6 +37,20 @@ export interface TestDaemonOptions {
   /** Replaces the real git runner (timeouts, counting). */
   gitRunner?: GitRunner;
   http?: HttpBind | null;
+  /** `[audit.forward]`; default none. */
+  forward?: AuditForward | null;
+  /** `[audit] checkpoint_every`; default 100. */
+  checkpointEvery?: number;
+  /** `[audit] require_signing`; default false. */
+  requireSigning?: boolean;
+  /** An Ed25519 private key (PKCS #8 PEM) written to `[audit] key` before boot. */
+  signingKey?: string;
+  /** A key `cops keygen --rotate` left pending, written next to it before boot. */
+  pendingKey?: string;
+  /** Reuse this directory (a restart after `stop({ keepFiles: true })`). */
+  dir?: string;
+  /** The forwarder's reconnect backoff; default 20 ms to 200 ms here. */
+  forwardRetry?: { readonly minMs: number; readonly maxMs: number };
   /** `[daemon] hook_binary`; default none. */
   hookBinary?: string;
   context?: ContextConfigInput;
@@ -59,7 +73,8 @@ export interface TestDaemon {
   callWithHeaders(method: Method, path: string, body?: unknown): Promise<HttpReplyWithHeaders>;
   audit(): AuditLine[];
   writePolicy(file: string, source: string): void;
-  stop(): Promise<void>;
+  /** Stops the daemon and removes its directory (unless `keepFiles`, for a restart). */
+  stop(opts?: { keepFiles?: boolean }): Promise<void>;
 }
 
 type Method = "GET" | "POST";
@@ -133,16 +148,32 @@ export function testConfig(dir: string, opts: TestDaemonOptions): DaemonConfig {
     },
     context: opts.context ?? {},
     policy: mergeConfig<PolicyConfigInput>({ when: { budgetMs: 1_000 } }, opts.policy ?? {}),
-    audit: { path: join(dir, "audit.jsonl"), forward: null },
+    audit: {
+      path: join(dir, "audit.jsonl"),
+      forward: opts.forward ?? null,
+      checkpointEvery: opts.checkpointEvery ?? 100,
+      requireSigning: opts.requireSigning ?? false,
+      key: join(dir, "keys", "audit-ed25519.key"),
+      publicKey: join(dir, "audit-ed25519.pub"),
+    },
     store: { path: join(dir, "store.sqlite") },
     enforcement: { mode: opts.mode ?? "enforce" },
   };
 }
 
+/** Writes the signing key and a pending rotation where `testConfig` points `[audit] key`. */
+function writeKeys(dir: string, opts: TestDaemonOptions): void {
+  const key = join(dir, "keys", "audit-ed25519.key");
+  mkdirSync(join(dir, "keys"), { recursive: true, mode: 0o700 });
+  if (opts.signingKey !== undefined) writeFileSync(key, opts.signingKey, { mode: 0o600 });
+  if (opts.pendingKey !== undefined) writeFileSync(`${key}.next`, opts.pendingKey, { mode: 0o600 });
+}
+
 /** Starts a daemon in a new temp directory (short path: Unix sockets cap at ~104 bytes). */
 export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaemon> {
-  const dir = mkdtempSync(join(tmpdir(), "jvd-"));
-  mkdirSync(join(dir, "policies"));
+  const dir = opts.dir ?? mkdtempSync(join(tmpdir(), "jvd-"));
+  mkdirSync(join(dir, "policies"), { recursive: true });
+  writeKeys(dir, opts);
   if (opts.policiesDir === undefined) {
     for (const [file, source] of Object.entries(opts.policies)) {
       writeFileSync(join(dir, "policies", file), source);
@@ -163,6 +194,7 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     ...(opts.judge === undefined ? {} : { judge: opts.judge }),
     ...(opts.now === undefined ? {} : { now: opts.now }),
     ...(opts.gitRunner === undefined ? {} : { gitRunner: opts.gitRunner }),
+    forwardRetry: opts.forwardRetry ?? { minMs: 20, maxMs: 200 },
   });
   return {
     daemon,
@@ -180,9 +212,9 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
     writePolicy(file, source) {
       writeFileSync(join(dir, "policies", file), source);
     },
-    async stop() {
+    async stop(o = {}) {
       await daemon.stop();
-      rmSync(dir, { recursive: true, force: true });
+      if (o.keepFiles !== true) rmSync(dir, { recursive: true, force: true });
     },
   };
 }

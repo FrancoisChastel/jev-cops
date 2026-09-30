@@ -11,26 +11,41 @@
  * `config-tamper` before the command runs; reading it is held, not killed (the daemon also
  * lists it in `privatePaths`: its scored decisions are the T6 oracle), on the Claude Code
  * hook an ask with a human and a deny without one. Live in `cops doctor` (M1
- * step 7): it verifies the chain and fails on a break. Shipping off-box (the syslog/S3
- * forwarder), which alone catches tail truncation or a full recompute (L6), is M2.
+ * step 7): it verifies the chain and fails on a break. Live off-box (M2, D-103/D-104): a
+ * real copsd signs its log (Ed25519 checkpoints) and ships every line over TLS syslog to an
+ * in-test receiver (never a real server); `cops audit verify --remote` and `cops doctor
+ * --audit-remote` pass on the intact pair, a tail cut at a checkpoint (which still verifies
+ * locally) fails against the off-box copy, and a full recompute without the key fails the
+ * signatures. The live rsyslog container run is the gated OpenShell step (PLAN-M2 §9).
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { VerdictResponse } from "@jev-cops/core";
+import { runAuditCommand } from "../../packages/cli/src/commands/audit.ts";
 import { runDoctorCommand } from "../../packages/cli/src/commands/doctor.ts";
 import { captureIo } from "../../packages/cli/src/io.ts";
 import { copsToml, doctorEnv, doctorFixture } from "../../packages/cli/src/testing/doctor.ts";
-import { verifyChain } from "../../packages/daemon/src/audit.ts";
+import { auditTexts, verifyChain } from "../../packages/daemon/src/audit.ts";
+import { linesFromMessages } from "../../packages/daemon/src/audit-forward/syslog-parse.ts";
+import { publicKeyFromPem } from "../../packages/daemon/src/audit-sign/keys.ts";
+import { verifyAuditLines } from "../../packages/daemon/src/audit-verify.ts";
 import {
   startTestDaemon,
   type TestDaemon,
   withFreshId,
 } from "../../packages/daemon/src/testing/daemon.ts";
+import { waitFor } from "../../packages/daemon/src/testing/forward-contract.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
+import { recompute, testKey } from "../../packages/daemon/src/testing/signed-log.ts";
+import {
+  type SyslogReceiver,
+  startSyslogReceiver,
+  syslogForwardTo,
+} from "../../packages/daemon/src/testing/syslog-receiver.ts";
 import { buildEvent } from "../fixtures/context/index.ts";
 import { claudeCode, claudeWorkspace } from "./claude-code.ts";
-import { pending } from "./pending.ts";
 
 describe("T12 log tampering", () => {
   let td: TestDaemon;
@@ -110,12 +125,120 @@ describe("T12 log tampering", () => {
       f.dispose();
     }
   });
-
-  test.todo(
-    "the log is shipped off-box and cops doctor alerts on a chain break (catches tail truncation)",
-    pending("M2 (forwarder, cops doctor)"),
-  );
 });
+
+describe("T12 the log is shipped off-box and signed: truncation and recompute are alerts", () => {
+  const key = testKey();
+  let td: TestDaemon;
+  let receiver: SyslogReceiver;
+  let scratch: string;
+  let pub: string;
+
+  beforeEach(async () => {
+    receiver = await startSyslogReceiver();
+    scratch = mkdtempSync(join(tmpdir(), "jvt12-"));
+    td = await startTestDaemon({
+      policies: { "ok.ts": policyModule("ok") },
+      signingKey: key.privatePem,
+      checkpointEvery: 3,
+      forward: syslogForwardTo(receiver, scratch),
+    });
+    pub = td.config.audit.publicKey;
+    writeFileSync(pub, key.publicPem);
+    for (const command of ["ls", "cat README.md", "rm -rf build", "pwd", "id"]) {
+      const e = withFreshId(buildEvent({ tool: "Bash", kind: "exec", input: { command } }));
+      await td.call("POST", "/v1/judge", e);
+    }
+    await waitFor(
+      () => linesFromMessages(receiver.messages()).lines.length,
+      (n) => n >= td.audit().length,
+    );
+  });
+
+  afterEach(async () => {
+    await td.stop();
+    await receiver.close();
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  /** The receiver's raw RFC 5425 capture, as the team's copy. */
+  function capture(): string {
+    const path = join(scratch, "receiver.raw");
+    writeFileSync(path, receiver.frames());
+    return path;
+  }
+
+  function snapshot(name: string, texts: readonly string[]): string {
+    const path = join(scratch, name);
+    writeFileSync(path, `${texts.join("\n")}\n`);
+    return path;
+  }
+
+  async function verify(...argv: string[]) {
+    return runAuditCommand(["verify", ...argv], captureIo());
+  }
+
+  async function doctorOn(auditPath: string, ...extra: string[]) {
+    const f = doctorFixture();
+    try {
+      const toml = copsToml(f, { ...td.config, audit: { ...td.config.audit, path: auditPath } });
+      const io = captureIo();
+      const deps = { env: doctorEnv(f), notice: () => {} };
+      const argv = ["--json", "--config", toml, ...extra];
+      const code = await runDoctorCommand(argv, io, { deps: () => deps, tty: false });
+      const report = JSON.parse(io.stdout.join("\n")) as {
+        checks: { name: string; status: string; detail: string }[];
+      };
+      return { code, byName: (n: string) => report.checks.find((c) => c.name === n) };
+    } finally {
+      f.dispose();
+    }
+  }
+
+  test("shipped off-box: the receiver holds the local log line for line, and verify --remote agrees", async () => {
+    const local = auditTexts(td.config.audit.path);
+    const copy = linesFromMessages(receiver.messages());
+    expect(copy.problems).toEqual([]);
+    expect(copy.lines).toEqual(td.audit().slice(0, copy.lines.length));
+    expect(copy.lines.length).toBe(local.length);
+    const snap = snapshot("local.jsonl", local);
+    expect(await verify(snap, "--pubkey", pub, "--remote", capture())).toBe(0);
+  });
+
+  test("a tail cut at a checkpoint verifies locally, and cops doctor fails it against the off-box copy", async () => {
+    const texts = auditTexts(td.config.audit.path);
+    const last = texts.findLastIndex(
+      (t, i) => i < texts.length - 1 && t.includes('"kind":"checkpoint"'),
+    );
+    const cut = snapshot("cut.jsonl", texts.slice(0, last + 1));
+    expect(verifyAuditLines(auditTexts(cut), { keys: [publicKeyFromPem(key.publicPem)] }).ok).toBe(
+      true,
+    );
+    const remote = capture();
+    expect(await verify(cut, "--pubkey", pub, "--remote", remote)).toBe(1);
+    const d = await doctorOn(cut, "--audit-remote", remote);
+    expect(d.code).toBe(1);
+    expect(d.byName("off-box copy")?.status).toBe("fail");
+    expect(d.byName("off-box copy")?.detail).toContain(
+      `local tail truncated after seq ${last + 1}`,
+    );
+  });
+
+  test("a full recompute without the key fails the signatures in cops doctor", async () => {
+    const texts = recompute(auditTexts(td.config.audit.path), 3, { forged: true });
+    const forged = snapshot("forged.jsonl", texts);
+    expect(verifyChainOf(forged)).toBe(true);
+    const d = await doctorOn(forged);
+    expect(d.code).toBe(1);
+    expect(d.byName("chain")?.status).toBe("ok");
+    expect(d.byName("signatures")?.status).toBe("fail");
+    expect(await verify(forged, "--pubkey", pub)).toBe(1);
+  });
+});
+
+function verifyChainOf(path: string): boolean {
+  return verifyChain(path).ok;
+}
 
 describe("T12 an agent that edits or truncates the audit log is killed at the hook", () => {
   let td: TestDaemon;
