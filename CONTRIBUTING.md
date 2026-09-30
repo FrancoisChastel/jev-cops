@@ -29,6 +29,14 @@ Bun ≥ 1.3 is required (`bun:sqlite`, `bun build --compile`). Node is not a sup
 - No features outside the spec. Ambiguity listed under "Open decisions" gets asked in an
   issue; anything else takes the safer option and a row in `docs/DECISIONS.md`.
 
+## Live tests run in Docker, never on your machine
+
+Tests and scripts must never run, install or configure a real harness (`claude`, `codex`,
+`opencode`, `pi`), a scanner, or your login session's services on the host. Unit and e2e
+tests use fakes and throwaway `HOME` directories; live verification against real harness
+binaries runs only inside the Docker images under `docker/`, against a fake model API on
+an internal network, with no real credentials (see `scripts/live/`).
+
 ## Workflow
 
 1. Write the test first, watch it fail.
