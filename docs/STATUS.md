@@ -174,24 +174,28 @@ config all behaved as specified; fresh clone → check → gate → build green.
 
 | # | Sev | Finding | Status |
 |---|---|---|---|
-| M1 | medium | `dd of=<kill-tier path>` is `allow`: the normalizer does not know `dd`, so config-tamper never sees the write (hook binary, store, Codex config) | in progress |
+| M1 | medium | `dd of=<kill-tier path>` is `allow`: the normalizer does not know `dd`, so config-tamper never sees the write (hook binary, store, Codex config) | fixed: `dd`, `install`, `rsync`, copies into dirs, `tar -x`, `unzip -d`, `patch` (D-097) |
 | M2 | medium | `cat ~/.jev-cops/audit.jsonl` is `allow`: the full scored decisions (the T6 oracle kept off agent channels by D-066/D-096) are readable, and no gap line says so | in progress |
-| L1 | low | `pkill -f copsd` / `cops-hook` is `allow` (DoS only: the hook fails closed); symlink and `$VAR`-built write paths uncaught (documented normalizer gaps) | in progress |
-| L2 | low | `cops doctor` says "read-only" but its canary appends audit lines and latches throw-away sessions | in progress |
+| L1 | low | `pkill -f copsd` / `cops-hook` is `allow` (DoS only: the hook fails closed); symlink and `$VAR`-built write paths uncaught (documented normalizer gaps) | fixed: stopping the judge held by name (D-100); pid kills, `$VAR` and symlink writes printed as gaps |
+| L2 | low | `cops doctor` says "read-only" but its canary appends audit lines and latches throw-away sessions | fixed: doctor states its footprint (D-102) |
 | L3 | note | SIGUSR1 to the hook panics Bun (exit 133, no output → the tool proceeds); same class as PLAN-M1 §5 residual #2 (SIGKILL/OOM), closed only by OpenShell | documented |
-| T | low | `adapters/claude-code/testing/pre-decision.ts` (the fake Claude Code's precedence oracle) has no unit test | in progress |
+| T | low | `adapters/claude-code/testing/pre-decision.ts` (the fake Claude Code's precedence oracle) has no unit test | fixed: 30 doc-quoted tests; two oracle fail-open bugs fixed (D-101) |
+
+**After fixes:** 3188 tests + 6 todo, coverage 98.8 % functions / 99.2 % lines, gate PASS
+(6 policies, 133 cases, 266 runs). **M1 closed.**
 
 ## In progress
 
-- Fixing the M1 gate review findings above.
+- Nothing. M1 closed 2026-09-30.
 
 ## Next
 
-- The judge's own state is agent-readable without OpenShell: `~/.jev-cops/audit.jsonl`
-  and the SQLite store hold the full scored decisions (D-050), and writes to them are
-  `kill` (D-082) but reads are not matched. Needs a gap line at least; possibly a
-  `config-tamper` hold on direct reads. Also `~/.claude/projects/` transcripts (D-096 limits
-  what they contain).
+- `policies/config-tamper.ts` is at 398 lines: the loader imports every `.ts` in
+  `policies/`, so the next addition needs helper support (a subdirectory the loader skips,
+  or SDK-level path-tier helpers).
+- Normalizer gaps still printed, not closed: writes through `$VAR` paths or a symlink,
+  files inside an archive/patch, reads of the judge's records from inside an interpreter or
+  a recursive read above them, `kill <pid>`.
 - Self-minted holds: an agent that posts its own `/v1/judge` gets that hold's token and a
   precedent matching its later real call; only OpenShell (keeping tool processes off the
   socket) closes it — T07 todo for M2.

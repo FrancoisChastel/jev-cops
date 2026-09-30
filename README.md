@@ -12,7 +12,7 @@ The same `git push --force` is allowed on a feature branch the user asked about,
 on the default branch, and denied in a headless session. What changes is the context,
 not the command string.
 
-> **Status: M0 and M1 complete** (M1 in gate review). Works today with **Pi** and **Claude
+> **Status: M0 and M1 complete and gate-reviewed.** Works today with **Pi** and **Claude
 > Code**: the hook blocks, rewrites and asks, verified against the real `pi` and `claude`
 > binaries ([Pi capture](docs/captures/pi-m0.md), [Claude Code capture](docs/captures/claude-code-m1.md)).
 > `cops install` wires it up and `cops doctor` proves it fires. Next: OpenShell hard
