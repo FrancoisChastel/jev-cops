@@ -4,14 +4,17 @@
  * docs/adapters.md#claude-code.
  */
 export * from "./args.ts";
+export * from "./canary.ts";
 export * from "./client.ts";
 export * from "./deps.ts";
 export * from "./events-pre.ts";
 export * from "./events-session.ts";
 export * from "./gaps.ts";
 export * from "./hook.ts";
-export * from "./install.ts";
+export * from "./hook-binary.ts";
 export * from "./hook-entries.ts";
+export * from "./install.ts";
+export * from "./install-state.ts";
 export * from "./intact.ts";
 export * from "./line-diff.ts";
 export * from "./log.ts";
@@ -24,6 +27,7 @@ export * from "./refusals.ts";
 export * from "./settings.ts";
 export * from "./settings-io.ts";
 export * from "./settings-merge.ts";
+export * from "./spawn.ts";
 export * from "./state.ts";
 export * from "./tools.ts";
 export * from "./verdict.ts";

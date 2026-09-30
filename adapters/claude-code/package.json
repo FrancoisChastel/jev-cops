@@ -11,7 +11,9 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./process": "./src/process.ts"
+    "./process": "./src/process.ts",
+    "./canary": "./src/canary.ts",
+    "./install": "./src/install.ts"
   },
   "files": [
     "src",

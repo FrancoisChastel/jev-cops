@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CLAUDE_CODE_STATE_FILE, readHarnessVersion } from "./state.ts";
+import {
+  CLAUDE_CODE_STATE_FILE,
+  claudeCodeStatePath,
+  parseClaudeVersion,
+  readHarnessVersion,
+} from "./state.ts";
 
 let home = "";
 afterEach(() => rmSync(home, { recursive: true, force: true }));
@@ -30,5 +35,22 @@ describe("readHarnessVersion (claude --version as install/doctor recorded it)", 
     ["an array", "[]"],
   ])("%s → null (omitted from events)", (_name, content) => {
     expect(readHarnessVersion(withState(content))).toBeNull();
+  });
+});
+
+describe("parseClaudeVersion (`claude --version` prints `2.1.280 (Claude Code)`)", () => {
+  test.each([
+    ["2.1.280 (Claude Code)\n", "2.1.280"],
+    ["2.1.285", "2.1.285"],
+    ["2.2.0-beta.1 (Claude Code)", "2.2.0-beta.1"],
+    ["Claude Code 2.1.280", null],
+    ["", null],
+    [`1.2.3-${"x".repeat(80)}`, null],
+  ])("%p → %p", (output, version) => {
+    expect(parseClaudeVersion(output)).toBe(version);
+  });
+
+  test("the state file lives under ~/.jev-cops", () => {
+    expect(claudeCodeStatePath("/h")).toBe(`/h/.jev-cops/${CLAUDE_CODE_STATE_FILE}`);
   });
 });
