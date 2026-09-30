@@ -1,9 +1,45 @@
 import { type Classification, type InterpreterInfo, plain } from "./classification.ts";
-import { lookup, optionValue, parseArgs } from "./options.ts";
+import { hasOption, lookup, optionValue, parseArgs } from "./options.ts";
 import type { PathArg } from "./types.ts";
+
+/**
+ * Verb of a shell, REPL or remote login started without a command to run: it accepts
+ * later input jev-cops never sees (Codex's `write_stdin` into a running `exec_command`
+ * session does not run `PreToolUse`, PLAN-M3 §2.1 row 9). `opaque-exec` v2 holds it.
+ */
+export const INTERACTIVE_SHELL_VERB = "interactive-shell";
 
 /** Shells: always interpreters; `-c` code is parsed recursively as bash. */
 export const SHELLS = ["sh", "bash", "zsh", "dash", "ksh", "fish", "ash"] as const;
+
+/**
+ * REPLs that are not otherwise interpreters: interactive when started with no positional
+ * argument (a positional is a script or a subcommand). Over-inclusive on purpose.
+ */
+export const REPLS = [
+  ...["irb", "pry", "ipython", "ipython3", "bpython", "lua", "luajit", "tclsh", "wish"],
+  ...["ghci", "julia", "erl", "iex", "jshell", "scala", "R"],
+] as const;
+
+/** Language flags that enter the REPL even with a script (`python -i x.py`, `php -a`). */
+const LANG_INTERACTIVE_FLAGS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  python: ["-i"],
+  python2: ["-i"],
+  python3: ["-i"],
+  node: ["-i", "--interactive"],
+  php: ["-a", "--interactive"],
+};
+
+/** `c` with the {@link INTERACTIVE_SHELL_VERB} verb added. */
+export function interactive(c: Classification): Classification {
+  return { ...c, verbs: [...c.verbs, INTERACTIVE_SHELL_VERB] };
+}
+
+/** True for a {@link REPLS} binary started without a script or subcommand. */
+export function isBareRepl(name: string, args: ReadonlyArray<string>): boolean {
+  const repl = (REPLS as ReadonlyArray<string>).includes(name);
+  return repl && parseArgs(args, new Set()).positionals.length === 0;
+}
 
 /** Language interpreters and the flags that take inline code (never parsed). */
 export const INTERPRETER_INLINE_FLAGS: Readonly<Record<string, ReadonlyArray<string>>> = {
@@ -53,7 +89,7 @@ function classifyShell(name: string, args: ReadonlyArray<string>, base: number):
   }
   const readsStdin = parsed.options.some((o) => o.name === "-s");
   if (first === undefined || first.value === "-" || readsStdin) {
-    return interpreted(name, info(true, null, true));
+    return interactive(interpreted(name, info(true, null, true)));
   }
   return interpreted(name, info(true, null, false), execPath(first.value, base + first.index));
 }
@@ -74,23 +110,32 @@ function classifyLang(
   const parsed = parseArgs(args, new Set([...inline, ...(lookup(LANG_VALUE_OPTS, key) ?? [])]));
   const code = optionValue(parsed, inline);
   if (code !== null) return interpreted(name, info(false, code, false));
-  if (parsed.options.some((o) => o.name === "-m")) return plain("exec", [name]);
+  const tty = hasOption(parsed, lookup(LANG_INTERACTIVE_FLAGS, key) ?? []);
   const first = parsed.positionals[0];
-  if (first === undefined || first.value === "-") return interpreted(name, info(false, null, true));
-  return plain("exec", [name], { paths: [execPath(first.value, base + first.index)] });
+  const c = parsed.options.some((o) => o.name === "-m")
+    ? plain("exec", [name])
+    : first === undefined || first.value === "-"
+      ? interpreted(name, info(false, null, true))
+      : plain("exec", [name], { paths: [execPath(first.value, base + first.index)] });
+  return tty || c.interpreter?.stdin === true ? interactive(c) : c;
 }
 
+/** `su` runs `-c` code, or else starts an interactive shell as another user. */
 function classifySu(args: ReadonlyArray<string>): Classification {
   const code = optionValue(parseArgs(args, SU_VALUE_OPTS), ["-c", "--command"]);
-  const interp = code === null ? null : info(true, code, false);
-  return plain("exec", ["su", "privilege"], { interpreter: interp });
+  const c = plain("exec", ["su", "privilege"], {
+    interpreter: code === null ? null : info(true, code, false),
+  });
+  return code === null ? interactive(c) : c;
 }
 
 /**
  * Classifies interpreters: shells (`-c` code, stdin, or a script), `eval` (its args
  * joined as code), `source`/`.` (a script), `su -c`, and python/node/perl/ruby/php
  * with inline code or stdin. A language running a script file is a plain exec with
- * the script as an exec path. Returns null when `name` is not an interpreter.
+ * the script as an exec path. A shell or language reading its code from stdin, a REPL
+ * flag (`python -i`) and `su` without `-c` add {@link INTERACTIVE_SHELL_VERB}.
+ * Returns null when `name` is not an interpreter.
  * `base` is the argv index of `args[0]`.
  */
 export function classifyInterpreter(

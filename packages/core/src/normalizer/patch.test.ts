@@ -44,7 +44,12 @@ describe("parsePatch: the apply_patch grammar (codex-rs/apply-patch/src/parser.r
       ["move", "path/update.py", "path/update2.py"],
       ["update", "b.py"],
     ]);
-    expect(parsed.hunks.map((h) => h.added)).toEqual(["abc\ndef\n", "", "    return 123\n", "bar\n"]);
+    expect(parsed.hunks.map((h) => h.added)).toEqual([
+      "abc\ndef\n",
+      "",
+      "    return 123\n",
+      "bar\n",
+    ]);
   });
 
   test("an empty patch is valid and names nothing", () => {
@@ -97,11 +102,17 @@ describe("parsePatch: malformed patches are invalid but keep every path they nam
     ["End of File outside an update", patch("*** Add File: a", "*** End of File"), [["add", "a"]]],
     ["a stray Move to", patch("*** Move to: t"), [["update", "t"]]],
     ["a late Move to", patch("*** Update File: s", "+x", "*** Move to: t"), [["move", "s", "t"]]],
-    ["an Environment ID after a hunk", patch("*** Delete File: a", "*** Environment ID: x"), [["delete", "a"]]],
+    [
+      "an Environment ID after a hunk",
+      patch("*** Delete File: a", "*** Environment ID: x"),
+      [["delete", "a"]],
+    ],
     ["a second Begin", patch("*** Begin Patch", "*** Delete File: a"), [["delete", "a"]]],
     [
       "an End in the middle hides nothing",
-      [patch("*** Delete File: a"), patch("*** Add File: /home/dev/.codex/hooks.json", "+{}")].join("\n"),
+      [patch("*** Delete File: a"), patch("*** Add File: /home/dev/.codex/hooks.json", "+{}")].join(
+        "\n",
+      ),
       [
         ["delete", "a"],
         ["add", "/home/dev/.codex/hooks.json"],
@@ -142,7 +153,11 @@ describe("hunkCommands: one command per file operation", () => {
         [PATCH_VERB, "update"],
         [{ raw: "src/a.ts", path: "/work/repo/src/a.ts", access: "write" }],
       ],
-      ["fs.delete", [PATCH_VERB, "delete"], [{ raw: "../old.txt", path: "/work/old.txt", access: "delete" }]],
+      [
+        "fs.delete",
+        [PATCH_VERB, "delete"],
+        [{ raw: "../old.txt", path: "/work/old.txt", access: "delete" }],
+      ],
       [
         "fs.write",
         [PATCH_VERB, "move"],

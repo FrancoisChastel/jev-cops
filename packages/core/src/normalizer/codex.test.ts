@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  type CodexFixtureName,
-  codexPayload,
-} from "../../../../tests/fixtures/codex/index.ts";
+import { type CodexFixtureName, codexPayload } from "../../../../tests/fixtures/codex/index.ts";
 import { loadEventFixture } from "../../../../tests/fixtures/events/index.ts";
 import { type Event, parseEvent } from "../schema/event.ts";
 import { INTERACTIVE_SHELL_VERB } from "./interpreters.ts";
@@ -50,11 +47,18 @@ const verbs = (n: NormalizedEvent): string[] => n.commands.flatMap((c) => c.verb
 describe("normalize: Codex Bash (exec_command matched as Bash, exec_command.rs:519-530)", () => {
   test("tool_input.command is a string read exactly like Claude Code's Bash", async () => {
     const n = await normalize(fromPayload("pre-tool-use.bash"), OPTS);
-    expect(n).toMatchObject({ kind: "fs.delete", paths: ["/work/repo/build"], raw: "rm -rf ./build" });
+    expect(n).toMatchObject({
+      kind: "fs.delete",
+      paths: ["/work/repo/build"],
+      raw: "rm -rf ./build",
+    });
   });
 
   test("an array command (the spec's shape, not the docs') fails closed", async () => {
-    const n = await normalize(codex("Bash", { command: ["rm", "-rf", "x"] }, { kind: "exec" }), OPTS);
+    const n = await normalize(
+      codex("Bash", { command: ["rm", "-rf", "x"] }, { kind: "exec" }),
+      OPTS,
+    );
     expect(n.kind).toBe("exec");
     expect(n.opaque.map((o) => o.reason)).toEqual(["parse-error"]);
   });
@@ -88,7 +92,8 @@ describe("normalize: Codex apply_patch (tool_input.command is the patch, apply_p
       [PATCH_VERB, "delete"],
     ]);
     expect(n.opaque).toEqual([]);
-    expect(n.raw).toBe(codexPayload("pre-tool-use.apply-patch").tool_input.command as string);
+    const input = codexPayload("pre-tool-use.apply-patch").tool_input as Json;
+    expect(n.raw).toBe(input.command as string);
   });
 
   test("adding ~/.codex/hooks.json is a write to it", async () => {
@@ -132,9 +137,18 @@ describe("normalize: Codex apply_patch (tool_input.command is the patch, apply_p
   });
 
   test("the state hash follows the patch body", async () => {
-    const a = await normalize(codex("apply_patch", { command: patch("*** Add File: a", "+1") }), OPTS);
-    const b = await normalize(codex("apply_patch", { command: patch("*** Add File: a", "+2") }), OPTS);
-    const c = await normalize(codex("apply_patch", { command: patch("*** Add File: a", "+1") }), OPTS);
+    const a = await normalize(
+      codex("apply_patch", { command: patch("*** Add File: a", "+1") }),
+      OPTS,
+    );
+    const b = await normalize(
+      codex("apply_patch", { command: patch("*** Add File: a", "+2") }),
+      OPTS,
+    );
+    const c = await normalize(
+      codex("apply_patch", { command: patch("*** Add File: a", "+1") }),
+      OPTS,
+    );
     expect(a.stateHash).not.toBe(b.stateHash);
     expect(a.stateHash).toBe(c.stateHash);
   });

@@ -1,8 +1,10 @@
 import type { CallKind, Event } from "../schema/event.ts";
 import { maxKind } from "./classification.ts";
 import { eventKind, normalizeCommand } from "./command.ts";
+import { withHarnessEnv } from "./harness.ts";
 import { canonicalJson, safeStringify, sha256Hex } from "./hash.ts";
 import { urlHost } from "./net.ts";
+import { hunkCommands, PATCH_VERB, parsePatch, readShellPatch } from "./patch.ts";
 import { resolvePath } from "./paths.ts";
 import { canonicalTool, mcpServer, type ToolRule, toolRule } from "./tools.ts";
 import type {
@@ -10,16 +12,20 @@ import type {
   NormalizedCommand,
   NormalizedEvent,
   NormalizedScript,
+  OpaqueSpan,
   PathRef,
 } from "./types.ts";
 
 export {
   canonicalTool,
+  HARNESS_TOOL_ALIASES,
+  HARNESS_TOOL_RULES,
   isInertTool,
   mcpServer,
   TOOL_ALIASES,
   TOOL_RULES,
   type ToolRule,
+  type ToolTable,
   toolRule,
 } from "./tools.ts";
 export type * from "./types.ts";
@@ -36,20 +42,35 @@ function stringField(input: Record<string, unknown>, field: string): string | un
 
 const MCP_PREFIX = /^mcp(?::|__)/;
 
+/** The event's rule from its own harness's table (D-054); see {@link toolRule}. */
 function ruleFor(event: Event): ToolRule | null {
   const { tool, kind, input } = event.call;
-  const known = toolRule(tool);
+  const known = toolRule(tool, event.harness);
   if (known !== undefined) return known;
   const shellLike = kind === "exec" && stringField(input, "command") !== undefined;
   return shellLike && !MCP_PREFIX.test(tool) ? { reader: "bash" } : null;
 }
 
-const SHELL_READERS: ReadonlyArray<ToolRule["reader"]> = ["bash", "shell", "monitor"];
+/** The input field holding the text a shell-like or patch rule reads. */
+function textField(rule: ToolRule | null): string | undefined {
+  switch (rule?.reader) {
+    case "bash":
+    case "monitor":
+      return "command";
+    case "shell":
+      return rule.field ?? "command";
+    case "patch":
+      return rule.field;
+    default:
+      return undefined;
+  }
+}
 
+/** The command, script or patch text the rule reads, else the input as JSON. */
 function rawOf(event: Event, rule: ToolRule | null): string {
-  const command = stringField(event.call.input, "command");
-  const shell = rule !== null && SHELL_READERS.includes(rule.reader);
-  return shell && command !== undefined ? command : safeStringify(event.call.input);
+  const field = textField(rule);
+  const text = field === undefined ? undefined : stringField(event.call.input, field);
+  return text ?? safeStringify(event.call.input);
 }
 
 /** True when the input was read as a bash command, so the commands already cover it. */
@@ -155,18 +176,98 @@ function wsUrl(input: Readonly<Record<string, unknown>>): string | undefined {
   return typeof url === "string" ? url : undefined;
 }
 
-async function readBash(event: Event, raw: string, opts: NormalizeOptions) {
-  const command = stringField(event.call.input, "command");
+function unique(values: ReadonlyArray<string>): string[] {
+  return [...new Set(values)];
+}
+
+/** A script whose commands changed: its paths and kind recomputed as normalizeCommand does. */
+function rebuilt(
+  script: NormalizedScript,
+  commands: NormalizedCommand[],
+  opaque: OpaqueSpan[],
+): NormalizedScript {
+  const paths = unique(commands.flatMap((c) => c.targets.paths));
+  return { ...script, commands, opaque, paths, kind: eventKind(commands, opaque) };
+}
+
+/**
+ * What only a whole normalized command shows: a harness CLI run with config-relocating
+ * environment (harness.ts) and the patch a shell `apply_patch` reads (patch.ts).
+ */
+function readShellCommands(script: NormalizedScript, home: string): NormalizedScript {
+  const read = script.commands.map((c) => readShellPatch(withHarnessEnv(c), home));
+  const opaque = [...script.opaque, ...read.flatMap((r) => r.opaque)];
+  return rebuilt(
+    script,
+    read.map((r) => r.command),
+    opaque,
+  );
+}
+
+/**
+ * The working directory a call names (OpenCode's `bash` `workdir`), read like a leading
+ * `cd <dir> &&`: a command of kind `other` naming the directory with `unknown` access, so
+ * scope and config-tamper see it and the state hash tells two directories apart.
+ */
+function withWorkdir(script: NormalizedScript, workdir: string, dir: string): NormalizedScript {
+  const cd: NormalizedCommand = {
+    argv: ["cd", workdir],
+    env: {},
+    redirects: [],
+    heredocs: [],
+    raw: workdir,
+    kind: "other",
+    targets: { paths: [dir], hosts: [] },
+    pathRefs: [{ raw: workdir, path: dir, access: "unknown" }],
+    verbs: ["cd"],
+    isInterpreter: false,
+    viaInterpreter: false,
+  };
+  return rebuilt(script, [cd, ...script.commands], script.opaque);
+}
+
+type BashRule = Extract<ToolRule, { reader: "bash" }>;
+
+async function readBash(event: Event, rule: BashRule, raw: string, opts: NormalizeOptions) {
+  const { input, cwd } = event.call;
+  const command = stringField(input, "command");
   if (command === undefined) return unparsed(event, raw);
-  return normalizeCommand(command, { cwd: event.call.cwd, home: opts.home });
+  const workdir = rule.workdir === undefined ? undefined : stringField(input, rule.workdir);
+  const dir = workdir === undefined ? null : resolvePath(workdir, cwd, opts.home);
+  const script = await normalizeCommand(command, { cwd: dir ?? cwd, home: opts.home });
+  const read = readShellCommands(script, opts.home);
+  return workdir === undefined || dir === null ? read : withWorkdir(read, workdir, dir);
 }
 
 async function readMonitor(event: Event, raw: string, opts: NormalizeOptions) {
   if (stringField(event.call.input, "command") !== undefined) {
-    return inBackground(await readBash(event, raw, opts));
+    return inBackground(await readBash(event, { reader: "bash" }, raw, opts));
   }
   const url = wsUrl(event.call.input);
   return url === undefined ? unparsed(event, raw) : readUrl(url, event, raw);
+}
+
+/**
+ * An `apply_patch` tool (Codex `command`, OpenCode `patchText`): one command per file
+ * operation. A malformed patch keeps the paths it names and adds a `parse-error` span
+ * (D-005); one that names nothing is {@link unparsed}; an empty patch is a bare write.
+ */
+function readPatch(
+  rule: Extract<ToolRule, { reader: "patch" }>,
+  event: Event,
+  raw: string,
+  opts: NormalizeOptions,
+): NormalizedScript {
+  const { tool, input, cwd } = event.call;
+  const text = stringField(input, rule.field);
+  const parsed = text === undefined ? null : parsePatch(text);
+  if (parsed === null || (!parsed.valid && parsed.hunks.length === 0)) return unparsed(event, raw);
+  if (parsed.hunks.length === 0) {
+    return toolScript(event, raw, { kind: "fs.write", argv: [tool], verbs: [PATCH_VERB] });
+  }
+  const commands = hunkCommands(parsed.hunks, { tool, cwd, home: opts.home });
+  const opaque: OpaqueSpan[] = parsed.valid ? [] : [{ reason: "parse-error", span: raw }];
+  return rebuilt(emptyScript("other"), commands, opaque);
 }
 
 /** An MCP tool: `other`, with the server recorded as the verb `mcp:<server>`. */
@@ -186,7 +287,7 @@ async function readTool(
   const tool = event.call.tool;
   switch (rule?.reader) {
     case "bash":
-      return backgrounded(event, await readBash(event, raw, opts));
+      return backgrounded(event, await readBash(event, rule, raw, opts));
     case "shell": {
       const script = toolScript(event, raw, { kind: "exec", argv: [raw] });
       return backgrounded(event, { ...script, opaque: [{ reason: "interpreter", span: raw }] });
@@ -197,10 +298,14 @@ async function readTool(
       return readPath(rule, event, raw, opts);
     case "url":
       return readUrl(stringField(event.call.input, rule.field), event, raw);
+    case "patch":
+      return readPatch(rule, event, raw, opts);
     case "spawn":
       return toolScript(event, raw, { kind: "spawn", argv: [tool] });
-    case "kind":
-      return toolScript(event, raw, { kind: rule.kind, argv: [tool] });
+    case "kind": {
+      const verbs = [tool.toLowerCase(), ...(rule.verbs ?? [])];
+      return toolScript(event, raw, { kind: rule.kind, argv: [tool], verbs });
+    }
     case "inert":
       return toolScript(event, raw, { kind: "other", argv: [tool], verbs: ["inert"] });
     default:

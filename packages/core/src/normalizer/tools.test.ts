@@ -234,32 +234,37 @@ describe("tool table by harness: (harness, tool) → rule", () => {
     expect(toolRule("bash", "opencode")).toEqual({ reader: "bash", workdir: "workdir" });
   });
 
-  test("a harness never reads another harness's names", () => {
+  test("Codex and OpenCode names are read only on their own harness, and never M1 names", () => {
     const foreign = [
-      ["Read", "pi"],
-      ["Bash", "pi"],
-      ["bash", "claude-code"],
-      ["read", "claude-code"],
       ["apply_patch", "claude-code"],
+      ["apply_patch", "pi"],
+      ["glob", "pi"],
+      ["todowrite", "claude-code"],
+      ["update_plan", "pi"],
+      ["view_image", "opencode"],
       ["Read", "codex"],
       ["Write", "codex"],
       ["read", "codex"],
+      ["TodoWrite", "codex"],
       ["Write", "opencode"],
       ["find", "opencode"],
       ["ls", "opencode"],
-      ["glob", "pi"],
-      ["apply_patch", "pi"],
+      ["powershell", "opencode"],
+      ["Agent", "opencode"],
     ] as const;
     expect(foreign.filter(([tool, harness]) => toolRule(tool, harness) !== undefined)).toEqual([]);
   });
 
-  test("Claude Code's table is the M1 table's capitalized half, unchanged", () => {
-    const capitalized = Object.keys(TOOL_RULES).filter((t) => /^[A-Z]/.test(t));
-    expect(Object.keys(HARNESS_TOOL_RULES["claude-code"]).sort()).toEqual(capitalized.sort());
+  test("Claude Code and Pi keep the M1 table, unchanged: their names never collide", () => {
+    expect(HARNESS_TOOL_RULES["claude-code"]).toBe(TOOL_RULES);
+    expect(HARNESS_TOOL_RULES.pi).toBe(TOOL_RULES);
+    const lower = Object.keys(TOOL_RULES).filter((t) => /^[a-z]/.test(t));
+    expect(lower.sort()).toEqual(
+      ["bash", "edit", "find", "grep", "ls", "powershell", "read"].concat("write"),
+    );
   });
 
-  test("without a harness the lookup is the M1 table (Claude Code and Pi), unchanged", () => {
-    expect(TOOL_RULES).toEqual({ ...HARNESS_TOOL_RULES["claude-code"], ...HARNESS_TOOL_RULES.pi });
+  test("without a harness the lookup is the M1 table", () => {
     expect(toolRule("read")).toEqual(toolRule("read", "pi"));
     expect(toolRule("Read")).toEqual(toolRule("Read", "claude-code"));
     const later = ["apply_patch", "todowrite", "glob", "webfetch"].map((t) => toolRule(t));
@@ -283,13 +288,13 @@ describe("tool table by harness: (harness, tool) → rule", () => {
       ...["Bash", "Glob", "Glob", "glob"],
     ]);
     expect(["Agent", "bash", "apply_patch"].map((t) => canonicalTool(t, "claude-code"))).toEqual([
-      ...["Task", "bash", "apply_patch"],
+      ...["Task", "Bash", "apply_patch"],
     ]);
   });
 
-  test("without a harness the aliases are the M1 ones", () => {
-    const m1 = { ...HARNESS_TOOL_ALIASES["claude-code"], ...HARNESS_TOOL_ALIASES.pi };
-    expect(TOOL_ALIASES).toEqual(m1);
+  test("Claude Code, Pi and a caller with no harness use the M1 aliases", () => {
+    expect(HARNESS_TOOL_ALIASES["claude-code"]).toBe(TOOL_ALIASES);
+    expect(HARNESS_TOOL_ALIASES.pi).toBe(TOOL_ALIASES);
     expect(["apply_patch", "glob", "task"].map((t) => canonicalTool(t))).toEqual([
       ...["apply_patch", "glob", "task"],
     ]);

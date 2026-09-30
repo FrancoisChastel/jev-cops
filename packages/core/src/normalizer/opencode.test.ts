@@ -39,11 +39,18 @@ const verbs = (n: NormalizedEvent): string[] => n.commands.flatMap((c) => c.verb
 describe("normalize: OpenCode bash (tool/shell/prompt.ts: command, timeout ms, workdir)", () => {
   test("command is parsed like Bash; timeout changes nothing", async () => {
     const n = await normalize(fromFixture("bash"), OPTS);
-    expect(n).toMatchObject({ kind: "fs.delete", paths: ["/work/repo/build"], raw: "rm -rf ./build" });
+    expect(n).toMatchObject({
+      kind: "fs.delete",
+      paths: ["/work/repo/build"],
+      raw: "rm -rf ./build",
+    });
   });
 
   test("workdir is the cwd of that call, named like a leading cd", async () => {
-    const n = await normalize(opencode("bash", { command: "rm -rf build", workdir: "/tmp/w" }), OPTS);
+    const n = await normalize(
+      opencode("bash", { command: "rm -rf build", workdir: "/tmp/w" }),
+      OPTS,
+    );
     expect(n.kind).toBe("fs.delete");
     expect(access(n)).toEqual({ "/tmp/w": "unknown", "/tmp/w/build": "delete" });
     expect(n.commands[0]).toMatchObject({ argv: ["cd", "/tmp/w"], verbs: ["cd"], kind: "other" });
@@ -111,12 +118,15 @@ describe("normalize: OpenCode file tools read filePath (tool/{edit,write,read,ls
 });
 
 describe("the Pi/OpenCode name collision is settled by the event's harness", () => {
-  test.each(["read", "write", "edit"])("%s reads path on Pi, filePath on OpenCode", async (tool) => {
-    const input = { path: "/pi/x", filePath: "/opencode/x", content: "", edits: [] };
-    const pi = await normalize(event("pi", tool, input), OPTS);
-    const oc = await normalize(event("opencode", tool, input), OPTS);
-    expect([pi.paths, oc.paths]).toEqual([["/pi/x"], ["/opencode/x"]]);
-  });
+  test.each(["read", "write", "edit"])(
+    "%s reads path on Pi, filePath on OpenCode",
+    async (tool) => {
+      const input = { path: "/pi/x", filePath: "/opencode/x", content: "", edits: [] };
+      const pi = await normalize(event("pi", tool, input), OPTS);
+      const oc = await normalize(event("opencode", tool, input), OPTS);
+      expect([pi.paths, oc.paths]).toEqual([["/pi/x"], ["/opencode/x"]]);
+    },
+  );
 
   test("an OpenCode-shaped write on Pi (and the reverse) names no path", async () => {
     const pi = await normalize(event("pi", "write", { filePath: "/etc/x", content: "" }), OPTS);
@@ -124,16 +134,24 @@ describe("the Pi/OpenCode name collision is settled by the event's harness", () 
     expect([pi.kind, pi.paths, oc.kind, oc.paths]).toEqual(["fs.write", [], "fs.write", []]);
   });
 
-  test("grep reads path on both; Claude Code does not know the lower-case names", async () => {
+  test("grep reads path on both; Claude Code keeps the M1 reading of Pi's names", async () => {
     const input = { pattern: "x", path: "/src" };
+    const harnesses = ["pi", "opencode", "claude-code"] as const;
     const results = await Promise.all(
-      (["pi", "opencode", "claude-code"] as const).map((h) => normalize(event(h, "grep", input), OPTS)),
+      harnesses.map((h) => normalize(event(h, "grep", input), OPTS)),
     );
     expect(results.map((n) => [n.kind, n.paths])).toEqual([
       ["fs.read", ["/src"]],
       ["fs.read", ["/src"]],
-      ["other", []],
+      ["fs.read", ["/src"]],
     ]);
+  });
+
+  test("OpenCode-only names mean nothing on Pi or Claude Code", async () => {
+    for (const harness of ["pi", "claude-code"] as const) {
+      const n = await normalize(event(harness, "apply_patch", { patchText: "x" }), OPTS);
+      expect(n).toMatchObject({ kind: "other", commands: [] });
+    }
   });
 
   test("Pi's find and ls are not OpenCode tools", async () => {

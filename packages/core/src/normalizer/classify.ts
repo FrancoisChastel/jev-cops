@@ -13,9 +13,10 @@ import { type Classification, type InterpreterInfo, maxKind, plain } from "./cla
 import { filePaths, rmVerbs, sedEffects, sedMode } from "./files.ts";
 import { GIT_SUBCOMMAND_KINDS, readGit } from "./git.ts";
 import { classifyHarness } from "./harness.ts";
-import { classifyInterpreter } from "./interpreters.ts";
-import { readCurl, readWget, urlHost, verbHosts } from "./net.ts";
+import { classifyInterpreter, interactive, isBareRepl } from "./interpreters.ts";
+import { readCurl, readWget, SSH_VALUE_OPTS, urlHost, verbHosts } from "./net.ts";
 import { hasOption, lookup, optionValue, type Positional, parseArgs } from "./options.ts";
+import { classifyApplyPatch } from "./patch.ts";
 import { looksLikePath } from "./paths.ts";
 import type { PathArg } from "./types.ts";
 import { COPY_RULES, classifyDd, copyPaths } from "./writers.ts";
@@ -29,7 +30,8 @@ export {
 } from "./classification.ts";
 export { FILE_RULES } from "./files.ts";
 export { HARNESS_CLIS, HARNESS_CONFIG_VERB } from "./harness.ts";
-export { INTERPRETER_INLINE_FLAGS, SHELLS } from "./interpreters.ts";
+export { INTERACTIVE_SHELL_VERB, INTERPRETER_INLINE_FLAGS, REPLS, SHELLS } from "./interpreters.ts";
+export { APPLY_PATCH_COMMANDS, PATCH_VERB } from "./patch.ts";
 
 function kinds(kind: CallKind, verbs: ReadonlyArray<string>): Record<string, CallKind> {
   return Object.fromEntries(verbs.map((v) => [v, kind]));
@@ -252,8 +254,11 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
       return classifyUnzip(args, base);
     case "patch":
       return classifyPatch(args, base);
+    case "apply_patch":
+    case "applypatch":
+      return classifyApplyPatch(base);
     case "ssh":
-      return classifySsh(args);
+      return sshSession(classifySsh(args), args);
     case "scp":
     case "sftp": {
       const carried = sshConfigCode(args);
@@ -265,14 +270,30 @@ function classifyVerb(name: string, args: ReadonlyArray<string>, base: number): 
     case "awk":
       return classifyAwk(args, base);
   }
+  return classifyByName(name, args, base);
+}
+
+/** ssh options that run no remote shell: no command, control, config dump, stdio forward. */
+const SSH_NO_SHELL = ["-N", "-O", "-G", "-V", "-Q", "-W"];
+
+/** `ssh host` with no remote command is an interactive remote shell. */
+function sshSession(c: Classification, args: ReadonlyArray<string>): Classification {
+  const remote = (c.carried ?? []).some((code) => code.remote);
+  const noShell = hasOption(parseArgs(args, SSH_VALUE_OPTS), SSH_NO_SHELL);
+  return remote || noShell || c.hosts.length === 0 ? c : interactive(c);
+}
+
+/** A name with no rule of its own: harness CLIs, subcommand tables, REPLs, the verb table. */
+function classifyByName(name: string, args: ReadonlyArray<string>, base: number): Classification {
   const harness = classifyHarness(name, args);
   if (harness !== null) return harness;
   if (lookup(SUBCOMMAND_KINDS, name) !== undefined) return classifySubcommand(name, args);
   const copies = lookup(COPY_RULES, name) !== undefined;
-  return plain(lookup(VERB_KINDS, name) ?? "exec", [name], {
+  const c = plain(lookup(VERB_KINDS, name) ?? "exec", [name], {
     paths: copies ? copyPaths(name, args, base) : filePaths(name, args, base),
     hosts: verbHosts(name, args),
   });
+  return isBareRepl(name, args) ? interactive(c) : c;
 }
 
 function unique(values: ReadonlyArray<string>): string[] {
