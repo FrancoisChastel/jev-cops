@@ -10,8 +10,8 @@
 # Builds that harness's image (JEV_COPS_LIVE_NO_BUILD=1 reuses it), starts the fake API and
 # the harness container on the internal network, starts copsd --enforce on the installed
 # starter policies and runs `cops install <harness>` (Claude Code, Pi), drives the harness
-# headlessly, then copies out: transcript(s), the audit log, the fake API's request digest
-# and what the model read, redacted (no host path; hostnames are fixed by the compose file).
+# headlessly, then copies out: transcript(s), the audit log, the fake API request log (and
+# its digest: what the model read), redacted (no host path; hostnames are fixed by compose).
 set -euo pipefail
 # shellcheck source=scripts/live/lib.sh
 source "$(dirname "$0")/lib.sh"
@@ -74,6 +74,7 @@ for d in "$RAW"/out/*/; do
   cp "$d/argv.txt" "$OUT/argv-$name.txt"
   printf 'exit %s\n' "$(cat "$d/exit-code")" >> "$OUT/argv-$name.txt"
 done
+cp "$RAW/requests.jsonl" "$OUT/requests.jsonl"
 check digest "$RAW/requests.jsonl" > "$OUT/requests.digest.jsonl"
 for s in ls push-main write-settings echo; do
   check seen "$RAW/requests.jsonl" "$s" >> "$OUT/model-saw.txt" 2> /dev/null || true
