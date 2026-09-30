@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildEvent } from "../../../tests/fixtures/context/index.ts";
@@ -8,7 +8,11 @@ import type { AuditForward } from "./config.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "./testing/daemon.ts";
 import { waitFor } from "./testing/forward-contract.ts";
 import { policyModule } from "./testing/policies.ts";
-import { type SyslogReceiver, startSyslogReceiver } from "./testing/syslog-receiver.ts";
+import {
+  type SyslogReceiver,
+  startSyslogReceiver,
+  syslogForwardTo,
+} from "./testing/syslog-receiver.ts";
 
 let td: TestDaemon | null = null;
 let receiver: SyslogReceiver | null = null;
@@ -25,29 +29,7 @@ afterEach(async () => {
 function syslogForward(r: SyslogReceiver, over: Partial<AuditForward> = {}): AuditForward {
   const dir = mkdtempSync(join(tmpdir(), "jvs-"));
   dirs.push(dir);
-  writeFileSync(join(dir, "ca.pem"), r.cert.cert);
-  return {
-    kind: "syslog",
-    target: `127.0.0.1:${r.port}`,
-    required: false,
-    maxLagLines: 1_000,
-    maxLagMs: 600_000,
-    cursor: join(dir, "forward.cursor"),
-    syslog: {
-      host: "127.0.0.1",
-      port: r.port,
-      ca: join(dir, "ca.pem"),
-      cert: null,
-      key: null,
-      serverName: null,
-      facility: 16,
-      appName: "copsd",
-      enterpriseNumber: 32473,
-      maxMessageBytes: 8192,
-      resendOverlap: 100,
-    },
-    ...over,
-  };
+  return syslogForwardTo(r, dir, over);
 }
 
 const exec = () =>

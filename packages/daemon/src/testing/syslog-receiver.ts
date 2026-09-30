@@ -3,10 +3,13 @@
  * certificate, octet-counted framing checked strictly. It never talks to a real syslog
  * server. `stop`/`start` take it down and bring it back on the same port (an outage).
  */
+import { writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
 import { createServer, type Server, type TLSSocket } from "node:tls";
 import { octetFrame } from "../audit-forward/syslog-format.ts";
 import { splitOctetFrames } from "../audit-forward/syslog-parse.ts";
+import type { AuditForward } from "../config-audit.ts";
 import { selfSignedCert, type TestCert } from "./tls-cert.ts";
 
 /** What the receiver asks of its clients. */
@@ -83,6 +86,41 @@ function listen(
 function closeServer(server: Server, state: State): Promise<void> {
   for (const s of state.sockets) s.destroy();
   return new Promise((resolve) => server.close(() => resolve()));
+}
+
+/**
+ * An `[audit.forward] kind = "syslog"` to `r`, its CA pinned to `r`'s certificate (written
+ * into `dir`) and its cursor in `dir`.
+ */
+export function syslogForwardTo(
+  r: SyslogReceiver,
+  dir: string,
+  over: Partial<AuditForward> = {},
+): AuditForward {
+  const ca = join(dir, `receiver-${r.port}.pem`);
+  writeFileSync(ca, r.cert.cert);
+  return {
+    kind: "syslog",
+    target: `127.0.0.1:${r.port}`,
+    required: false,
+    maxLagLines: 1_000,
+    maxLagMs: 600_000,
+    cursor: join(dir, "forward.cursor"),
+    syslog: {
+      host: "127.0.0.1",
+      port: r.port,
+      ca,
+      cert: null,
+      key: null,
+      serverName: null,
+      facility: 16,
+      appName: "copsd",
+      enterpriseNumber: 32473,
+      maxMessageBytes: 8192,
+      resendOverlap: 100,
+    },
+    ...over,
+  };
 }
 
 /** Starts a receiver on a free port of 127.0.0.1. */

@@ -87,7 +87,7 @@ export function executable(dir: string, name: string, body: string): string {
   return path;
 }
 
-/** A `cops.toml` pointing the doctor at a test daemon's sockets, audit log and home. */
+/** A `cops.toml` pointing the doctor at a test daemon's sockets, audit log, keys and home. */
 export function copsToml(f: DoctorFixture, config: DaemonConfig): string {
   const path = join(f.root, "cops.toml");
   const d = config.daemon;
@@ -98,6 +98,8 @@ export function copsToml(f: DoctorFixture, config: DaemonConfig): string {
     `home = ${JSON.stringify(d.home)}`,
     "[audit]",
     `path = ${JSON.stringify(config.audit.path)}`,
+    `key = ${JSON.stringify(config.audit.key)}`,
+    `public_key = ${JSON.stringify(config.audit.publicKey)}`,
   ];
   writeFileSync(path, `${lines.join("\n")}\n`);
   return path;
