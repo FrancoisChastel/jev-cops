@@ -3,7 +3,7 @@
  * `bun scripts/live/report.ts <run-dir>`: the e2e report (Markdown, to stdout) from what
  * scripts/live/e2e.sh recorded in <run-dir>: `steps.tsv` (`id<TAB>status<TAB>title`, one
  * line per step, in order), `steps/<id>.txt` (the step's evidence: commands, their output,
- * one `PASS`/`FAIL`/`SKIP` line per expectation) and `meta.txt` (`key: value` lines: date,
+ * one `==> PASS`/`FAIL`/`SKIP` line per expectation) and `meta.txt` (`key: value` lines: date,
  * versions, images). The evidence files are committed next to the report.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -39,9 +39,15 @@ export function parseMeta(text: string): Array<[string, string]> {
   });
 }
 
-/** The expectation lines of an evidence file (what the table's evidence column shows). */
+/** An expectation line of an evidence file (distinct from any command's own PASS/FAIL). */
+const MARKER = /^==> (PASS|FAIL|SKIP) /;
+
+/** The expectation lines of an evidence file, marker removed (the table's last column). */
 export function verdictLines(evidence: string): string[] {
-  return evidence.split("\n").filter((l) => /^(PASS|FAIL|SKIP) /.test(l));
+  return evidence
+    .split("\n")
+    .filter((l) => MARKER.test(l))
+    .map((l) => l.slice(4));
 }
 
 function cell(text: string): string {
@@ -49,6 +55,8 @@ function cell(text: string): string {
 }
 
 const ICON: Readonly<Record<Status, string>> = { PASS: "PASS", FAIL: "**FAIL**", SKIP: "SKIP" };
+/** How much of a failed step's evidence the report quotes (the file has all of it). */
+const FAILURE_LINES = 40;
 
 /** The whole report. `evidence(id)` returns a step's evidence text ("" when none). */
 export function renderReport(
@@ -81,7 +89,17 @@ export function renderReport(
   if (failed.length > 0) {
     lines.push("", "## Failures", "");
     for (const s of failed) {
-      lines.push(`### ${s.id} ${s.title}`, "", "```text", evidence(s.id).trimEnd(), "```", "");
+      const tail = evidence(s.id).trimEnd().split("\n").slice(-FAILURE_LINES).join("\n");
+      lines.push(
+        `### ${s.id} ${s.title}`,
+        "",
+        `Last lines of [the evidence](./e2e/steps/${s.id}.txt):`,
+        "",
+        "```text",
+        tail,
+        "```",
+        "",
+      );
     }
   }
   return `${lines.join("\n").trimEnd()}\n`;

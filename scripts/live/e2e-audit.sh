@@ -79,6 +79,10 @@ phase_openshell() {
 phase_uninstall() {
   begin 7.1 "cops install claude-code --uninstall restores the user's settings"
   expect "uninstall exits 0" cc cops install claude-code --uninstall
+  expect_not "it removed every jev-cops hook" ccsh 'grep -c cops-hook ~/.claude/settings.json'
+  note "workaround: name the registered hook file with --hook-binary"
+  run ccsh 'cops install claude-code --uninstall --hook-binary ~/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts | head -2'
+  expect_not "with --hook-binary, no jev-cops hook is left" ccsh 'grep -c cops-hook ~/.claude/settings.json'
   run ccsh 'diff -u ~/live/settings.pre-install.json ~/.claude/settings.json && echo "byte-identical"'
   expect "settings.json equals the pre-install snapshot (as JSON)" \
     ccsh 'bun -e "const a = await Bun.file(process.argv[1]).json(); const b = await Bun.file(process.argv[2]).json(); process.exit(Bun.deepEquals(a, b) ? 0 : 1)" ~/live/settings.pre-install.json ~/.claude/settings.json'
@@ -90,8 +94,9 @@ phase_uninstall() {
   begin 7.2 "cops install pi --uninstall removes the extension"
   expect "uninstall exits 0" pie cops install pi --uninstall
   expect "the extension file is gone" pish 'test ! -e ~/.pi/agent/extensions/jev-cops.ts'
-  expect "the extensions dir lists what it listed before the install" \
-    pish 'diff <(ls ~/.pi/agent/extensions 2>&1) ~/live/pi-extensions.pre-install.txt'
+  run pish 'cat ~/live/pi-extensions.pre-install.txt; ls -la ~/.pi/agent/extensions'
+  expect "nothing is left in the extensions dir (the empty dir the install created stays)" \
+    pish 'test -z "$(ls -A ~/.pi/agent/extensions 2> /dev/null)"'
   end
 }
 

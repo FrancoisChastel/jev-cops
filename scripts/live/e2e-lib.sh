@@ -2,7 +2,7 @@
 # The e2e suite's step recorder and container helpers (sourced by scripts/live/e2e.sh after
 # lib.sh). A step is `begin <id> <title>`, then expectations, then `end`. Every command an
 # expectation runs is written to the step's evidence file with its output and exit code;
-# each expectation adds one `PASS <what>` / `FAIL <what>` / `SKIP <what>` line. Nothing
+# each expectation adds one `==> PASS <what>` (or FAIL, SKIP) line. Nothing
 # here exits on a failed expectation: the suite always runs to the end and reports.
 
 # shellcheck disable=SC2034 # read by e2e.sh and the phase files
@@ -36,9 +36,9 @@ record() {
 # Records a command whose outcome is not an expectation (never fails the suite).
 run() { record "$@" || true; }
 
-pass() { printf 'PASS %s\n' "$*" >> "$EVID"; printf '   PASS %s\n' "$*"; }
-fail() { printf 'FAIL %s\n' "$*" >> "$EVID"; printf '   FAIL %s\n' "$*"; STEP_FAILED=1; }
-skip() { printf 'SKIP %s\n' "$*" >> "$EVID"; printf '   SKIP %s\n' "$*"; }
+pass() { printf '==> PASS %s\n' "$*" >> "$EVID"; printf '   PASS %s\n' "$*"; }
+fail() { printf '==> FAIL %s\n' "$*" >> "$EVID"; printf '   FAIL %s\n' "$*"; STEP_FAILED=1; }
+skip() { printf '==> SKIP %s\n' "$*" >> "$EVID"; printf '   SKIP %s\n' "$*"; }
 
 expect() { # what cmd...
   local what=$1
@@ -57,7 +57,7 @@ end() {
   if [ "$STEP_FAILED" = 1 ]; then
     status=FAIL
     FAILED_STEPS=$((FAILED_STEPS + 1))
-  elif ! grep -q '^PASS ' "$EVID" && grep -q '^SKIP ' "$EVID"; then
+  elif ! grep -q '^==> PASS ' "$EVID" && grep -q '^==> SKIP ' "$EVID"; then
     status=SKIP
   fi
   printf '%s\t%s\t%s\n' "$STEP" "$status" "$TITLE" >> "$RUN/steps.tsv"

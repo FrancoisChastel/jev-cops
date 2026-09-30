@@ -25,18 +25,19 @@ describe("parsing", () => {
     expect(parseMeta("date: 2026-09-30\nnot a pair\n: empty key")).toEqual([
       ["date", "2026-09-30"],
     ]);
-    expect(verdictLines("$ cops --version\n0.1.0\nPASS version\nSKIP mock judge\nFAIL x")).toEqual([
-      "PASS version",
-      "SKIP mock judge",
-      "FAIL x",
-    ]);
+    expect(
+      verdictLines(
+        "$ cops audit verify\nFAIL  chain broken\n==> PASS version\n==> SKIP mock judge\n==> FAIL x",
+      ),
+    ).toEqual(["PASS version", "SKIP mock judge", "FAIL x"]);
   });
 });
 
 describe("renderReport", () => {
   const steps = parseSteps("1.1\tPASS\tversion | help\n3.4\tFAIL\tallow\n3.13\tSKIP\tmock judge");
   const evidence = (id: string) =>
-    ({ "1.1": "PASS prints `0.1.0`", "3.4": "$ claude -p\nFAIL audit has an allow" })[id] ?? "";
+    ({ "1.1": "==> PASS prints `0.1.0`", "3.4": "$ claude -p\n==> FAIL audit has an allow" })[id] ??
+    "";
   const md = renderReport(steps, [["Claude Code", "2.1.286"]], evidence);
 
   test("counts, meta, the table with escaped cells", () => {
@@ -50,7 +51,8 @@ describe("renderReport", () => {
 
   test("failures get their full evidence", () => {
     expect(md).toContain("## Failures");
-    expect(md).toContain("### 3.4 allow\n\n```text\n$ claude -p\nFAIL audit has an allow\n```");
+    expect(md).toContain("### 3.4 allow");
+    expect(md).toContain("```text\n$ claude -p\n==> FAIL audit has an allow\n```");
   });
 
   test("no failures section when all pass", () => {
@@ -64,7 +66,7 @@ describe("reportFor and the command line", () => {
     mkdirSync(join(dir, "steps"));
     writeFileSync(join(dir, "steps.tsv"), "0.1\tPASS\tpack\n");
     writeFileSync(join(dir, "meta.txt"), "jev-cops: 0.1.0\n");
-    writeFileSync(join(dir, "steps", "0.1.txt"), "PASS 11 tarballs\n");
+    writeFileSync(join(dir, "steps", "0.1.txt"), "==> PASS 11 tarballs\n");
     const md = reportFor(dir);
     expect(md).toContain("| [0.1](./e2e/steps/0.1.txt) | PASS | pack | PASS 11 tarballs |");
     expect(md).toContain("- jev-cops: 0.1.0");
