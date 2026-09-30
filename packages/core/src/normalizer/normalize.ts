@@ -1,10 +1,9 @@
 import type { CallKind, Event } from "../schema/event.ts";
 import { maxKind } from "./classification.ts";
 import { eventKind, normalizeCommand } from "./command.ts";
-import { withHarnessEnv } from "./harness.ts";
 import { canonicalJson, safeStringify, sha256Hex } from "./hash.ts";
 import { urlHost } from "./net.ts";
-import { hunkCommands, PATCH_VERB, parsePatch, readShellPatch } from "./patch.ts";
+import { hunkCommands, PATCH_VERB, parsePatch } from "./patch.ts";
 import { resolvePath } from "./paths.ts";
 import { canonicalTool, mcpServer, type ToolRule, toolRule } from "./tools.ts";
 import type {
@@ -195,20 +194,6 @@ function rebuilt(
 }
 
 /**
- * What only a whole normalized command shows: a harness CLI run with config-relocating
- * environment (harness.ts) and the patch a shell `apply_patch` reads (patch.ts).
- */
-function readShellCommands(script: NormalizedScript, home: string): NormalizedScript {
-  const read = script.commands.map((c) => readShellPatch(withHarnessEnv(c), home));
-  const opaque = [...script.opaque, ...read.flatMap((r) => r.opaque)];
-  return rebuilt(
-    script,
-    read.map((r) => r.command),
-    opaque,
-  );
-}
-
-/**
  * The working directory a call names (OpenCode's `bash` `workdir`), read like a leading
  * `cd <dir> &&`: a command of kind `other` naming the directory with `unknown` access, so
  * scope and config-tamper see it and the state hash tells two directories apart.
@@ -239,8 +224,7 @@ async function readBash(event: Event, rule: BashRule, raw: string, opts: Normali
   const workdir = rule.workdir === undefined ? undefined : stringField(input, rule.workdir);
   const dir = workdir === undefined ? null : resolvePath(workdir, cwd, opts.home);
   const script = await normalizeCommand(command, { cwd: dir ?? cwd, home: opts.home });
-  const read = readShellCommands(script, opts.home);
-  return workdir === undefined || dir === null ? read : withWorkdir(read, workdir, dir);
+  return workdir === undefined || dir === null ? script : withWorkdir(script, workdir, dir);
 }
 
 async function readMonitor(event: Event, raw: string, opts: NormalizeOptions) {

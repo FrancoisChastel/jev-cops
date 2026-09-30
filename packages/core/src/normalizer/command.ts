@@ -2,6 +2,8 @@ import type { CallKind } from "../schema/event.ts";
 import { type ParsedScript, parseScript, type RawCommand } from "./bash.ts";
 import { type Classification, classifyArgv, maxKind } from "./classify.ts";
 import { decodeLiteral, isDecoder } from "./decode.ts";
+import { withHarnessEnv } from "./harness.ts";
+import { readShellPatch } from "./patch.ts";
 import { absolutize } from "./paths.ts";
 import { redirectHosts, redirectRefs } from "./redirects.ts";
 import type {
@@ -304,15 +306,32 @@ export function eventKind(
 }
 
 /**
+ * What only a whole normalized command shows: a harness CLI run with config-relocating
+ * environment (harness.ts: the prefix assignment never reaches the classifier) and the
+ * patch a shell `apply_patch` reads from its argument or heredoc (patch.ts).
+ */
+function readWholeCommands(analysis: Analysis, home: string): Analysis {
+  const read = analysis.commands.map((c) => readShellPatch(withHarnessEnv(c), home));
+  return {
+    ...analysis,
+    commands: read.map((r) => r.command),
+    opaque: [...analysis.opaque, ...read.flatMap((r) => r.opaque)],
+  };
+}
+
+/**
  * Normalizes a bash command string without an event: flattened commands, union of
  * absolute paths and hosts, opaque spans, decoded literals and the event-level kind.
- * Never throws and never touches the filesystem; only the parser is impure.
+ * Commands carry the verbs and paths only a whole command shows (harness-config
+ * environment, a shell `apply_patch`'s files). Never throws and never touches the
+ * filesystem; only the parser is impure.
  */
 export async function normalizeCommand(
   command: string,
   opts: CommandOptions,
 ): Promise<NormalizedScript> {
-  const analysis = await analyse(command, { ...opts, depth: 0, via: false, remote: false });
+  const parsed = await analyse(command, { ...opts, depth: 0, via: false, remote: false });
+  const analysis = readWholeCommands(parsed, opts.home);
   const opaque = uniqueSpans(analysis.opaque);
   return {
     kind: eventKind(analysis.commands, opaque),

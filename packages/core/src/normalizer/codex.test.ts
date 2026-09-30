@@ -5,6 +5,7 @@ import { loadEventFixture } from "../../../../tests/fixtures/events/index.ts";
 import { createCaseFile } from "../context/casefile.ts";
 import type { CaseFile } from "../context/types.ts";
 import { type Event, parseEvent } from "../schema/event.ts";
+import { normalizeCommand } from "./command.ts";
 import { INTERACTIVE_SHELL_VERB } from "./interpreters.ts";
 import { normalize } from "./normalize.ts";
 import { PATCH_VERB } from "./patch.ts";
@@ -180,6 +181,22 @@ describe("normalize: Codex apply_patch (tool_input.command is the patch, apply_p
     );
     expect(a.stateHash).not.toBe(b.stateHash);
     expect(a.stateHash).toBe(c.stateHash);
+  });
+});
+
+describe("normalizeCommand reads a shell apply_patch's patch as normalize does", () => {
+  test("the heredoc's files are the command's paths", async () => {
+    const command = `apply_patch <<'EOF'\n${patch("*** Add File: ~/.codex/hooks.json", "+{}")}\nEOF`;
+    const n = await normalizeCommand(command, { cwd: "/work/repo", home: HOME });
+    expect(n).toMatchObject({ kind: "fs.write", paths: [`${HOME}/.codex/hooks.json`], opaque: [] });
+    expect(n.commands.flatMap((c) => c.verbs)).toEqual([PATCH_VERB, "add"]);
+  });
+
+  test("an unreadable patch keeps the working directory and is a parse-error", async () => {
+    const n = await normalizeCommand("apply_patch 'rm -rf ~'", { cwd: "/work/repo", home: HOME });
+    expect(n.kind).toBe("exec");
+    expect(n.opaque.map((o) => o.reason)).toEqual(["parse-error"]);
+    expect(n.paths).toEqual(["/work/repo"]);
   });
 });
 

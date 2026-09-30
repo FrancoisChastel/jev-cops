@@ -95,6 +95,27 @@ describe("harness CLIs that change configuration carry the harness-config verb",
   });
 });
 
+const RELOCATED = [
+  "CODEX_HOME=/tmp/c codex exec hi",
+  "env CODEX_HOME=/tmp/c codex exec hi",
+  "OPENCODE_PURE=1 opencode run hi",
+  "OPENCODE_CONFIG_DIR=/tmp/o opencode",
+  "CLAUDE_CONFIG_DIR=/tmp/c claude -p hi",
+  "PI_CODING_AGENT_DIR=/tmp/p pi -p hi",
+  "HOME=/tmp/h claude -p hi",
+  "bash -c 'CODEX_HOME=/tmp/c codex exec hi'",
+];
+
+describe("normalizeCommand sees config-relocating environment too", () => {
+  test.each(RELOCATED)("%s", async (command) => {
+    expect(await verbsOf(command)).toContain(HARNESS_CONFIG_VERB);
+  });
+
+  test("an unrelated variable on a harness CLI adds nothing", async () => {
+    expect(await verbsOf("RUST_LOG=debug codex exec hi")).not.toContain(HARNESS_CONFIG_VERB);
+  });
+});
+
 describe("config-relocating environment on a harness CLI adds harness-config (D-114 pattern)", () => {
   async function eventVerbs(command: string): Promise<string[]> {
     const base = loadEventFixture("pre-bash") as Record<string, unknown>;
