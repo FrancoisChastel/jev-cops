@@ -1,7 +1,7 @@
 #!/bin/bash
 # Drives an interactive `claude` in tmux inside this container (what a human sees is the
 # pane; the hook reads a real interactive parent).
-#   tmux-claude.sh start <name>                start claude in ~/work/repo, wait for its prompt
+#   tmux-claude.sh start <name> [claude args]  start claude in ~/work/repo, wait for its prompt
 #   tmux-claude.sh send <name> <text>          type text, then Enter
 #   tmux-claude.sh keys <name> <key>...        send raw keys (Enter, Escape, 2, ...)
 #   tmux-claude.sh wait <name> <regex> [secs]  wait until the pane matches (exit 1 on timeout)
@@ -29,9 +29,12 @@ wait_for() { # regex secs
 
 case "$cmd" in
   start)
+    shift 2
     t kill-session -t "$name" 2> /dev/null || true
-    t new-session -d -s "$name" -x 160 -y 50 -c "$HOME/work/repo" "claude"
-    wait_for '(for shortcuts|Try "|❯)' "${3:-60}"
+    # The session keeps running after claude exits, so its last screen can be captured.
+    t new-session -d -s "$name" -x 160 -y 50 -c "$HOME/work/repo" \
+      "claude $(printf '%q ' "$@"); echo '[claude exited]'; sleep 3600"
+    wait_for '(for shortcuts|Try "|❯)' 60
     ;;
   send)
     t send-keys -t "$name" -l "${3:?text}"
