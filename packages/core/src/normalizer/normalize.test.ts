@@ -23,6 +23,11 @@ function withCall(call: Json, overrides: Json = {}): Event {
   return toEvent({ ...base, ...overrides, call: { ...(base.call as Json), ...call } });
 }
 
+/** A call from Pi: its lower-case tool names are read only on the `pi` harness. */
+function piCall(call: Json): Event {
+  return withCall(call, { harness: "pi" });
+}
+
 function bash(command: string): Event {
   return withCall({ tool: "Bash", kind: "exec", input: { command } });
 }
@@ -150,7 +155,7 @@ describe("normalize: tool mapping", () => {
 describe("normalize: Pi built-in tools (v0.87.1 input schemas)", () => {
   test("bash parses input.command like Bash", async () => {
     const n = await normalize(
-      withCall({ tool: "bash", kind: "exec", input: { command: "rm -rf ./build", timeout: 30 } }),
+      piCall({ tool: "bash", kind: "exec", input: { command: "rm -rf ./build", timeout: 30 } }),
       OPTS,
     );
     expect(n).toMatchObject({
@@ -163,7 +168,7 @@ describe("normalize: Pi built-in tools (v0.87.1 input schemas)", () => {
   test("powershell is opaque exec over input.command: the bash grammar cannot read it", async () => {
     const command = "Remove-Item -Recurse -Force C:\\build";
     const n = await normalize(
-      withCall({ tool: "powershell", kind: "exec", input: { command } }),
+      piCall({ tool: "powershell", kind: "exec", input: { command } }),
       OPTS,
     );
     expect(n).toMatchObject({ kind: "exec", raw: command, paths: [] });
@@ -172,7 +177,7 @@ describe("normalize: Pi built-in tools (v0.87.1 input schemas)", () => {
 
   test("read is fs.read on input.path, home-expanded", async () => {
     const n = await normalize(
-      withCall({ tool: "read", kind: "fs.read", input: { path: "~/.aws/credentials", limit: 5 } }),
+      piCall({ tool: "read", kind: "fs.read", input: { path: "~/.aws/credentials", limit: 5 } }),
       OPTS,
     );
     expect(n).toMatchObject({ kind: "fs.read", paths: [`${HOME}/.aws/credentials`] });
@@ -182,7 +187,7 @@ describe("normalize: Pi built-in tools (v0.87.1 input schemas)", () => {
     ["write", { path: "src/../x.ts", content: "export {};" }],
     ["edit", { path: "src/../x.ts", edits: [{ oldText: "a", newText: "b" }] }],
   ] as const)("%s is fs.write on input.path, resolved against cwd", async (tool, input) => {
-    const n = await normalize(withCall({ tool, kind: "fs.write", input }), OPTS);
+    const n = await normalize(piCall({ tool, kind: "fs.write", input }), OPTS);
     expect(n.kind).toBe("fs.write");
     expect(n.commands[0]?.pathRefs).toEqual([
       { raw: "src/../x.ts", path: "/work/repo/x.ts", access: "write" },
@@ -194,19 +199,19 @@ describe("normalize: Pi built-in tools (v0.87.1 input schemas)", () => {
     ["find", { pattern: "*.pem", path: "~/.ssh" }],
     ["ls", { path: "~/.ssh" }],
   ] as const)("%s is fs.read on input.path (the pattern is not a path)", async (tool, input) => {
-    const n = await normalize(withCall({ tool, kind: "fs.read", input }), OPTS);
+    const n = await normalize(piCall({ tool, kind: "fs.read", input }), OPTS);
     expect(n).toMatchObject({ kind: "fs.read", paths: [`${HOME}/.ssh`] });
   });
 
   test("ls without a path is fs.read with no target", async () => {
-    const n = await normalize(withCall({ tool: "ls", kind: "fs.read", input: {} }), OPTS);
+    const n = await normalize(piCall({ tool: "ls", kind: "fs.read", input: {} }), OPTS);
     expect(n).toMatchObject({ kind: "fs.read", paths: [] });
   });
 
   test("canonicalTool maps Pi names onto the names the context engine knows", () => {
     expect(
-      ["bash", "powershell", "read", "write", "edit", "grep", "find", "ls", "Bash", "x"].map(
-        canonicalTool,
+      ["bash", "powershell", "read", "write", "edit", "grep", "find", "ls", "Bash", "x"].map((t) =>
+        canonicalTool(t, "pi"),
       ),
     ).toEqual(["Bash", "Bash", "Read", "Write", "Edit", "Grep", "Glob", "Glob", "Bash", "x"]);
   });

@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_CONTEXT_CONFIG } from "./config.ts";
-import { findSecretPatterns, globToRegExp, isSecretPath, SECRET_PATTERNS } from "./secrets.ts";
+import {
+  findSecretPatterns,
+  globToRegExp,
+  HARNESS_CREDENTIAL_GLOBS,
+  isSecretPath,
+  SECRET_PATTERNS,
+} from "./secrets.ts";
 
 const HOME = "/home/dev";
 const GLOBS = DEFAULT_CONTEXT_CONFIG.secrets.pathGlobs;
@@ -43,6 +49,34 @@ describe("isSecretPath: spec globs", () => {
   test("~ expands to the given home, not the daemon's", () => {
     expect(isSecretPath("/root/.ssh/id_rsa", "/root", GLOBS)).toBe(true);
     expect(isSecretPath("/root/.ssh/id_rsa", HOME, GLOBS)).toBe(false);
+  });
+});
+
+describe("isSecretPath: harness credential files (PLAN-M3 §5)", () => {
+  test.each([
+    "/home/dev/.codex/auth.json",
+    "/home/dev/.local/share/opencode/auth.json",
+    "/home/dev/.claude/.credentials.json",
+    "/home/dev/.pi/agent/auth.json",
+    "/home/dev/.CODEX/AUTH.JSON",
+  ])("%s is a secret path whatever the configured globs", (path) => {
+    expect(isSecretPath(path, HOME, GLOBS)).toBe(true);
+    expect(isSecretPath(path, HOME, [])).toBe(true);
+    expect(isSecretPath(path, HOME, ["**/*.pem"])).toBe(true);
+  });
+
+  test.each([
+    "/home/dev/.codex/config.toml",
+    "/home/dev/.codex/auth.json.bak",
+    "/work/repo/.codex/auth.json",
+    "/home/dev/.local/share/opencode/log/x.log",
+    "/other/.codex/auth.json",
+  ])("%s is not", (path) => {
+    expect(isSecretPath(path, HOME, [])).toBe(false);
+  });
+
+  test("every harness credential glob is under the home directory", () => {
+    expect(HARNESS_CREDENTIAL_GLOBS.every((g) => g.startsWith("~/"))).toBe(true);
   });
 });
 

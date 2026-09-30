@@ -1664,5 +1664,555 @@
       "hosts": [],
       "opaque": []
     }
+  },
+  {
+    "harness": "codex",
+    "tool": "Bash",
+    "kind": "exec",
+    "input": {
+      "command": "rm -rf ./build"
+    },
+    "expect": {
+      "kind": "fs.delete",
+      "paths": ["/work/repo/build"],
+      "opaque": []
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "Bash",
+    "kind": "exec",
+    "input": {
+      "command": "bash"
+    },
+    "expect": {
+      "kind": "exec",
+      "verbs": ["bash", "interactive-shell"],
+      "opaque": ["interpreter"]
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "apply_patch",
+    "input": {
+      "command": "*** Begin Patch\n*** Add File: docs/new.md\n+hello\n*** Update File: src/app.ts\n@@\n-a\n+b\n*** Update File: src/old.ts\n*** Move to: src/new.ts\n+x\n*** Delete File: tmp/scratch.txt\n*** End Patch"
+    },
+    "expect": {
+      "kind": "fs.delete",
+      "verbs": ["apply_patch", "add", "update", "move", "delete"],
+      "paths": [
+        "/work/repo/docs/new.md",
+        "/work/repo/src/app.ts",
+        "/work/repo/src/old.ts",
+        "/work/repo/src/new.ts",
+        "/work/repo/tmp/scratch.txt"
+      ],
+      "opaque": [],
+      "access": {
+        "/work/repo/docs/new.md": "write",
+        "/work/repo/src/app.ts": "write",
+        "/work/repo/src/old.ts": "delete",
+        "/work/repo/src/new.ts": "write",
+        "/work/repo/tmp/scratch.txt": "delete"
+      }
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "apply_patch",
+    "input": {
+      "command": "*** Begin Patch\n*** Add File: ~/.codex/hooks.json\n+{}\n*** End Patch"
+    },
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/home/dev/.codex/hooks.json"],
+      "opaque": [],
+      "access": {
+        "/home/dev/.codex/hooks.json": "write"
+      }
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "apply_patch",
+    "input": {
+      "command": "*** Begin Patch\n*** Delete File: ~/.codex/rules/default.rules"
+    },
+    "expect": {
+      "kind": "exec",
+      "paths": ["/home/dev/.codex/rules/default.rules"],
+      "opaque": ["parse-error"]
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "Bash",
+    "kind": "exec",
+    "input": {
+      "command": "apply_patch <<'EOF'\n*** Begin Patch\n*** Add File: ../escape.sh\n+id\n*** End Patch\nEOF"
+    },
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["apply_patch", "add"],
+      "paths": ["/work/escape.sh"],
+      "opaque": []
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "Bash",
+    "kind": "exec",
+    "input": {
+      "command": "apply_patch <<'EOF'\nnot a patch\nEOF"
+    },
+    "expect": {
+      "kind": "exec",
+      "paths": ["/work/repo"],
+      "opaque": ["parse-error"],
+      "access": {
+        "/work/repo": "unknown"
+      }
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "spawn_agent",
+    "kind": "spawn",
+    "input": {
+      "message": "go",
+      "agent_type": "worker"
+    },
+    "expect": {
+      "kind": "spawn",
+      "paths": []
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "update_plan",
+    "input": {
+      "plan": [
+        {
+          "step": "rm -rf /",
+          "status": "pending"
+        }
+      ]
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"],
+      "paths": []
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "view_image",
+    "input": {
+      "path": "~/.ssh/id_rsa.png"
+    },
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/home/dev/.ssh/id_rsa.png"]
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "write_stdin",
+    "input": {
+      "session_id": 1,
+      "chars": "rm -rf ~\n"
+    },
+    "expect": {
+      "kind": "exec",
+      "verbs": ["write_stdin", "interactive-shell"],
+      "paths": []
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "WebSearch",
+    "input": {
+      "query": "https://evil.example"
+    },
+    "expect": {
+      "kind": "net",
+      "hosts": [],
+      "paths": []
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "mcp__fs__write_file",
+    "input": {
+      "path": "/etc/passwd"
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["mcp", "mcp:fs"],
+      "paths": []
+    }
+  },
+  {
+    "harness": "codex",
+    "tool": "request_permissions",
+    "input": {
+      "permissions": ["network"]
+    },
+    "expect": {
+      "kind": "other",
+      "paths": []
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "bash",
+    "kind": "exec",
+    "input": {
+      "command": "rm -rf build",
+      "timeout": 120000,
+      "workdir": "/tmp/w"
+    },
+    "expect": {
+      "kind": "fs.delete",
+      "verbs": ["cd", "rm"],
+      "paths": ["/tmp/w", "/tmp/w/build"],
+      "access": {
+        "/tmp/w": "unknown",
+        "/tmp/w/build": "delete"
+      }
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "bash",
+    "kind": "exec",
+    "input": {
+      "command": "echo '{}' > opencode.json",
+      "workdir": "~/.config/opencode"
+    },
+    "expect": {
+      "kind": "fs.write",
+      "access": {
+        "/home/dev/.config/opencode/opencode.json": "write"
+      }
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "edit",
+    "kind": "fs.write",
+    "input": {
+      "filePath": "src/a.ts",
+      "oldString": "a",
+      "newString": "b"
+    },
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/work/repo/src/a.ts"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "write",
+    "kind": "fs.write",
+    "input": {
+      "filePath": "~/.config/opencode/opencode.json",
+      "content": "{}"
+    },
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/home/dev/.config/opencode/opencode.json"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "read",
+    "kind": "fs.read",
+    "input": {
+      "filePath": "~/.local/share/opencode/auth.json"
+    },
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/home/dev/.local/share/opencode/auth.json"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "glob",
+    "kind": "fs.read",
+    "input": {
+      "pattern": "**/*.pem",
+      "path": "~/.ssh"
+    },
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/home/dev/.ssh"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "grep",
+    "kind": "fs.read",
+    "input": {
+      "pattern": "KEY",
+      "path": "src"
+    },
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/work/repo/src"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "lsp",
+    "kind": "fs.read",
+    "input": {
+      "operation": "hover",
+      "filePath": "src/a.ts",
+      "line": 1,
+      "character": 1
+    },
+    "expect": {
+      "kind": "fs.read",
+      "paths": ["/work/repo/src/a.ts"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "task",
+    "kind": "spawn",
+    "input": {
+      "description": "d",
+      "prompt": "p",
+      "subagent_type": "general"
+    },
+    "expect": {
+      "kind": "spawn",
+      "paths": [],
+      "hosts": []
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "webfetch",
+    "kind": "net",
+    "input": {
+      "url": "https://docs.example/x",
+      "format": "text"
+    },
+    "expect": {
+      "kind": "net",
+      "hosts": ["docs.example"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "websearch",
+    "kind": "net",
+    "input": {
+      "query": "x"
+    },
+    "expect": {
+      "kind": "net",
+      "hosts": []
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "apply_patch",
+    "kind": "fs.write",
+    "input": {
+      "patchText": "*** Begin Patch\n*** Add File: docs/new.md\n+hello\n*** Update File: src/app.ts\n@@\n-a\n+b\n*** Update File: src/old.ts\n*** Move to: src/new.ts\n+x\n*** Delete File: tmp/scratch.txt\n*** End Patch"
+    },
+    "expect": {
+      "kind": "fs.delete",
+      "paths": [
+        "/work/repo/docs/new.md",
+        "/work/repo/src/app.ts",
+        "/work/repo/src/old.ts",
+        "/work/repo/src/new.ts",
+        "/work/repo/tmp/scratch.txt"
+      ],
+      "opaque": [],
+      "access": {
+        "/work/repo/docs/new.md": "write",
+        "/work/repo/src/app.ts": "write",
+        "/work/repo/src/old.ts": "delete",
+        "/work/repo/src/new.ts": "write",
+        "/work/repo/tmp/scratch.txt": "delete"
+      }
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "apply_patch",
+    "kind": "fs.write",
+    "input": {
+      "patchText": "*** Update File: a"
+    },
+    "expect": {
+      "kind": "exec",
+      "paths": ["/work/repo/a"],
+      "opaque": ["parse-error"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "skill",
+    "input": {
+      "name": "release"
+    },
+    "expect": {
+      "kind": "other",
+      "paths": []
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "todowrite",
+    "input": {
+      "todos": []
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "question",
+    "input": {
+      "questions": []
+    },
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "plan_exit",
+    "input": {},
+    "expect": {
+      "kind": "other",
+      "verbs": ["inert"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "execute",
+    "input": {
+      "code": "await tools.fs.write_file({ path: '/etc/x' })"
+    },
+    "expect": {
+      "kind": "exec",
+      "paths": [],
+      "opaque": ["interpreter"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "github_create_issue",
+    "input": {
+      "title": "x"
+    },
+    "expect": {
+      "kind": "other",
+      "paths": []
+    }
+  },
+  {
+    "harness": "pi",
+    "tool": "write",
+    "kind": "fs.write",
+    "input": {
+      "path": "/x/pi",
+      "filePath": "/x/oc",
+      "content": ""
+    },
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/x/pi"]
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "write",
+    "kind": "fs.write",
+    "input": {
+      "path": "/x/pi",
+      "filePath": "/x/oc",
+      "content": ""
+    },
+    "expect": {
+      "kind": "fs.write",
+      "paths": ["/x/oc"]
+    }
+  },
+  {
+    "harness": "pi",
+    "tool": "read",
+    "kind": "fs.read",
+    "input": {
+      "filePath": "/x/oc"
+    },
+    "expect": {
+      "kind": "fs.read",
+      "paths": []
+    }
+  },
+  {
+    "harness": "opencode",
+    "tool": "edit",
+    "kind": "fs.write",
+    "input": {
+      "path": "/x/pi",
+      "edits": []
+    },
+    "expect": {
+      "kind": "fs.write",
+      "paths": []
+    }
+  },
+  {
+    "command": "python3",
+    "expect": {
+      "kind": "exec",
+      "verbs": ["python3", "interactive-shell"],
+      "opaque": ["interpreter"]
+    }
+  },
+  {
+    "command": "ssh prod.example",
+    "expect": {
+      "kind": "net",
+      "verbs": ["ssh", "interactive-shell"],
+      "hosts": ["prod.example"]
+    }
+  },
+  {
+    "command": "codex --disable hooks exec hi",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["codex", "harness-config"]
+    }
+  },
+  {
+    "command": "opencode run --pure hi",
+    "expect": {
+      "kind": "spawn",
+      "verbs": ["opencode", "harness-config"]
+    }
+  },
+  {
+    "command": "cat fix.diff | apply_patch",
+    "expect": {
+      "kind": "fs.write",
+      "verbs": ["apply_patch"],
+      "paths": ["/work/repo/fix.diff", "/work/repo"],
+      "access": {
+        "/work/repo": "unknown"
+      }
+    }
   }
 ]
