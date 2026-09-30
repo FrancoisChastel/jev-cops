@@ -293,6 +293,7 @@ runs the same checks. Formats, key rotation and exact guarantees: [docs/audit.md
 | `cops budget <session-id> [--reset]` | show or reset a session's risk budget (reset needs the admin socket) |
 | `cops keygen [--rotate]` | create the audit signing key, or rotate it (a running copsd switches over the admin socket) |
 | `cops audit verify <audit.jsonl> --pubkey <file>` | verify the hash chain and signed checkpoints; `--remote <copy>` also checks the off-box copy |
+| `cops openshell compile\|apply\|create` | **M2 preview:** compile the policies, repo and task into an NVIDIA OpenShell sandbox policy (`--dry-run` diffs it), add the task's hosts to a running sandbox, or create one with it |
 | `cops hook --harness claude-code` | the Claude Code hook itself (normally run by Claude Code, not by you) |
 
 `cops <command> --help` and `cops help` give every option and exit code.
@@ -304,7 +305,8 @@ context, legible explanations, an audit trail you can tune against. It is delibe
 **not a sandbox and not the last line of defence.** A hook can be bypassed by a bug in the
 harness, and a process with your privileges can be killed. Anything that must never happen
 belongs to a kernel-enforced sandbox such as [NVIDIA OpenShell](https://github.com/NVIDIA/openshell),
-which jev-cops will compile its hard findings down to (M2).
+which jev-cops compiles its hard findings down to (`cops openshell`, an M2 preview not yet
+run against a live gateway).
 
 What it guarantees today:
 
@@ -332,7 +334,7 @@ Found a bypass? Please report it privately. See [SECURITY.md](SECURITY.md).
 |---|---|---|
 | M0 | core, normalizer, context engine, policy engine, SDK, starter policies, daemon, CLI, Pi adapter | ✅ done |
 | M1 | Claude Code hook, `cops install`, `cops doctor`, `config-tamper` | ✅ done |
-| M2 | NVIDIA OpenShell policy compilation, just-in-time grants, signed audit checkpoints shipped off-box (syslog) | 🚧 in progress |
+| M2 | NVIDIA OpenShell policy compilation (preview: `cops openshell`), just-in-time grants, signed audit checkpoints shipped off-box over syslog (done) | 🚧 in progress |
 | — | `cops setup`: one-command setup with a choice of skill scanner (e.g. NVIDIA SkillSpector) | 🚧 in progress |
 | M3 | Codex and OpenCode adapters, `cops replay` over recorded sessions | 🗓 planned |
 | M4 | two-week observe-only pilot, false-positive review, `deny` enabled by default | 🗓 planned |
@@ -355,6 +357,7 @@ packages/sdk        definePolicy, typed question builders, fixture runner   (@je
 packages/judge      semantic judge providers                               (@jev-cops/judge)
 packages/daemon     copsd: sockets, SQLite stores, signed audit log         (@jev-cops/daemon)
 packages/cli        cops                                                    (@jev-cops/cli)
+packages/openshell  OpenShell policy compiler and openshell wrapper         (@jev-cops/openshell)
 adapters/           claude-code (command hook) · pi (extension)
 policies/           the starter policy set with fixtures                   (@jev-cops/policies)
 tests/tamper        T1–T13 anti-tamper acceptance tests
