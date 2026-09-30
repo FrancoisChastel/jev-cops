@@ -123,11 +123,22 @@ clone → check → gate → build all green. Fixes before M1:
   events (PreToolUse refused over HTTP). T1/T11 daemon side live. 2181 tests. Decisions
   D-075–D-080.
 
+- **M1 steps 4–5 — Claude Code hook** (`adapters/claude-code`, `jevdict hook`,
+  `dist/jevdict-hook`): fail-closed command hook (exit 2 on every failure path, own 13 s
+  deadline), tighten-only verdict mapping, hold→ask only with a human, session/prompt/
+  config-change/post events, ConfigChange intact check. Verified live on `claude` 2.1.280
+  against a local fake API (rewrite via `updatedInput`, kill via `continue: false`, prompt
+  block; found that a headless `ask` reason reaches the model). Cold start p50 39 ms.
+  Fake Claude Code runner e2e; T1/T2/T3/T8/T9 live on Claude Code. Daemon protects its
+  own inputs; `explain`/`replay` read M1 lines. Decisions D-081–D-087.
+
+**Totals:** 2615 tests + 6 todo, `bun run check` green, coverage 98.6 % functions /
+99.1 % lines (80 % per file enforced), `bun run gate` PASS (6 policies, 93 cases, 186 runs),
+`bun run build` → `dist/jevdictd`, `dist/jevdict`, `dist/jevdict-hook`.
+
 ## In progress
 
-- **M1 steps 4–5**: the `jevdict hook` binary (command hook, fail closed, exit 2) and
-  adapter events; the daemon appends `policies.dir`, `~/.jevdict/` and the binaries to
-  `protectedPaths`; CLI `explain`/`replay` read `session` lines and latched judge lines.
+- Nothing: PLAN-M1 session boundary after step 5.
 
 ## Next
 
@@ -137,8 +148,12 @@ clone → check → gate → build all green. Fixes before M1:
 - Carriers not yet parsed: `watch`, `script -c`, `tmux`/`screen` command strings, `flock`,
   `chroot`, `nsenter`, `sudo -s`, `vim -c '!…'`, `parallel`; T5 "exec of a freshly written
   file is judged on its content" uses the write's taint, not its content.
-- M1 steps 6–9: `jevdict install claude-code`/`install pi`, `jevdict doctor` + canary,
-  tamper T1/T2/T3/T4/T8/T9 on Claude Code, docs + a real `claude` capture.
+- M1 steps 6–9: `jevdict install claude-code`/`install pi` (writes the settings block,
+  `[daemon] hook_binary`, `~/.jevdict/claude-code.json` with the Claude Code version),
+  `jevdict doctor` + offline/live canary, T4 installer gap, a real interactive `claude`
+  capture covering: the ask dialog (text, newlines, whether a declined ask hides our reason
+  from Claude), auto mode's classifier after a hook ask, ConfigChange on a real edit, SDK /
+  VS Code parent argv (SDK hosts are headless today, D-086), `stopReason` display.
 
 ## Known gaps carried forward (from the normalizer report)
 

@@ -12,8 +12,9 @@ not the command string.
 > **Status: M0 complete and gate-reviewed.** Core, policy engine, SDK,
 > starter policies, judge providers, daemon, CLI and the **Pi adapter** are built and
 > tested; a real `pi` run blocks and rewrites tool calls end to end
-> ([capture](docs/captures/pi-m0.md)). Claude Code, Codex and OpenCode adapters come in
-> M1–M3. Not production-ready yet: see [docs/STATUS.md](docs/STATUS.md).
+> ([capture](docs/captures/pi-m0.md)). **M1 in progress:** the Claude Code command hook is
+> built and verified against the real `claude` binary; `jevdict install`/`doctor` come
+> next. Codex and OpenCode in M3. Not production-ready yet: see [docs/STATUS.md](docs/STATUS.md).
 
 ## How it works
 
@@ -48,9 +49,9 @@ Requires [Bun](https://bun.sh) ≥ 1.3. Node is not a supported runtime.
 ```bash
 git clone https://github.com/FrancoisChastel/jevdict && cd jevdict
 bun install
-bun run check          # lint + typecheck + 1600 tests
+bun run check          # lint + typecheck + 2600 tests
 bun run gate           # jevdict test: every starter policy against its fixtures
-bun run build          # dist/jevdictd and dist/jevdict, WASM grammar embedded
+bun run build          # dist/jevdictd, dist/jevdict, dist/jevdict-hook (WASM grammar embedded)
 ```
 
 Run the judge and ask it about a tool call:
@@ -66,7 +67,9 @@ Configuration lives in `~/.config/jevdict/jevdict.toml` (see `packages/daemon/sr
 for every key and default); a repo-local `.jevdict.toml` may only tighten it. Judge API keys
 are read from the environment only (`.env.example`).
 
-To try it with [Pi](https://pi.dev), see [adapters/pi/README.md](adapters/pi/README.md).
+To try it with [Pi](https://pi.dev), see [adapters/pi/README.md](adapters/pi/README.md); with
+Claude Code (manual settings block until `jevdict install` lands), see
+[adapters/claude-code/README.md](adapters/claude-code/README.md).
 `jevdict install <harness>` and `jevdict doctor` arrive with M1.
 
 ## Writing a policy
@@ -103,7 +106,7 @@ packages/sdk        definePolicy, question builders, fixture runner  (@jevdict/s
 packages/judge      semantic judge providers: TypeSafe Jev, OpenRouter, Vercel AI SDK
 packages/daemon     jevdictd: socket + loopback HTTP, SQLite stores, hash-chained audit log
 packages/cli        jevdict test | explain | replay | budget   (install, doctor: M1)
-adapters/pi         Pi extension (M0); claude-code (M1); codex, opencode (M3)
+adapters/           pi (M0) · claude-code command hook (M1) · codex, opencode (M3)
 policies/           starter policy set, one *.fixtures.json per policy
 tests/tamper        T1–T13 anti-tamper acceptance tests (see tests/tamper/README.md)
 docs/               SPEC.md (source of truth), PLAN-M0.md, DECISIONS.md, STATUS.md, adapters.md
