@@ -162,6 +162,19 @@ describe("installWarnings (never refuse)", () => {
     expect(installWarnings(v, check(), noGit).some((l) => l.includes("/project.json"))).toBe(true);
   });
 
+  test("a project or local install below the repository root is pointed at the root", () => {
+    const git = (p: string) => p === "/work/.git";
+    const warns = (scope: InstallCheck["scope"]) =>
+      installWarnings(view(), check({ scope, projectDir: "/work/repo" }), git).some((l) =>
+        l.includes("--project-dir /work"),
+      );
+    expect(warns("project")).toBe(true);
+    expect(warns("local")).toBe(true);
+    expect(warns("user")).toBe(false);
+    const atRoot = installWarnings(view(), check({ scope: "project", projectDir: "/work" }), git);
+    expect(atRoot.some((l) => l.includes("--project-dir"))).toBe(false);
+  });
+
   test("a managed install warns that another managed source may win", () => {
     const trusted = { projects: { "/work/repo": { hasTrustDialogAccepted: true } } };
     const w = installWarnings(view({}, trusted), check({ scope: "managed" }), noGit);

@@ -140,6 +140,14 @@ function rollback(settings: InstallResult, w: Written, ctx: InstallContext): voi
   restoreText(w.state.path, w.state.previous, 0o600, c);
 }
 
+/** Hooks may not see `CLAUDE_CONFIG_DIR` (hooks#common-input-fields, env-vars, v2.1.251+). */
+function configDirWarnings(s: Setup): string[] {
+  if (s.configDir === null) return [];
+  return [
+    `CLAUDE_CONFIG_DIR is set (${s.configDir}): with CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 Claude Code strips it from hook processes (v2.1.251+), so the ConfigChange check would look for the user settings in ~/.claude and block every settings change; do not combine the two`,
+  ];
+}
+
 function managedWarnings(a: ClaudeInstallArgs, hookBinary: string): string[] {
   if (a.scope !== "managed" || isRootLocked(hookBinary)) return [];
   return [
@@ -191,7 +199,7 @@ export async function installClaudeCode(
     ...base,
     hookBinary,
     hookVersion: CLI_VERSION,
-    warnings: [...base.warnings, ...managedWarnings(a, hookBinary)],
+    warnings: [...base.warnings, ...configDirWarnings(s), ...managedWarnings(a, hookBinary)],
   };
   const settings = installClaudeCodeHooks(settingsOptions(a, s, ctx, hookBinary));
   const report = { ...withBinary, settings };

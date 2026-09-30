@@ -173,7 +173,8 @@ function unreadable(view: SettingsView): string[] {
 
 /**
  * What the installer prints but does not refuse: `bypassPermissions`/`dontAsk` default
- * modes, an untrusted folder, unreadable settings, the managed first-wins rule, and always
+ * modes, an untrusted folder, a project install below the repository root, unreadable
+ * settings, the managed first-wins rule, and always
  * the `--dangerously-skip-permissions` and "Without OpenShell" notices.
  */
 export function installWarnings(
@@ -186,11 +187,18 @@ export function installWarnings(
     : [
         `${o.projectDir} is not a trusted workspace: interactive sessions hold back every hook, this one included, until you accept Claude Code's workspace trust dialog (-p and SDK runs count as trusted)`,
       ];
+  const root = o.scope === "project" || o.scope === "local" ? gitRoot(o.projectDir, exists) : null;
+  const subdir =
+    root === null || root === o.projectDir
+      ? []
+      : [
+          `${o.projectDir} is inside the repository ${root}: Claude Code keeps a repository's project and local settings at its root, so pass --project-dir ${root}`,
+        ];
   const managed =
     o.scope === "managed"
       ? [
           "A managed-settings.d drop-in is read only when the file-based policy is the managed source Claude Code applies: under the default managedSourcesBehavior (first-wins), server-managed settings or an MDM profile with any policy key make it skip the files; check /status.",
         ]
       : [];
-  return [...unreadable(view), ...modeWarnings(view), ...trust, ...managed, ...ALWAYS];
+  return [...unreadable(view), ...modeWarnings(view), ...trust, ...subdir, ...managed, ...ALWAYS];
 }

@@ -318,6 +318,16 @@ describe("cops install claude-code: other scopes and transports", () => {
     expect(toml.daemon).toEqual({ http: "127.0.0.1:8787", hook_binary: w.hook });
   }, 30_000);
 
+  test("CLAUDE_CONFIG_DIR inside --home: user settings there, with the env-scrub warning", async () => {
+    const configDir = join(w.home, "cfg");
+    const r = await install([], enforce.config.daemon.socket, {
+      env: { PATH: `${w.bin}:/usr/bin:/bin`, CLAUDE_CONFIG_DIR: configDir },
+    });
+    expect(r.code).toBe(0);
+    expect(existsSync(join(configDir, "settings.json"))).toBe(true);
+    expect(r.out).toContain("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB");
+  }, 30_000);
+
   test("--home ignores a CLAUDE_CONFIG_DIR outside it", async () => {
     const r = await install([], enforce.config.daemon.socket, {
       env: { PATH: `${w.bin}:/usr/bin:/bin`, CLAUDE_CONFIG_DIR: "/somewhere/real/.claude" },
