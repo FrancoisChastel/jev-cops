@@ -1,6 +1,6 @@
 import type { AuditLine, ChainHead } from "../audit-line.ts";
 import { lineEndAfter, readLinesFrom } from "../audit-read.ts";
-import { readCursor, writeCursor } from "./cursor.ts";
+import { type ForwardCursor, readCursor, writeCursor } from "./cursor.ts";
 import type { AuditForwarder, ForwarderKind, ForwarderStatus } from "./types.ts";
 
 /** One destination's connection, as the forwarder drives it. */
@@ -31,32 +31,59 @@ export interface ForwarderOptions {
   readonly retry?: { readonly minMs: number; readonly maxMs: number };
   /** Lines per write (default 256). */
   readonly batchLines?: number;
+  /**
+   * A connection lost within this long of opening delivered nothing it was given (a TLS 1.3
+   * receiver refuses a client certificate only after the handshake): default 2 s.
+   */
+  readonly settleMs?: number;
 }
 
 const DEFAULT_RETRY = { minMs: 250, maxMs: 30_000 };
 const DEFAULT_BATCH = 256;
+const DEFAULT_SETTLE_MS = 2_000;
 const CLOSE_BUDGET_MS = 2_000;
+const START: ChainHead = { seq: 0, hash: "" };
 
 function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** What a cursor found at open says about the log. */
+function cursorProblem(
+  cursor: ForwardCursor,
+  head: ChainHead,
+  found: string | null,
+): string | null {
+  if (cursor.seq > head.seq) {
+    return `forward cursor at seq ${cursor.seq} is past the log's last line ${head.seq}: the local tail was cut or the log replaced`;
+  }
+  if (found === null)
+    return `forward cursor seq ${cursor.seq} is not in the log: shipping it again from the start`;
+  if (cursor.seq > 0 && found !== cursor.hash) {
+    return `the log's line at seq ${cursor.seq} differs from the line shipped (hash ${cursor.hash}): the log was rewritten`;
+  }
+  return null;
 }
 
 /**
  * A forwarder over any transport (D-103). The local log is the queue: each batch is read
  * from the file after the cursor, so lines appended while the destination is down are
  * shipped when it returns, and a restart resumes from the persisted cursor. Delivery is
- * at least once: after an unclean stop the last `resendOverlap` lines go again, and a
- * destination that knows what it holds (a file) resumes exactly after it.
+ * at least once: a connection lost before it settled rewinds to where it started, one
+ * lost later (or an unclean stop) rewinds `resendOverlap` lines, and a destination that
+ * knows what it holds (a file) resumes exactly after it.
  */
 export class CursorForwarder implements AuditForwarder {
   private readonly now: () => number;
   private readonly retry: { readonly minMs: number; readonly maxMs: number };
   private readonly batch: number;
+  private readonly settleMs: number;
   private report: (problem: string) => void = () => {};
   private headSeq = 0;
-  private sent: ChainHead = { seq: 0, hash: "" };
+  private sent: ChainHead = START;
   private offset = 0;
-  private uncertain = false;
+  private connStart: ChainHead = START;
+  private connectedAt = 0;
   private connected = false;
   private connecting = false;
   private closed = false;
@@ -74,6 +101,7 @@ export class CursorForwarder implements AuditForwarder {
     this.now = opts.now ?? Date.now;
     this.retry = opts.retry ?? DEFAULT_RETRY;
     this.batch = opts.batchLines ?? DEFAULT_BATCH;
+    this.settleMs = opts.settleMs ?? DEFAULT_SETTLE_MS;
     this.retryMs = this.retry.minMs;
     transport.onDrop((reason) => this.lost(reason));
   }
@@ -82,10 +110,10 @@ export class CursorForwarder implements AuditForwarder {
     this.report = report;
     this.headSeq = head.seq;
     this.downSince = this.now();
-    const problems = this.loadCursor(head);
+    const problem = this.loadCursor(head);
     if (this.sent.seq < this.headSeq) this.behindSince = this.now();
     void this.connect();
-    for (const p of problems) this.safeReport(p);
+    if (problem !== null) this.safeReport(problem);
   }
 
   send(line: AuditLine): void {
@@ -123,54 +151,39 @@ export class CursorForwarder implements AuditForwarder {
     this.closed = true;
     if (this.timer !== null) clearTimeout(this.timer);
     const wasConnected = this.connected;
+    const confirmed = this.confirmed();
     this.connected = false;
     const graceful = await this.transport.close().catch(() => false);
-    this.saveCursor(wasConnected && graceful && !this.uncertain);
+    const clean = wasConnected && graceful;
+    this.saveCursor(clean ? this.sent : confirmed, clean);
   }
 
-  /** Resumes after the persisted cursor; returns the problems it found with it. */
-  private loadCursor(head: ChainHead): string[] {
+  /** Positions after the persisted cursor (an overlap before it when it was not clean). */
+  private loadCursor(head: ChainHead): string | null {
     const { kind, target } = this.transport;
     const cursor = readCursor(this.opts.cursorPath, kind, target);
     if (cursor === null) {
       this.seek(0);
-      return [];
+      return null;
     }
-    this.uncertain = !cursor.clean;
-    if (cursor.seq > head.seq) {
-      this.seekHead(head);
-      return [
-        `forward cursor at seq ${cursor.seq} is past the log's last line ${head.seq}: the local tail was cut or the log replaced`,
-      ];
-    }
-    const found = this.seek(cursor.seq);
-    if (found === null)
-      return [
-        `forward cursor seq ${cursor.seq} is not in the log: shipping it again from the start`,
-      ];
-    if (cursor.seq > 0 && found !== cursor.hash) {
-      return [
-        `the log's line at seq ${cursor.seq} differs from the line shipped (hash ${cursor.hash}): the log was rewritten`,
-      ];
-    }
-    return [];
+    const found = cursor.seq > head.seq ? null : this.seek(cursor.seq);
+    const problem = cursorProblem(cursor, head, found);
+    if (cursor.seq > head.seq && this.seek(head.seq) === null) this.seek(0);
+    if (!cursor.clean) this.seek(Math.max(0, this.sent.seq - this.transport.resendOverlap));
+    return problem;
   }
 
-  /** Positions after line `seq`; null (and the start) when the log has no such line. */
+  /** Positions after line `seq`; returns its hash, or null (and the start) when absent. */
   private seek(seq: number): string | null {
     const at = lineEndAfter(this.opts.logPath, seq);
     if (at === null) {
-      this.sent = { seq: 0, hash: "" };
+      this.sent = START;
       this.offset = 0;
       return null;
     }
-    this.sent = { seq: at.hash === null ? 0 : seq, hash: at.hash ?? "" };
+    this.sent = at.hash === null ? START : { seq, hash: at.hash };
     this.offset = at.offset;
     return at.hash ?? "";
-  }
-
-  private seekHead(head: ChainHead): void {
-    if (this.seek(head.seq) === null) this.seek(0);
   }
 
   private async connect(): Promise<void> {
@@ -188,22 +201,16 @@ export class CursorForwarder implements AuditForwarder {
     this.connected = true;
     this.downSince = null;
     this.retryMs = this.retry.minMs;
-    this.resume();
+    this.resumeAtDestination();
+    this.connStart = this.sent;
+    this.connectedAt = performance.now();
     this.schedulePump();
   }
 
-  /** After (re)connecting: exactly after what the destination holds, else overlap if unsure. */
-  private resume(): void {
+  /** A destination that knows its last line (a file copy) is the exact resume point. */
+  private resumeAtDestination(): void {
     const held = this.transport.delivered();
-    if (held !== null) {
-      this.resumeAt(held);
-    } else if (this.uncertain) {
-      this.seek(Math.max(0, this.sent.seq - this.transport.resendOverlap));
-    }
-    this.uncertain = false;
-  }
-
-  private resumeAt(held: ChainHead): void {
+    if (held === null) return;
     if (held.seq > this.headSeq) {
       this.safeReport(
         `the destination holds seq ${held.seq}, past the log's last line ${this.headSeq}: the local tail was cut`,
@@ -216,11 +223,22 @@ export class CursorForwarder implements AuditForwarder {
     }
   }
 
+  /** What the destination surely holds: nothing past the start of an unsettled connection. */
+  private confirmed(): ChainHead {
+    const settled = performance.now() - this.connectedAt >= this.settleMs;
+    return this.connected && !settled ? this.connStart : this.sent;
+  }
+
   private lost(reason: string): void {
     this.lastError = reason;
     if (this.closed) return;
+    if (this.connected) {
+      const young = performance.now() - this.connectedAt < this.settleMs;
+      const back = young ? this.connStart.seq : this.sent.seq - this.transport.resendOverlap;
+      this.seek(Math.max(0, Math.min(back, this.sent.seq)));
+      if (this.sent.seq < this.headSeq) this.behindSince ??= this.now();
+    }
     this.connected = false;
-    this.uncertain = true;
     this.downSince ??= this.now();
     this.scheduleReconnect();
   }
@@ -249,7 +267,7 @@ export class CursorForwarder implements AuditForwarder {
       const read = readLinesFrom(this.opts.logPath, this.offset, this.batch);
       if (read.size < this.offset) {
         this.safeReport("the audit log shrank under the forwarder: its tail was cut");
-        this.seekHead({ seq: this.sent.seq, hash: this.sent.hash });
+        if (this.seek(this.sent.seq) === null) this.seek(0);
         return;
       }
       const last = read.lines.at(-1);
@@ -263,18 +281,19 @@ export class CursorForwarder implements AuditForwarder {
         this.lost(message(cause));
         return;
       }
+      if (!this.connected) return;
       this.sent = { seq: last.line.seq, hash: last.line.hash };
       this.offset = last.end;
-      this.saveCursor(false);
+      this.saveCursor(this.confirmed(), false);
     }
     if (this.sent.seq >= this.headSeq) this.behindSince = null;
   }
 
-  private saveCursor(clean: boolean): void {
+  private saveCursor(at: ChainHead, clean: boolean): void {
     const { kind, target } = this.transport;
-    const hash = this.sent.seq === 0 ? null : this.sent.hash;
+    const hash = at.seq === 0 ? null : at.hash;
     try {
-      writeCursor(this.opts.cursorPath, { kind, target, seq: this.sent.seq, hash, clean });
+      writeCursor(this.opts.cursorPath, { kind, target, seq: at.seq, hash, clean });
     } catch (cause) {
       this.lastError = `cannot persist the forward cursor: ${message(cause)}`;
     }

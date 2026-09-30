@@ -1,3 +1,4 @@
+import { refuseUnshipped } from "./audit-forward/gate.ts";
 import { handleClaudeCodeHook } from "./claude-code/route.ts";
 import { handleConfirmView } from "./confirm-view.ts";
 import type { Runtime } from "./daemon.ts";
@@ -77,7 +78,8 @@ async function readJson(req: Request): Promise<{ ok: true; body: unknown } | { o
 /** POST routes per surface. Budget reset is admin-only; everything a harness calls is agent-only. */
 const POST_ROUTES: Readonly<Record<Surface, Readonly<Record<string, Route>>>> = {
   agent: {
-    "/v1/judge": (rt, body) => withDeadline(rt, handleJudge(rt, body), body),
+    "/v1/judge": (rt, body) =>
+      refuseUnshipped(rt, body) ?? withDeadline(rt, handleJudge(rt, body), body),
     "/v1/observe": (rt, body) => handleObserve(rt, body),
     "/v1/resolve": (rt, body) => handleResolve(rt, body),
     "/v1/session": (rt, body) => handleSession(rt, body),

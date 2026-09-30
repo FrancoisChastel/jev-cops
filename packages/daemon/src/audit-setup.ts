@@ -1,6 +1,7 @@
 import { AuditLog } from "./audit.ts";
 import { FileTransport } from "./audit-forward/file.ts";
 import { CursorForwarder, type ForwarderOptions } from "./audit-forward/forwarder.ts";
+import { SyslogTransport } from "./audit-forward/syslog.ts";
 import type { AuditForwarder, ForwarderStatus } from "./audit-forward/types.ts";
 import type { AuditForward, DaemonConfig } from "./config.ts";
 
@@ -22,30 +23,38 @@ export interface ForwardDeps {
   readonly retry?: ForwarderOptions["retry"];
 }
 
-/** The forwarder for `[audit.forward]` (null: none configured, or `syslog` not built here). */
+/** The forwarder for `[audit.forward]`; null when none is configured. */
 export function buildForwarder(
   fwd: AuditForward | null,
   logPath: string,
   deps: ForwardDeps,
 ): AuditForwarder | null {
-  if (fwd === null || fwd.kind !== "file") return null;
+  if (fwd === null) return null;
   const opts = {
     logPath,
     cursorPath: fwd.cursor,
     now: deps.now,
     ...(deps.retry === undefined ? {} : { retry: deps.retry }),
   };
-  return new CursorForwarder(new FileTransport(fwd.target), opts);
+  const transport =
+    fwd.syslog === null ? new FileTransport(fwd.target) : new SyslogTransport(fwd.syslog);
+  return new CursorForwarder(transport, opts);
+}
+
+/** The boot warning when the audit log stays on this machine. */
+function forwardWarning(fwd: AuditForward | null): string[] {
+  if (fwd !== null) return [];
+  return [
+    "audit log not shipped off-box ([audit.forward] unset): a tail cut at a checkpoint is invisible locally",
+  ];
 }
 
 /** Opens the audit log with its forwarder. */
 export function openAudit(config: DaemonConfig, deps: ForwardDeps): AuditRuntime {
   const fwd = config.audit.forward;
   const forwarder = buildForwarder(fwd, config.audit.path, deps);
-  const warnings =
-    fwd?.kind === "syslog" && forwarder === null ? ["audit.forward syslog: not forwarding"] : [];
   const audit = AuditLog.open(config.audit.path, { now: deps.now, forwarder });
-  return { audit, forwarder, warnings };
+  return { audit, forwarder, warnings: forwardWarning(fwd) };
 }
 
 /** Closes the log, then lets the forwarder ship what it can within its budget. */
