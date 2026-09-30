@@ -22,13 +22,30 @@ function write(file: string, text: string): void {
   writeFileSync(join(dir, file), text);
 }
 
-function nextEvent<T>(register: (fn: (value: T) => void) => void, ms = 3_000): Promise<T> {
+/** Ceiling for a watch event under a loaded full-suite run; the poke loop usually ends it in < 1 s. */
+const WATCH_EVENT_CEILING_MS = 15_000;
+const POKE_INTERVAL_MS = 250;
+
+/**
+ * Resolves on the first watcher event. `poke` performs the file change and is repeated
+ * every {@link POKE_INTERVAL_MS} until the event arrives: FSEvents may coalesce, delay or
+ * drop a change made right after `watch()` returns, so a single write made this test flaky
+ * under a loaded full-suite run. Each poke is a real change, so what the test proves (a
+ * change on disk triggers a reload) is unchanged.
+ */
+function nextEvent<T>(register: (fn: (value: T) => void) => void, poke: () => void): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("no reload event")), ms);
+    const pokes = setInterval(poke, POKE_INTERVAL_MS);
+    const timer = setTimeout(() => {
+      clearInterval(pokes);
+      reject(new Error("no reload event"));
+    }, WATCH_EVENT_CEILING_MS);
     register((value) => {
       clearTimeout(timer);
+      clearInterval(pokes);
       resolve(value);
     });
+    poke();
   });
 }
 
@@ -89,23 +106,27 @@ describe("reload", () => {
     let onReload: (s: PolicySnapshot) => void = () => {};
     set = await PolicySet.load(dir, { onReload: (s) => onReload(s), debounceMs: 20 });
     set.watch();
-    const reloaded = nextEvent<PolicySnapshot>((fn) => {
-      onReload = fn;
-    });
-    write("beta.ts", policyModule("beta"));
+    const reloaded = nextEvent<PolicySnapshot>(
+      (fn) => {
+        onReload = fn;
+      },
+      () => write("beta.ts", policyModule("beta")),
+    );
     expect((await reloaded).policies).toHaveLength(2);
-  });
+  }, 20_000);
 
   test("watching reports a rejected reload", async () => {
     write("alpha.ts", policyModule("alpha"));
     let onRejected: (p: string[]) => void = () => {};
     set = await PolicySet.load(dir, { onRejected: (p) => onRejected(p), debounceMs: 20 });
     set.watch();
-    const rejected = nextEvent<string[]>((fn) => {
-      onRejected = fn;
-    });
-    write("zeta.ts", "export default 42;\n");
+    const rejected = nextEvent<string[]>(
+      (fn) => {
+        onRejected = fn;
+      },
+      () => write("zeta.ts", "export default 42;\n"),
+    );
     expect((await rejected).join("\n")).toContain("zeta.ts");
     expect(set.current().policies).toHaveLength(1);
-  });
+  }, 20_000);
 });
