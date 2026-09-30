@@ -24,7 +24,7 @@
       "severity": "MEDIUM",
       "confidence": 0.81,
       "title": "External Transmission",
-      "location": { "file": "/scan/root/scripts/sync.py", "start_line": 45 }
+      "location": { "file": "scripts/sync.py", "start_line": 45 }
     },
     {
       "id": "SC1",

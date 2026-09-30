@@ -115,13 +115,10 @@ const RECOMMENDATION: Readonly<Record<string, Exclude<ScanVerdict, "error">>> = 
   DO_NOT_INSTALL: "unsafe",
 };
 
-/** `file` relative to the scanned `root` (or the container's `/scan`), else as given. */
+/** `file` relative to the scanned `root` when it lies under it, else as given. */
 function shownPath(file: string, root: string): string {
-  for (const base of [root, "/scan"]) {
-    const prefix = base.endsWith("/") ? base : `${base}/`;
-    if (file.startsWith(prefix)) return file.slice(prefix.length);
-  }
-  return file;
+  const prefix = root.endsWith("/") ? root : `${root}/`;
+  return file.startsWith(prefix) ? file.slice(prefix.length) : file;
 }
 
 function issueFinding(i: z.output<typeof skillspectorIssue>, root: string): ScanFinding {
@@ -142,7 +139,8 @@ function issueFinding(i: z.output<typeof skillspectorIssue>, root: string): Scan
 /**
  * One `skillspector scan --format json` stdout. The verdict is the tool's
  * `recommendation` (`SAFE → safe`, `CAUTION → caution`, `DO_NOT_INSTALL → unsafe`), never
- * re-derived from the score. `root` is the scanned directory, stripped from finding paths.
+ * re-derived from the score. `root` is the scanned directory as the tool saw it (`/scan` in
+ * a container), stripped from finding paths.
  */
 export function parseSkillspectorReport(
   stdout: string,

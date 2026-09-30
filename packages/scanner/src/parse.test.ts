@@ -112,7 +112,7 @@ describe("parseSkillspectorReport", () => {
     expect(d.ok && d.value.verdict).toBe("unsafe");
   });
 
-  test("a path under the scanned root (or the container's /scan) is shown relative", () => {
+  test("a path under the scanned root is shown relative; any other path as given", () => {
     const report = {
       ...safe,
       issues: [
@@ -121,14 +121,16 @@ describe("parseSkillspectorReport", () => {
         { id: "C", severity: "LOW", location: { file: "/elsewhere/y.py" } },
       ],
     };
-    const r = parseSkillspectorReport(json(report), "/scan/root");
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.value.findings.map((x) => [x.file, x.line])).toEqual([
+    const paths = (root: string) => {
+      const r = parseSkillspectorReport(json(report), root);
+      return r.ok ? r.value.findings.map((x) => [x.file, x.line]) : null;
+    };
+    expect(paths("/scan/root")).toEqual([
       ["SKILL.md", 3],
-      ["x.py", undefined],
+      ["/scan/x.py", undefined],
       ["/elsewhere/y.py", undefined],
     ]);
+    expect(paths("/scan/")?.map(([f]) => f)).toEqual(["root/SKILL.md", "x.py", "/elsewhere/y.py"]);
   });
 
   test("the title prefers title, then name, message, category, id; always one bounded line", () => {
