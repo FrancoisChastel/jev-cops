@@ -109,6 +109,10 @@ describe("normalize: Codex apply_patch (tool_input.command is the patch, apply_p
     expect(n.commands[3]?.heredocs).toEqual([]);
   });
 
+  test.todo("T10: the case file taints a file an apply_patch tool writes from tainted text", () => {
+    throw new Error("pending: context/record.ts must read a patch command's body, as for Bash");
+  });
+
   test("a malformed patch is an opaque parse-error exec that still names its paths", async () => {
     const text = `*** Begin Patch\n*** Add File: ${HOME}/.codex/config.toml\n+x`;
     const n = await normalize(codex("apply_patch", { command: text }), OPTS);

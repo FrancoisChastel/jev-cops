@@ -115,6 +115,10 @@ describe("normalize: OpenCode file tools read filePath (tool/{edit,write,read,ls
     const n = await normalize(fromFixture(name), OPTS);
     expect(n).toMatchObject({ kind: "fs.read", paths: [path] });
   });
+
+  test.todo("T10: the case file taints a file an edit writes from tainted newString", () => {
+    throw new Error("pending: context/record.ts reads new_string and newText, not newString");
+  });
 });
 
 describe("the Pi/OpenCode name collision is settled by the event's harness", () => {

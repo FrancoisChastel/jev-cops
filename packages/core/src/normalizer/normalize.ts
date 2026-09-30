@@ -367,8 +367,9 @@ function failClosed(event: Event): NormalizedEvent {
 }
 
 /**
- * Normalizes an event into the daemon's own reading of it. Pure apart from the parser:
- * no filesystem access, `event` is not modified, `event.call.kind` is kept as the
+ * Normalizes an event into the daemon's own reading of it. The tool is read with the
+ * rule of the event's own harness ({@link HARNESS_TOOL_RULES}). Pure apart from the
+ * parser: no filesystem access, `event` is not modified, `event.call.kind` is kept as the
  * adapter sent it while `kind` is the daemon's classification. Never throws: any
  * internal failure yields an `exec` event with a `parse-error` span over `raw` (D-005).
  */
