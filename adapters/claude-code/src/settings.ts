@@ -1,7 +1,8 @@
 /**
  * Claude Code settings files the hook reads: where they are (settings#settings-files,
  * managed-settings; PLAN-M1 §2 row 19) and a strict reader. Used by the ConfigChange check
- * (intact.ts); `cops install`/`doctor` (M1 steps 6–7) extend it.
+ * (intact.ts), `cops install` (the file each scope writes, the global config for workspace
+ * trust) and `cops doctor`.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -39,7 +40,10 @@ export function managedDirFor(platform: NodeJS.Platform): string | null {
 
 function managedDropIns(dir: string): string[] {
   try {
-    const names = readdirSync(join(dir, "managed-settings.d")).filter((n) => n.endsWith(".json"));
+    // Claude Code "ignores hidden files and files that don't end in .json" (managed-settings).
+    const names = readdirSync(join(dir, "managed-settings.d")).filter(
+      (n) => n.endsWith(".json") && !n.startsWith("."),
+    );
     return names.sort().map((n) => join(dir, "managed-settings.d", n));
   } catch {
     return []; // no drop-in directory: nothing managed there
@@ -67,6 +71,53 @@ export function settingsFiles(loc: SettingsLocation): SettingsFile[] {
   ];
 }
 
+/** The drop-in `cops install claude-code --managed` writes under `managed-settings.d/`. */
+export const MANAGED_DROP_IN = "50-jev-cops.json";
+
+/**
+ * The file a `cops install claude-code` scope writes: user `$CLAUDE_CONFIG_DIR/settings.json`
+ * or `~/.claude/settings.json`; project `.claude/settings.json`; local
+ * `.claude/settings.local.json`; managed `<managed dir>/managed-settings.d/50-jev-cops.json`
+ * (managed-settings#split-a-file-based-policy-across-teams). Throws for managed on an OS
+ * with no managed-settings directory.
+ */
+export function settingsPathFor(scope: SettingsFile["scope"], loc: SettingsLocation): string {
+  switch (scope) {
+    case "user":
+      return join(loc.configDir ?? join(loc.home, ".claude"), "settings.json");
+    case "project":
+      return join(loc.projectDir, ".claude", "settings.json");
+    case "local":
+      return join(loc.projectDir, ".claude", "settings.local.json");
+    case "managed":
+      if (loc.managedDir === null) throw new Error("no managed-settings directory on this OS");
+      return join(loc.managedDir, "managed-settings.d", MANAGED_DROP_IN);
+  }
+}
+
+/**
+ * Claude Code's global config (`~/.claude.json`: workspace trust flags). With
+ * `CLAUDE_CONFIG_DIR` set, the docs do not say where it lives: the file inside that
+ * directory is tried first, then the one in the home directory.
+ */
+export function globalConfigPaths(loc: SettingsLocation): string[] {
+  const home = join(loc.home, ".claude.json");
+  return loc.configDir === null ? [home] : [join(loc.configDir, ".claude.json"), home];
+}
+
+/** Parses settings text strictly: JSON whose top level is an object. */
+export function parseSettingsText(text: string): SettingsRead {
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return { kind: "invalid", error: "not a JSON object" };
+    }
+    return { kind: "ok", value: value as Record<string, unknown> };
+  } catch (cause) {
+    return { kind: "invalid", error: cause instanceof Error ? cause.message : "not JSON" };
+  }
+}
+
 /** Reads a settings file strictly (JSON, an object; no comments or trailing commas). */
 export function readSettingsFile(path: string): SettingsRead {
   let text: string;
@@ -77,13 +128,5 @@ export function readSettingsFile(path: string): SettingsRead {
     if (code === "ENOENT") return { kind: "missing" };
     return { kind: "invalid", error: code ?? "unreadable" };
   }
-  try {
-    const value: unknown = JSON.parse(text);
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return { kind: "invalid", error: "not a JSON object" };
-    }
-    return { kind: "ok", value: value as Record<string, unknown> };
-  } catch (cause) {
-    return { kind: "invalid", error: cause instanceof Error ? cause.message : "not JSON" };
-  }
+  return parseSettingsText(text);
 }
