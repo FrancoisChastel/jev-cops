@@ -10,7 +10,8 @@ import {
 } from "./launchd.ts";
 import { serviceSpec } from "./units.ts";
 
-const golden = (name: string) => readFileSync(join(import.meta.dir, "fixtures", name), "utf8");
+const golden = (name: string) =>
+  readFileSync(join(import.meta.dir, "..", "testing", "service-goldens", name), "utf8");
 const HOME = "/Users/me";
 const PLIST = "/Users/me/Library/LaunchAgents/dev.jev-cops.copsd.plist";
 const LAUNCHCTL = "/bin/launchctl";

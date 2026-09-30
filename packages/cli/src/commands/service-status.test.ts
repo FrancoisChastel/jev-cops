@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { captureIo } from "../io.ts";
-import { type ServiceWorld, serviceWorld } from "../service/testing.ts";
+import { type ServiceWorld, serviceWorld } from "../testing/service-world.ts";
 import { runServiceCommand, SERVICE_USAGE } from "./service.ts";
 
 let w: ServiceWorld;

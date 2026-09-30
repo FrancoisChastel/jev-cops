@@ -7,7 +7,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HealthResult, RunResult, ServiceContext } from "./context.ts";
+import type { HealthResult, RunResult, ServiceContext } from "../service/context.ts";
 
 /** The world and the contexts that run in it. */
 export interface ServiceWorld {

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { captureIo } from "../io.ts";
 import { renderLaunchdPlist } from "../service/launchd.ts";
 import { renderSystemdUnit } from "../service/systemd.ts";
-import { type ServiceWorld, serviceWorld } from "../service/testing.ts";
 import { serviceSpec } from "../service/units.ts";
+import { type ServiceWorld, serviceWorld } from "../testing/service-world.ts";
 import { runServiceCommand } from "./service.ts";
 
 let w: ServiceWorld;

@@ -10,7 +10,8 @@ import {
 } from "./systemd.ts";
 import { serviceSpec } from "./units.ts";
 
-const golden = (name: string) => readFileSync(join(import.meta.dir, "fixtures", name), "utf8");
+const golden = (name: string) =>
+  readFileSync(join(import.meta.dir, "..", "testing", "service-goldens", name), "utf8");
 const HOME = "/home/me";
 const SYSTEMCTL = "/usr/bin/systemctl";
 
