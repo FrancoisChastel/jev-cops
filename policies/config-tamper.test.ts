@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import {
   createCaseFile,
   createDisabledJudge,
@@ -11,9 +12,11 @@ import {
   resolveContextConfig,
   resolvePolicyConfig,
 } from "@jev-cops/core";
+import { judgeInputPaths } from "../packages/daemon/src/protected-paths.ts";
 import {
   startTestDaemon,
   type TestDaemon,
+  testConfig,
   withFreshId,
 } from "../packages/daemon/src/testing/daemon.ts";
 import { buildEvent } from "../tests/fixtures/context/index.ts";
@@ -24,7 +27,8 @@ import configTamper from "./config-tamper.ts";
  * config-tamper kill (spec §Precedents, D-035), checked through the real engine, alone
  * and with the whole starter set; and, through a real copsd, observe mode turning the
  * kill into an allow with the "would have" note, `[policy] protectedPaths` and the
- * daemon's own private paths reaching the policy, and the agent-safe reasons of a hold.
+ * daemon's own private paths reaching the policy, and the agent-safe reasons of a hold;
+ * and the daemon's own protected paths covering the policies dir, `_lib/` included.
  */
 
 const HOME = "/home/dev";
@@ -57,12 +61,16 @@ const ALWAYS: PrecedentLookup = {
 async function verdictFor(
   path: string,
   policies: readonly PolicyDefinition[] = [configTamper],
+  protectedPaths: readonly string[] = [],
 ): Promise<string> {
   const engine = createPolicyEngine({
     policies,
     judge: createDisabledJudge(),
     contextConfig: resolveContextConfig({ home: HOME }),
-    policyConfig: resolvePolicyConfig({ when: { budgetMs: 50 } }),
+    policyConfig: resolvePolicyConfig({
+      when: { budgetMs: 50 },
+      protectedPaths: [...protectedPaths],
+    }),
     precedents: ALWAYS,
   });
   const cf = createCaseFile("sess_ct_precedent", { config: { home: HOME } });
@@ -82,6 +90,33 @@ describe("config-tamper and precedents (D-035)", () => {
 
   test("while a precedent does waive a config-tamper hold it names (a human decision)", async () => {
     expect(await verdictFor(`${HOME}/.claude/skills/x/SKILL.md`)).toBe("allow");
+  });
+});
+
+describe("the daemon's own protectedPaths cover the policies dir whole (D-082)", () => {
+  // The policies dir sits apart from the audit log, store and sockets, so only its own
+  // entry can protect the helpers under it.
+  const config = {
+    ...testConfig("/srv/jv", { policies: {} }),
+    policies: { dir: "/srv/jv-policies" },
+  };
+  const inputs = {
+    configFiles: ["/srv/jv-etc/cops.toml"],
+    selfBinary: null,
+    osHome: HOME,
+    cwd: "/",
+  };
+  const helper = "/srv/jv-policies/_lib/config-trees.ts";
+
+  test("a write to a helper under policies/_lib/ is a kill", async () => {
+    const own = judgeInputPaths(config, inputs);
+    expect(own).toContain("/srv/jv-policies");
+    expect(await verdictFor(helper, [configTamper], own)).toBe("kill");
+  });
+
+  test("and it is the policies dir entry that makes it one", async () => {
+    const without = judgeInputPaths(config, inputs).filter((p) => !p.endsWith("/jv-policies"));
+    expect(await verdictFor(helper, [configTamper], without)).toBe("allow");
   });
 });
 
@@ -117,6 +152,21 @@ describe("config-tamper through copsd", () => {
     const body = await judge("observe", "/home/dev/.claude/settings.json");
     expect(body.verdict).toBe("allow");
     expect(body.context_note).toStartWith("jev-cops would have: kill");
+  });
+
+  test("copsd boots on this directory, _lib/ included, and kills a write under _lib/", async () => {
+    // Arrange: the daemon loads a copy of this directory, _lib/ included, and boots only
+    // when the loader reports no problem (the kill is also the temp dir's, D-082).
+    td = await startTestDaemon({ policies: {}, policiesDir: import.meta.dir });
+    const input = {
+      file_path: join(td.config.policies.dir, "_lib", "config-trees.ts"),
+      content: "",
+    };
+    const event = withFreshId(buildEvent({ tool: "Write", kind: "fs.write", input }));
+    // Act
+    const res = await td.call("POST", "/v1/judge", event);
+    // Assert
+    expect(res.body).toMatchObject({ verdict: "kill" });
   });
 
   test("[policy] protectedPaths from the daemon config reaches the policy", async () => {
