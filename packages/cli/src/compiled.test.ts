@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CLAUDE_CODE_GAPS } from "@jev-cops/adapter-claude-code";
+import { PI_GAPS } from "@jev-cops/adapter-pi/install";
+import { startTestDaemon } from "../../daemon/src/testing/daemon.ts";
+import { policyModule } from "../../daemon/src/testing/policies.ts";
 
 /**
  * The compiled binary must carry the tree-sitter WASM and the SDK itself: it is built into
@@ -73,4 +77,34 @@ describe("compiled jev-cops", () => {
     expect(await run.exited).toBe(0);
     expect(out).toContain("0 failed · 0 problems → PASS");
   }, 60_000);
+
+  test("doctor runs from the binary (read-only; PATH holds no claude or pi)", async () => {
+    const td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
+    try {
+      const [home, bin, project] = ["doctor-home", "doctor-bin", "doctor-project"].map((d) => {
+        mkdirSync(join(dir, d));
+        return join(dir, d);
+      }) as [string, string, string];
+      const toml = join(dir, "doctor.toml");
+      const { socket, adminSocket } = td.config.daemon;
+      const lines = ["[daemon]", `socket = ${JSON.stringify(socket)}`];
+      lines.push(`admin_socket = ${JSON.stringify(adminSocket)}`, "[audit]");
+      lines.push(`path = ${JSON.stringify(td.config.audit.path)}`);
+      writeFileSync(toml, `${lines.join("\n")}\n`);
+      const argv = [join(dir, "cops"), "doctor", "--json", "--config", toml, "--home", home];
+      const env = { PATH: bin, HOME: home };
+      const run = Bun.spawn(argv, { cwd: project, env, stdout: "pipe", stderr: "pipe" });
+      const out = await new Response(run.stdout).text();
+      expect(await run.exited).toBe(0);
+      const report = JSON.parse(out) as {
+        counts: Record<string, number>;
+        checks: { name: string; status: string }[];
+      };
+      expect(report.checks.find((c) => c.name === "agent socket")?.status).toBe("ok");
+      expect(report.checks.find((c) => c.name === "chain")?.status).toBe("ok");
+      expect(report.counts.gap).toBe(CLAUDE_CODE_GAPS.length + PI_GAPS.length);
+    } finally {
+      await td.stop();
+    }
+  }, 30_000);
 });

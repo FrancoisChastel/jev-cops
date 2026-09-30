@@ -3,6 +3,7 @@
  * explain <event-id>` and the audit log are the interface"). `test` is the M0 gate.
  */
 export * from "./commands/budget.ts";
+export * from "./commands/doctor.ts";
 export * from "./commands/explain.ts";
 export * from "./commands/hook.ts";
 export * from "./commands/replay.ts";

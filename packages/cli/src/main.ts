@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { registerSdkModule } from "@jev-cops/sdk/register";
 import { runBudgetCommand } from "./commands/budget.ts";
+import { runDoctorCommand } from "./commands/doctor.ts";
 import { runExplainCommand } from "./commands/explain.ts";
 import { runHookCommand } from "./commands/hook.ts";
 import { runReplayCommand } from "./commands/replay.ts";
@@ -29,13 +30,20 @@ Commands:
   hook --harness claude-code [--socket path]
                                            the Claude Code command hook: reads the hook
                                            payload on stdin, exits 0 or 2 (fail closed)
+  doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path]
+         [--admin-socket path] [--config path] [--home path]
+                                           check copsd, the audit chain and each harness's
+                                           install (read-only), run a canary through the
+                                           registered hook, print every known gap; --live
+                                           also runs a real claude -p (JEV_COPS_LIVE_CANARY=1)
   help                                     this text
-  install, doctor                          not yet available (M1)
+  install                                  not yet available (M1)
 
 Exit codes:
-  0  success (test: every fixture passed; replay: ran, whatever the delta count)
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
   1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
-     an unknown session or an unreachable daemon)
+     an unknown session or an unreachable daemon; doctor: a check failed)
   2  usage error, or a command that is not available yet; hook: the call is blocked`;
 
 type Command = (argv: readonly string[], io: Io) => Promise<number>;
@@ -55,7 +63,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   budget: runBudgetCommand,
   hook: runHookCommand,
   install: notYet("install"),
-  doctor: notYet("doctor"),
+  doctor: runDoctorCommand,
 };
 
 /** Runs `jev-cops` with `argv` (without the binary name); resolves with the exit code. */
