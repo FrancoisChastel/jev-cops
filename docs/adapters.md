@@ -231,7 +231,11 @@ Agent SDK 0.3.285 runs, both against a local fake API, are captured in
 [Verified live (M1 step 9)](#verified-live-m1-step-9)). The installer's docs were
 re-checked on 2026-09-29 (settings, settings-reference, hooks, permissions,
 managed-settings, env-vars; changelog head still v2.1.285): see [Install](#install) and
-[Docs drift found for the installer](#docs-drift-found-for-the-installer).
+[Docs drift found for the installer](#docs-drift-found-for-the-installer). Claude Code
+**2.1.286**, installed from npm with jev-cops from its release tarballs, ran the whole Docker
+e2e suite (D-115, D-122; [`captures/claude-code-docker.md`](./captures/claude-code-docker.md),
+[`live-testing.md`](./live-testing.md)): see
+[Verified live (Docker, 2.1.286)](#verified-live-docker-2-1-286).
 
 ### Entry and registration
 
@@ -340,11 +344,22 @@ After the change, for each of `PreToolUse`, `PostToolUse`, `PostToolUseFailure`,
 `$CLAUDE_CONFIG_DIR`; project and local under `$CLAUDE_PROJECT_DIR` or the cwd; managed
 `managed-settings.json` and `managed-settings.d/*.json`; plus the changed file) registers,
 in a group whose matcher selects every call (absent, `""` or `"*"`; `UserPromptSubmit` has
-no matcher), a handler that is this very hook: `type: "command"` in exec form, `command`
-resolving (after `${CLAUDE_PROJECT_DIR}`, `PATH` and symlinks) to the running executable,
-the same leading arguments (the script under `bun`, `hook` under the CLI), `--harness
-claude-code`, the same socket, no `if`, not `async`/`asyncRewake`, and a `timeout` absent
-or at least 14 s (`PreToolUse`) or 6 s (the rest), so the hook's own deadline comes first.
+no matcher), a handler that is this very hook: `type: "command"` in exec form, starting the
+hook's own **program** (`src/hook-identity.ts`: the file whose code runs, symlinks resolved:
+the compiled binary, or the script Bun runs), either directly (`command` resolves, after
+`${CLAUDE_PROJECT_DIR}`, `PATH` and symlinks, to that program: a compiled binary, or a script
+run through its `#!/usr/bin/env bun` line, which is how the npm install's
+`jev-cops/bin/cops-hook.ts` is registered) or through Bun (`command` resolves to the very Bun
+running the hook and `args[0]` to the script), then the same leading arguments (`hook` under
+the CLI), `--harness claude-code`, the same socket, no `if`, not `async`/`asyncRewake`, and a
+`timeout` absent or at least 14 s (`PreToolUse`) or 6 s (the rest), so the hook's own
+deadline comes first. Another binary, another script, another Bun or a wrapper that execs
+the hook is not this hook. The hook computes its identity with `selfOf`, the installer and
+`cops doctor` predict it with `entrySelf` from the same module, and both also run the hook's
+own check through the registered entry (the canary's ConfigChange probe, [Install](#install)):
+before this, the hook run from source described itself as `bun` plus the script while the
+npm install registered the script, so every settings change was "not intact" (the Docker
+e2e's F1).
 An HTTP post handler counts only for a hook started with `--http-url <url>` (what
 `cops install claude-code --transport http` registers on every command entry), only on
 `PostToolUse`/`PostToolUseFailure`, and only when its `url` is exactly that URL +
@@ -390,7 +405,7 @@ From PLAN-M1 §2 (docs of 2026-09-29, Claude Code v2.1.285; "spec" is `docs/SPEC
 | 23 | Precedence with other hooks | — | "When multiple PreToolUse hooks return different decisions, precedence is `deny` > `defer` > `ask` > `allow`." hooks#pretooluse-decision-control: "A hook's `"ask"` also forces a permission prompt in auto mode: the classifier can still deny the tool call, but it can't approve the call silently" (2.1.211+). | Another hook's `allow` cannot undo jev-cops's `deny` or `ask`. `hold → ask` is valid in `auto` mode. |
 | 24 | Reason visibility | "`reason` goes back to the agent"; `detail` "never shown to the agent" | `permissionDecisionReason`: "For `"ask"`, shown to the user but not Claude. For `"deny"`, shown to Claude. For `"allow"` and `"defer"`, written to the debug log only". `stopReason` "stays in the conversation, so Claude sees it". | ask → reason carries `raw` + the confirm summary, no score (human only, T8; kept in an agent-readable transcript, row 46). deny/kill → `reason` only; `stopReason` = `reason`. |
 | 25 | Protected paths in Claude Code itself | T1 relies on jev-cops | permission-modes#protected-paths: writes to `.git`, `.claude`, … "never auto-approved, except in `bypassPermissions` mode"; changelog 2.1.126: "`--dangerously-skip-permissions` now bypasses prompts for writes to `.claude/`". permission-modes#critical-paths: `rm` of critical paths "no allow rule or `PreToolUse` hook `"allow"` approves". | Claude Code prompts for config writes in normal modes; `config-tamper` is what stops them in `bypassPermissions` (where a hook deny still blocks). |
-| 26 | Auto mode is the default | — | permission-modes: "With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions"; `-p` starts in `default` "when nothing is configured". | Holds land in auto mode's prompt (row 23). `PostToolUse.classifierContext` (feed the classifier jev-cops's risk) is noted for M3+. |
+| 26 | Auto mode is the default | — | permission-modes: "With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions"; `-p` starts in `default` "when nothing is configured". | Holds land in auto mode's prompt (row 23). `PostToolUse.classifierContext` (feed the classifier jev-cops's risk) is noted for M3+. Drift: 2.1.286 starts `-p` in auto mode too (row 57); `-p` stays headless for the hook whatever the permission mode. |
 | 27 | `updatedInput` without a decision | "map `rewrite` to `allow` plus `updatedInput`" | hooks#pretooluse-decision-control only says "Combine with `"allow"` to auto-approve, or `"ask"` to show the modified input to the user"; changelog 2.1.0 "Fixed PreToolUse hooks to allow `updatedInput` when returning `ask`" | Verified live (2.1.280): `updatedInput` alone replaces the input (the rewritten command ran) and permission checks apply to the new input. `rewrite` = `updatedInput` only; the plan's `ask` fallback is not needed. |
 | 28 | An `ask` without a human | Plan §2 row 10: "A wrong guess only turns `hold` into `ask`, which Claude Code itself denies without a host" | `permissionDecisionReason`: "For `"ask"`, shown to the user but not Claude" | Observed on 2.1.280: in `-p` with no permission host the ask is denied **and its reason becomes the tool result Claude reads**. An ask would leak its text (the normalized command and the policies' lines; before the confirm summary, the scored `detail`) to the model, so the hook asks only when a human can answer, and a parent that is unreadable or not recognizably `claude` counts as headless (gap printed for launchers that hide `-p`). |
 | 29 | Exit 2 + JSON deny + `continue: false` | "Deny plus session terminated" | hooks#exit-code-2, #json-output | Verified live: blocked, Claude sees the JSON `permissionDecisionReason`, no further model call (`terminal_reason: "hook_stopped"`). |
@@ -447,6 +462,24 @@ docs, or facts the docs do not state:
 | 55 | Under macOS `sandbox-exec`, setuid `/bin/ps` cannot run: the hook cannot read its parent and counts the session headless (the fail-safe). The hook used to run `ps` from `PATH`. | — | The hook now runs `/bin/ps`: a `ps` the agent plants earlier on `PATH` (e.g. Homebrew's user-writable `/opt/homebrew/bin`) cannot fake an interactive parent. |
 | 56 | `updatedInput` with no permission decision, from the real hook and a real copsd `rewrite`: Claude Code ran the pinned command and checked it against the allow rules. | row 27 | Re-verified with jev-cops end to end (row 27 used a probe hook). |
 
+<a id="verified-live-docker-2-1-286"></a>
+### Verified live (Docker, 2.1.286)
+
+`claude` **2.1.286** from `@anthropic-ai/claude-code@2.1.286` in a container on an internal
+Docker network, jev-cops **0.1.0** installed from its packed release tarballs with `bun add -g`
+(the hook is `…/node_modules/jev-cops/bin/cops-hook.ts`), `cops install claude-code`, `copsd
+--enforce` with the installed starter set, the fake model API of `scripts/live/fake-api/`
+(dummy key). Record: [`captures/claude-code-docker.md`](./captures/claude-code-docker.md) and
+[`captures/live/e2e-report.md`](./captures/live/e2e-report.md).
+
+| # | Fact (observed) | Docs | Consequence |
+|---|---|---|---|
+| 57 | `-p` runs in **auto** mode by default: hook payloads say `permission_mode: "auto"`. With `--allowedTools "Bash(python3:*)"`, Claude Code still asked its classifier about `python3 -c`, through `ANTHROPIC_BASE_URL`, sending the transcript (the user prompt and the tool call; no hook output) in ten requests; getting no answer it blocked the call ("Auto mode could not evaluate this action and is blocking it for safety"). | row 26: `-p` starts in `default` | The hook reads headless from the parent argv (`-p`), whatever the permission mode, and copsd puts headless before the permission mode (`noHumanOf`): a hold is still a deny, never an ask, in an auto-mode `-p` run (tests: `mode.test.ts`, `output.test.ts`, the fake Claude Code e2e, `session-facts.test.ts`). No hook text reaches the classifier (a headless run gets no ask). Live runs whose command must run use `--permission-mode manual` plus an exact allow rule, since the fake model cannot answer the classifier. |
+| 58 | A hook's `additionalContext` reaches the model as a mid-conversation `system` message, `PreToolUse:Bash hook additional context: jev-cops: …` (2.1.280: a `hook_additional_context` attachment next to the tool result). | not stated | `annotate`'s note still reaches the model, next to the tool result; nothing to change. `check.ts` reads system messages when it looks for what the model saw. |
+| 59 | `-p` prefixes an exit-2 reason in the tool result with `PreToolUse:Bash hook error: ` (2.1.285 did through the SDK, row 53; 2.1.280 `-p` gave the reason alone); the call is listed in `permission_denials`. | not stated | Agent-visible text only; the reason is still jev-cops's alone. |
+| 60 | An unrelated user-settings edit (`theme`) in a running interactive session fired `ConfigChange` (`source: user_settings`); on the npm install the hook judged it not intact and latched the session (F1), and restoring the file was refused too. After the fix: accepted (`intact: true`), a dropped `PreToolUse` is blocked and latches, and the restore is accepted. | row 20, row 49 | Fixed by one identity (see [Intact](#intact-configchange)) and the canary's ConfigChange probe in `cops install` and `cops doctor`. |
+| 61 | `cops install claude-code --uninstall` found "no jev-cops hooks" on the npm install (F2), and install + uninstall gave back JSON-equal but reformatted settings, `[daemon] hook_binary` left in cops.toml (F3). | D-089 | Fixed: ownership reads the program an entry names, uninstall knows the recorded binaries; the settings writer edits only what changes; uninstall takes `hook_binary` back out. |
+
 ### Install
 
 `cops install claude-code` (M1 step 6; adapter `src/install.ts`, `src/refusals.ts`, CLI
@@ -461,15 +494,23 @@ docs, or facts the docs do not state:
 - **Entries.** One group per event of `PreToolUse`, `PostToolUse`, `PostToolUseFailure`,
   `UserPromptSubmit`, `ConfigChange`, `SessionStart`, `SessionEnd`; no matcher; exec form
   (`command` + `args: ["--harness", "claude-code", "--socket", <socket>]`); timeouts 30 / 15 /
-  15 / 10 / 10 / 10 / 10 s. They pass the ConfigChange [intact](#intact) check by
+  15 / 10 / 10 / 10 / 10 s. They pass the ConfigChange [intact](#intact-configchange) check by
   construction (a test runs `checkIntact` over the written files). With `--transport http`
   the two post events are `{ "type": "http", "url": "<daemon>/v1/hooks/claude-code",
   "timeout": 15 }` and every command entry also carries `--http-url <daemon>`.
-- **Merge.** Handlers the installer owns (a `cops-hook`, `cops hook` or `…/hook-main.ts`
-  command for `--harness claude-code`, the `--hook-binary` path, shell-form leftovers, HTTP
-  hooks to `/v1/hooks/claude-code`) are removed first, then one fresh group per event is
-  appended. Nothing else changes (key order, foreign hooks, unknown keys); the file keeps its
-  indentation. Same entries twice = `unchanged`, no write.
+- **Merge.** Handlers the installer owns (a command for `--harness claude-code` whose
+  program, the command or the script under `bun`, is named `cops-hook[.exe|.ts]`,
+  `hook-main.ts`, `cops[.exe|.ts]` or `jev-cops`, or is one of the known hook binaries: the
+  one being installed, the ones cops.toml and the state file record, the one this `cops`
+  would register, symlinks resolved; shell-form leftovers; HTTP hooks to
+  `/v1/hooks/claude-code`) are removed first, then one fresh group per event is appended.
+  Nothing else changes: the file is edited, not rewritten (`src/json-edit.ts`): members and
+  elements that stay keep their bytes, a removed one takes its separator with it, an appended
+  one follows its container's separator, key spacing, indentation and line ending, and the
+  result must parse to exactly the merged value (key order included) or the whole file is
+  written afresh in its indentation. Install then uninstall gives the file back byte for byte
+  (tested on two- and four-space, tab, one-line, CRLF and foreign-hook files; the Docker e2e's
+  F3). Same entries twice = `unchanged`, no write.
 - **Write.** Temp file + rename in the same directory; the previous file is copied to
   `<file>.jev-cops-<UTC>.bak` (0600) first; user and local files are 0600 (their new
   directory 0700 / 0755), project and managed 0644. A failed rename leaves the old file.
@@ -502,7 +543,13 @@ docs, or facts the docs do not state:
   `PreToolUse` entry read back from the written file, with `HOME` and `PATH` only: `Bash`
   `true` → exit 0, no output; `Write` of `<home>/.claude/settings.json` → exit 2, JSON deny,
   `continue: false`, each under its own throw-away `jev-cops-canary-*` session (the write's
-  session stays latched). Outcomes: `ok`; `observe` (exit 0 with "would have: kill");
+  session stays latched). A third probe sends a `ConfigChange` (`source: user_settings`, the
+  user settings file, left unchanged) run in the project with `CLAUDE_PROJECT_DIR` (and
+  `CLAUDE_CONFIG_DIR` when set), as Claude Code gives them to hooks: the hook's own
+  [intact](#intact-configchange) check must accept it (exit 0, no output), or every settings
+  change in a session would be blocked and latch it; the install fails and rolls back with
+  the hook's reason (a managed drop-in outside this OS's managed directory, which the hook
+  never reads, skips it). Outcomes: `ok`; `observe` (exit 0 with "would have: kill");
   `unreachable` (the hook failed closed: "daemon not reachable: the hook will block every
   non-read call until copsd runs (fail closed)", exit 0); `failed` (exit 1, and the settings,
   cops.toml and state are restored). `cops doctor` runs the same function through every
@@ -511,15 +558,22 @@ docs, or facts the docs do not state:
   project, killed at the entry's `timeout`, the write aimed at copsd's `[daemon] home` (the
   one `config-tamper` protects). It reports each probe: `ok` → ok, `observe` → warn,
   `unreachable` → fail with a hint, `failed` → fail ("gate silently disabled" when the write
-  got through). The doctor writes no configuration; the canary leaves audit lines and
+  got through; "settings change is accepted" failing with the hook's own reason even when the
+  registration check reads the entries as in force: the doctor used to say `[ok] registered`
+  while the hook disagreed, F1). The doctor writes no configuration; the canary leaves audit lines and
   latches a throw-away session in copsd (its report says so under the title). It does not
   unlatch that session over the admin socket: the hook, not the doctor, maps the canary's
   Claude Code session id to copsd's, and an unlatch would add an admin write and another
   audit line for a session nothing uses again.
-- **Uninstall.** Removes the installer-owned handlers, the groups and event arrays they
+- **Uninstall.** Removes the installer-owned handlers (the Merge rule, with the binaries
+  cops.toml, the state file and `--hook-binary` name), the groups and event arrays they
   emptied and a `hooks` object left empty; a file left as `{}` is deleted (its backup
-  stays); the state file goes when it names that settings file; `[daemon] hook_binary`
-  stays in cops.toml. Works when cops.toml does not load.
+  stays); the state file goes when it names that settings file; `[daemon] hook_binary` goes
+  from cops.toml when it names a hook this uninstall removed and no settings file Claude Code
+  loads still registers it (the inverse line edit, verified by re-parse; a cops.toml the
+  install created is removed; `--dry-run` says "would remove"). An event array that already
+  was empty before the install is dropped with jev-cops's group (it cannot be told from one
+  the removal emptied). Works when cops.toml does not load.
 - **Test safety.** Home, project, managed directory, platform, uid, process runner and file
   system are injected; `os.homedir()` is read only in `processContext()` (a test fails if
   another install module mentions it). `--home <dir>` drops `CLAUDE_CONFIG_DIR`,

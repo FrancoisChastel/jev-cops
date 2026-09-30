@@ -61,6 +61,8 @@ describe("humanCanAnswer (D-008, D-078)", () => {
     ["interactive", "bypassPermissions", false],
     ["interactive", "manualish", false],
     ["headless", "default", false],
+    // Claude Code 2.1.286 starts -p sessions in auto mode: payloads say "auto", still no human.
+    ["headless", "auto", false],
   ] as const)("%s in %s → %p", (mode, permissionMode, expected) => {
     expect(humanCanAnswer({ mode, permissionMode })).toBe(expected);
   });

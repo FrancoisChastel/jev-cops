@@ -19,6 +19,7 @@ describe("noHumanOf", () => {
   test.each([
     ["headless", undefined, "headless"],
     ["headless", "default", "headless"],
+    ["headless", "auto", "headless"], // Claude Code 2.1.286's -p default
     ["interactive", "dontAsk", "permission-mode"],
     [undefined, "bypassPermissions", "permission-mode"],
     [null, "someFutureMode", "permission-mode"],

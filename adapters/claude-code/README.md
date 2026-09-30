@@ -79,15 +79,18 @@ What an install does, in order:
      entry that admits it.
 3. **Merges the entries** into the file, one group per event with no matcher, in exec form.
    Foreign hooks, other keys and key order are left alone, and stale jev-cops entries are
-   replaced. The write is atomic, and the previous file is backed up as
-   `<file>.jev-cops-<UTC time>.bak` (mode 0600). User and local files are 0600. Running the
-   install again changes nothing.
+   replaced. The file is edited, not rewritten: every byte the install does not change stays
+   as you wrote it, so `--uninstall` gives the file back as it was. The write is atomic, and
+   the previous file is backed up as `<file>.jev-cops-<UTC time>.bak` (mode 0600). User and
+   local files are 0600. Running the install again changes nothing.
 4. **Records the install** (not for `--managed`). It sets `[daemon] hook_binary` in cops.toml, which makes copsd
    protect the binary from its next start. It also writes `~/.jev-cops/claude-code.json`,
    whose `claude_version` (from `claude --version`) the hook reports as `harness_version`.
 5. **Runs the offline canary** through the entry exactly as written. `Bash true` must exit
-   0 silently, and a `Write` to `~/.claude/settings.json` must exit 2 with `continue: false`
-   (the `config-tamper` kill).
+   0 silently, a `Write` to `~/.claude/settings.json` must exit 2 with `continue: false`
+   (the `config-tamper` kill), and a `ConfigChange` for the unchanged user settings must be
+   accepted: the hook's own check finds itself registered (a wrapper script that execs the
+   hook is not accepted: register the hook itself).
    - If the daemon is down, the install still succeeds, with the warning "daemon not
      reachable: the hook will block every non-read call until copsd runs (fail closed)".
    - If the daemon is in `observe` mode, that is reported.
@@ -103,8 +106,10 @@ Exit codes: 0 installed (or already, removed, a dry run), 1 refused or failed, 2
 An interactive session holds hooks back until you accept the folder's workspace trust. A
 settings change that drops or alters one of the `PreToolUse`, `PostToolUse`,
 `PostToolUseFailure`, `UserPromptSubmit` or `ConfigChange` entries is blocked and ends the
-session ([intact](../../docs/adapters.md#intact)): uninstall with `cops install claude-code
---uninstall` outside a Claude Code session.
+session ([intact](../../docs/adapters.md#intact-configchange)): uninstall with `cops install
+claude-code --uninstall` outside a Claude Code session. Uninstall also takes
+`[daemon] hook_binary` back out of cops.toml when no other settings file still registers
+that hook.
 
 ## How verdicts map
 
@@ -179,5 +184,5 @@ echo '{"session_id":"canary","cwd":"'"$PWD"'","hook_event_name":"PreToolUse","to
 Keep every entry identical to the others and to the socket the daemon listens on: a
 settings change that drops or alters one of the `PreToolUse`, `PostToolUse`,
 `PostToolUseFailure`, `UserPromptSubmit` or `ConfigChange` entries is blocked and ends the
-session ([intact](../../docs/adapters.md#intact)). An interactive session holds hooks back
+session ([intact](../../docs/adapters.md#intact-configchange)). An interactive session holds hooks back
 until you accept the folder's workspace trust.

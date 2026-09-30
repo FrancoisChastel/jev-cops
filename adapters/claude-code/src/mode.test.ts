@@ -50,6 +50,10 @@ describe("modeOfArgs: headless iff print mode without a permission host (plan §
       "interactive",
     ],
     [["claude", "--output-format=json", "go"], "headless"],
+    // 2.1.286 runs -p in auto mode by default (the Docker e2e); an explicit mode changes nothing.
+    [["claude", "-p", "--permission-mode", "auto", "go"], "headless"],
+    [["claude", "-p", "--permission-mode", "manual", "go"], "headless"],
+    [["claude", "--permission-mode", "auto"], "interactive"],
     [["claude", "--input-format", "stream-json"], "headless"],
     [
       [

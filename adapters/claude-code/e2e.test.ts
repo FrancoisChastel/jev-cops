@@ -120,6 +120,24 @@ describe("Claude Code hook end to end: repo policies, enforce", () => {
     }
   });
 
+  test("-p in auto mode (Claude Code 2.1.286's default): still no human, the push is denied", async () => {
+    const repo = makeRepo();
+    try {
+      const c = await started({ cwd: repo, headless: true, permissionMode: "auto" });
+      const call = await c.tool("Bash", { command: "git push --force origin main" });
+      expect(call.decision.outcome).toBe("deny");
+      expect(call.result).toBe("jev-cops: Irreversible git operation on the default branch.");
+      const judged = lines(c, "judge").at(-1)?.payload as {
+        event: { session: { mode: string } };
+        decision: { verdict: string };
+      };
+      expect(judged.event.session.mode).toBe("headless");
+      expect(judged.decision.verdict).toBe("deny");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   test("rm -rf of a path first seen in a tool result is blocked (T10 through PostToolUse)", async () => {
     const c = await started({ headless: true });
     const seen = await c.tool(
