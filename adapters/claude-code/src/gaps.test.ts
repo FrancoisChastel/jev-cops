@@ -28,6 +28,18 @@ describe("CLAUDE_CODE_GAPS", () => {
     expect(text).not.toContain("by install or doctor");
   });
 
+  test("what the M1 gate review found is printed", () => {
+    const text = adapter.CLAUDE_CODE_GAPS.join("\n");
+    // M2: the judge's own records are readable by the agent's user without OpenShell.
+    expect(text).toContain("~/.jev-cops/audit.jsonl");
+    expect(text).toContain("~/.jev-cops/claude-code-hook.log");
+    expect(text).toContain("config-tamper holds a direct read");
+    expect(text).toContain("OpenShell makes them unreadable to the agent (M2)");
+    // L1: stopping the judge by pid is not recognized; a write through a variable is unseen.
+    expect(text).toContain("`kill <pid>`");
+    expect(text).toContain("through a variable");
+  });
+
   test("the package entry exports the hook runtime", () => {
     expect(typeof adapter.runHook).toBe("function");
     expect(typeof adapter.runHookProcess).toBe("function");

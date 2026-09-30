@@ -89,6 +89,15 @@ describe("installPiExtension", () => {
     for (const gap of PI_GAPS) expect(out.join("\n")).toContain(gap);
     expect(PI_GAPS.length).toBeGreaterThanOrEqual(5);
   });
+
+  test("the M1 gate review's gaps are printed: the judge's readable records, pid kills, blind writes", () => {
+    const text = PI_GAPS.join("\n");
+    expect(text).toContain("~/.jev-cops/audit.jsonl");
+    expect(text).toContain("config-tamper holds a direct read");
+    expect(text).toContain("OpenShell makes them unreadable to the agent (M2)");
+    expect(text).toContain("`kill <pid>`");
+    expect(text).toContain("through a variable");
+  });
 });
 
 describe("dry run and uninstall (cops install pi)", () => {

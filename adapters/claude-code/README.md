@@ -134,7 +134,11 @@ best-effort; `policy_settings` changes cannot be blocked; `kill` cannot exit Cla
 folders skip hooks (a managed install survives some); `@` references, `EndConversation` and
 `!` commands are never judged; the ask dialog also shows the tool input's own description;
 the ask's text (reason, command and the policies' lines, no score) is kept in the session
-transcript, which the agent can read.
+transcript, which the agent can read; the judge's own records (audit log, store, hook log)
+are readable without OpenShell, and `config-tamper` holds only the direct reads it sees;
+stopping copsd or the hook by pid is not recognized (by name it is held; either way the
+hook fails closed); writes through a variable, a symlink or an archive's contents are not
+seen.
 
 ## Appendix: the settings block by hand
 

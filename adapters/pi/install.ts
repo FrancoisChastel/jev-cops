@@ -24,6 +24,9 @@ export const PI_GAPS: readonly string[] = [
   "Tools from other extensions are sent as kind `other` with their raw input; nested agents started by other extensions are not linked as subagent sessions.",
   "Commands the user types with `!` in the Pi TUI (`user_bash`) do not go through `tool_call` and are not judged.",
   "Without OpenShell the agent can reach the daemon's sockets as you: the hold token keeps it from approving a hold this extension received or reading its confirm view, but it can post judge requests of its own and resolve or view those; the admin socket (budget reset, full explain) is human-only only when it is not mounted into the sandbox.",
+  "Without OpenShell the agent runs as you and can read the judge's own records: ~/.jev-cops/audit.jsonl and the SQLite store hold every decision with its scores (the oracle no agent channel carries). config-tamper holds a direct read of them (cat, grep, sqlite3, the read tool, an agent-run `cops explain`); a read it cannot see (from inside an interpreter, a recursive read of a directory above them) gets through. OpenShell makes them unreadable to the agent (M2).",
+  "Stopping copsd by name (`pkill`, `killall`, `kill $(pgrep …)`, a launchctl or systemctl stop) is held; a `kill <pid>`, or copsd run under another name, is not recognized. Either way the extension then blocks every non-read tool (fail closed): a denial of service, not a bypass; only OpenShell keeps the agent from signalling copsd (M2).",
+  "config-tamper sees the paths a command names: a write through a variable (`d=~/.pi; … > $d/agent/settings.json`), through a symlink made earlier, or into a directory an archive or a patch fills (`tar -x`, `unzip`, `git apply`: the directory is judged, not the files in it) is caught only when a config path is named; OpenShell's read-only mounts close it (M2).",
 ];
 
 /** Where and how to install the Pi extension. */

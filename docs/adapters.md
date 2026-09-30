@@ -180,6 +180,26 @@ prints:
   response), but it can post judge requests of its own and resolve or view those.
   `copsd-admin.sock` (budget reset, full explain) is human-only only when it is not
   mounted into the sandbox.
+- **Without OpenShell, the judge's own records are readable by the agent.** It runs as
+  you, and `~/.jev-cops/audit.jsonl` and the SQLite store hold every decision with its
+  scores, the oracle no agent channel carries (T6, D-066, D-096). copsd lists them in
+  `[policy] privatePaths` (the sockets, the policies dir and the config files exempt) and
+  `config-tamper` holds a direct read (`cat`, `grep`, `sqlite3`, the `read` tool, an
+  agent-run `cops explain`/`replay`); a read it cannot see (inside an interpreter, a
+  recursive read of a directory above them) gets through. OpenShell makes them unreadable
+  (M2).
+- **Stopping copsd by pid is not recognized.** `pkill`/`killall` of `copsd`, `kill $(pgrep
+  …)` and a `launchctl`/`systemctl` stop naming it are held; `kill <pid>`, or copsd run
+  under another name, is not. The extension then blocks every non-read tool (fail
+  closed): a denial of service, not a bypass. OpenShell keeps the agent from signalling
+  copsd (M2).
+- **config-tamper sees only the paths a command names.** A write through a variable
+  (`d=~/.pi; … > $d/agent/settings.json`), through a symlink made earlier, or into a
+  directory an archive or a patch fills (`tar -x`, `unzip`, `git apply`: the directory
+  is judged, not the files in it) is caught only when a config path is named. The
+  normalizer knows `dd of=`/`if=`, `install`, local `rsync`, `cp`/`mv`/`ln` into a
+  directory (where each source lands), `tar`, `unzip`, `patch`, `git apply`, `curl -o`
+  and `wget -O` (M1 gate review, finding M1).
 
 ### Sockets
 
@@ -573,6 +593,22 @@ These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`;
   profile supply the managed policy (first-wins, drift row 34).
 - **`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` hides `CLAUDE_CONFIG_DIR` from hooks** (drift row
   37): a user install under it fails closed on every settings change.
+- **Without OpenShell, the judge's own records are readable by the agent.**
+  `~/.jev-cops/audit.jsonl` and the SQLite store hold every decision with its scores (the
+  oracle no agent channel carries, T6), next to `~/.jev-cops/claude-code-hook.log`. copsd
+  lists them in `[policy] privatePaths` (sockets, policies dir and config files exempt)
+  and `config-tamper` holds a direct read (`cat`, `grep`, `sqlite3`, the Read tool, an
+  agent-run `cops explain`/`replay`): an ask with a human, a deny without. A read it cannot
+  see (inside an interpreter, a recursive read of a directory above them) gets through.
+  OpenShell makes them unreadable (M2).
+- **Stopping copsd or the hook by pid is not recognized.** `pkill`/`killall` patterns
+  selecting `copsd` or `cops-hook`, `kill $(pgrep …)` and a `launchctl`/`systemctl` stop
+  naming them are held; `kill <pid>`, or the judge under another name, is not. The hook
+  then blocks every non-read call (fail closed): a denial of service, not a bypass.
+- **config-tamper sees only the paths a command names.** A write through a variable
+  (`d=~/.claude; … > $d/settings.json`), through a symlink made earlier, or into a
+  directory an archive or a patch fills (`tar -x`, `unzip`, `git apply`) is caught only
+  when a config path is named (the directory is judged, not the files in it).
 
 ## Codex
 

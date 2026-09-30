@@ -84,6 +84,13 @@ observe-only events). Post events never block: the extension waits at most 2 s f
   agent from approving, or reading the confirm view of, a hold this extension received,
   but it can post its own judge requests; the admin socket (budget reset, full explain) is
   human-only only when it is not mounted into the sandbox.
+- **The judge's records are readable without OpenShell.** `~/.jev-cops/audit.jsonl` and
+  the store hold every scored decision; `config-tamper` holds a direct read of them (and an
+  agent-run `cops explain`), not one it cannot see.
+- **Stopping copsd by pid is not recognized.** Stopping it by name is held; either way the
+  extension then fails closed (a denial of service).
+- **Writes config-tamper cannot see.** Through a variable, a symlink made earlier, or the
+  files an archive or a patch holds.
 
 ## Appendix: install by hand
 
