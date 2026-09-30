@@ -22,6 +22,14 @@ describe("stopFindings", () => {
       "launchctl bootout gui/501/dev.jev-cops.copsd",
     ],
     ["kill -TERM $(pgrep -f cops-hook)", "pgrep -f cops-hook"],
+    ["kill $(pgrep -f copsd)", "pgrep -f copsd"],
+    ["kill -9 $(pidof copsd)", "pidof copsd"],
+    ["pgrep copsd | xargs kill -9", "pgrep copsd"],
+    ["timeout 5 pkill -f copsd", "timeout 5 pkill -f copsd"],
+    ["env X=1 /usr/bin/killall cops-hook", "env X=1 /usr/bin/killall cops-hook"],
+    ["sudo launchctl bootout gui/501/copsd", "sudo launchctl bootout gui/501/copsd"],
+    ['bash -c "pkill -f copsd"', "pkill -f copsd"],
+    ["find /proc -maxdepth 0 -exec pkill copsd \\;", "find /proc -maxdepth 0 -exec pkill copsd ;"],
   ])("%s is held as a stop", async (command, target) => {
     expect(stopFindings(await bash(command))).toEqual([{ tier: "hold", target, how: "stop" }]);
   });
@@ -33,6 +41,16 @@ describe("stopFindings", () => {
     "systemctl --user status copsd.service",
     "launchctl list",
     "kill 4242",
+    // The stop words as arguments of another program (D-109's any-word bug, queued there).
+    "echo pkill -f copsd",
+    "grep copsd notes.md",
+    "grep -n 'pkill -f copsd' docs/notes.md",
+    'git commit -m "pkill copsd on shutdown"',
+    "echo systemctl stop copsd.service",
+    "printf 'launchctl bootout gui/501/copsd'",
+    "echo kill $(pgrep -f copsd)",
+    "echo kill; pgrep -f copsd",
+    "man pkill",
   ])("%s is not a stop", async (command) => {
     expect(stopFindings(await bash(command))).toEqual([]);
   });

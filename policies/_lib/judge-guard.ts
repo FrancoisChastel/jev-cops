@@ -10,8 +10,10 @@ import { programsOf } from "./program.ts";
  * decisions agent channels never carry, T6); the agent running `cops explain|replay`
  * (which print them), `cops install` or `cops budget --reset` (`cops` as the program, not
  * as a word: `echo cops explain` is not); stopping `copsd` or `cops-hook` by name
- * (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/`systemctl` stop). A bare
- * pid, or the judge running under another name, is not recognized (a printed gap).
+ * (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/`systemctl` stop), each
+ * tool matched only as the command's program past wrappers (`echo pkill -f copsd` is
+ * not). A bare pid, or the judge running under another name, is not recognized (a
+ * printed gap).
  */
 
 type Command = PolicyEvent["commands"][number];
@@ -19,6 +21,7 @@ type Command = PolicyEvent["commands"][number];
 /** The judge's CLI and processes, and what stops a process or service by name. */
 const JUDGE_CLI = "cops";
 const JUDGE = ["copsd", "cops-hook"];
+const KILL = ["kill"];
 const BY_NAME = ["pkill", "killall"];
 const LOOKUPS = ["pgrep", "pidof"];
 const SERVICE_STOPS: Readonly<Record<string, readonly string[]>> = {
@@ -34,6 +37,16 @@ function baseName(word: string): string {
 function from(argv: readonly string[], names: readonly string[]): readonly string[] | null {
   const at = argv.findIndex((a) => names.includes(baseName(a)));
   return at < 0 ? null : argv.slice(at);
+}
+
+/**
+ * argv from the program the command runs when that program is one of `names` (past
+ * wrappers, or run by `find -exec`), else null: `sudo pkill …` runs `pkill`, `echo pkill …`
+ * runs `echo`.
+ */
+function running(c: Command, names: readonly string[]): readonly string[] | null {
+  const program = programsOf(c).find((p) => names.includes(p));
+  return program === undefined ? null : from(c.argv, [program]);
 }
 
 /** A pkill/pgrep pattern or killall name that would select the judge (bad regex: as text). */
@@ -52,24 +65,28 @@ function operands(argv: readonly string[]): string[] {
   return argv.slice(1).filter((a) => !a.startsWith("-"));
 }
 
-function stopsByName(argv: readonly string[]): boolean {
-  const signal = from(argv, BY_NAME);
+function stopsByName(c: Command): boolean {
+  const signal = running(c, BY_NAME);
   if (signal !== null) return operands(signal).some(selectsJudge);
-  const service = from(argv, Object.keys(SERVICE_STOPS)) ?? [];
+  const service = running(c, Object.keys(SERVICE_STOPS)) ?? [];
   const stops = SERVICE_STOPS[baseName(service[0] ?? "")] ?? [];
   const names = (w: string) => JUDGE.some((j) => w.includes(j));
   return service.some((w) => stops.includes(w)) && service.some(names);
 }
 
-/** Stopping `copsd` or `cops-hook` by name: DoS only, the hook fails closed without copsd. */
+/**
+ * Stopping `copsd` or `cops-hook` by name: DoS only, the hook fails closed without copsd.
+ * A `pkill`/`killall` or service stop naming the judge, or, when the call also runs `kill`
+ * (`kill $(pgrep …)`, `pgrep … | xargs kill`), a `pgrep`/`pidof` selecting it.
+ */
 export function stopFindings(e: PolicyEvent): Finding[] {
-  const kills = e.commands.some((c) => from(c.argv, ["kill"]) !== null);
+  const kills = e.commands.some((c) => running(c, KILL) !== null);
   const looked = (c: Command) => {
-    const lookup = kills ? from(c.argv, LOOKUPS) : null;
+    const lookup = kills ? running(c, LOOKUPS) : null;
     return lookup !== null && operands(lookup).some(selectsJudge);
   };
   return e.commands
-    .filter((c) => stopsByName(c.argv) || looked(c))
+    .filter((c) => stopsByName(c) || looked(c))
     .map((c) => ({ tier: "hold", target: c.argv.join(" "), how: "stop" }));
 }
 

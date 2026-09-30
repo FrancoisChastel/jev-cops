@@ -37,7 +37,8 @@ import { judgeCliFindings, privateReadFindings, stopFindings } from "./_lib/judg
  * `cops install` or `cops budget --reset` (`cops` as the command's program, past `sudo` or
  * `env` and inside `bash -c`; not a `cops` word: `echo cops explain`), and stopping `copsd`
  * or `cops-hook` by name (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/
- * `systemctl` stop; a bare pid is not recognized). Other reads never match.
+ * `systemctl` stop, each tool as the command's program: `echo pkill -f copsd` is not; a
+ * bare pid is not recognized). Other reads never match.
  *
  * The trees are shared with the OpenShell compiler; the call's findings on them are in
  * `./_lib/config-findings.ts`, the judge's own guards in `./_lib/judge-guard.ts`.
@@ -87,7 +88,7 @@ function reasonFor(f: Finding): string {
 
 export default definePolicy({
   name: "config-tamper",
-  version: 3,
+  version: 4,
   owner: "cyber-team",
   when: (e, ctx) => findings(e, ctx).length > 0,
   decide: (e, ctx) => top(e, ctx).tier,
