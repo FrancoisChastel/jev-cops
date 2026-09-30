@@ -22,7 +22,7 @@ const INERT = [
   ...["ToolSearch", "WaitForMcpServers", "ListAgents", "ListMcpResourcesTool"],
   ...["ReadMcpResourceTool", "AskUserQuestion", "EnterPlanMode", "ExitPlanMode"],
   ...["ScheduleWakeup", "ReportFindings", "SubagentHandback", "LSP", "SendMessage"],
-  ...["EnterWorktree", "ExitWorktree", "Skill", "SendFeedback", "CronDelete", "CronList"],
+  ...["Skill", "SendFeedback", "CronDelete", "CronList"],
 ];
 
 describe("tool table: Claude Code names (tools-reference, v2.1.285)", () => {
@@ -62,6 +62,10 @@ describe("tool table: Claude Code names (tools-reference, v2.1.285)", () => {
     expect(["Bash", "Write", "Agent", "todowrite", "mcp__x__y", "Unknown"].some(isInertTool)).toBe(
       false,
     );
+  });
+
+  test("worktree tools change the disk, so they are not inert and fail closed (D-081)", () => {
+    expect(["EnterWorktree", "ExitWorktree"].some(isInertTool)).toBe(false);
   });
 
   test("the table lists every Claude Code tool with a side effect or a read", () => {

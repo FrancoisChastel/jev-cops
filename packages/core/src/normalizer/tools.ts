@@ -44,15 +44,17 @@ function all(rule: ToolRule, tools: ReadonlyArray<string>): Record<string, ToolR
 
 /**
  * Claude Code bookkeeping tools (tools-reference, v2.1.285): task lists, plan mode,
- * questions, tool search, worktrees, messages, skills, LSP. They change nothing jevdict
- * judges, so they are `inert` rather than `other` (which is scored like exec).
+ * questions, tool search, messages, skills, LSP. They change nothing jevdict judges, so
+ * they are `inert` rather than `other` (which is scored like exec). `EnterWorktree` and
+ * `ExitWorktree` are deliberately absent: they create and remove git worktrees on disk,
+ * so they stay `other` and fail closed when the judge is unreachable (D-081).
  */
 const INERT_TOOLS = [
   ...["TaskCreate", "TaskGet", "TaskList", "TaskUpdate", "TodoWrite", "TaskOutput", "TaskStop"],
   ...["ToolSearch", "WaitForMcpServers", "ListAgents", "ListMcpResourcesTool"],
   ...["ReadMcpResourceTool", "AskUserQuestion", "EnterPlanMode", "ExitPlanMode"],
   ...["ScheduleWakeup", "ReportFindings", "SubagentHandback", "LSP", "SendMessage"],
-  ...["EnterWorktree", "ExitWorktree", "Skill", "SendFeedback", "CronDelete", "CronList"],
+  ...["Skill", "SendFeedback", "CronDelete", "CronList"],
 ];
 
 /**
