@@ -34,8 +34,8 @@ function policiesDir(name: string, files: Record<string, string>): string {
 }
 
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), "jevdict-replay-"));
-  const { createMockJudge } = await import("@jevdict/core");
+  root = mkdtempSync(join(tmpdir(), "jev-cops-replay-"));
+  const { createMockJudge } = await import("@jev-cops/core");
   const td = await startTestDaemon({
     policies: { "guard.ts": guard("hold"), "asks.ts": ASKS },
     judge: createMockJudge({ "asks/fine": { kind: "noul", p: 0.9, confidence: 1 } }),
@@ -66,7 +66,7 @@ beforeAll(async () => {
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-describe("jevdict replay", () => {
+describe("cops replay", () => {
   test("unchanged policies: zero deltas, recorded judge answers replayed", async () => {
     const dir = policiesDir("same", { "guard.ts": guard("hold"), "asks.ts": ASKS });
     const io = captureIo();

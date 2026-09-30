@@ -1,4 +1,4 @@
-import { type PolicyDefinition, type Question, validatePolicy } from "@jevdict/core";
+import { type PolicyDefinition, type Question, validatePolicy } from "@jev-cops/core";
 
 /**
  * Declares a policy: the module's default export (spec §Policy-as-code DSL). At the type

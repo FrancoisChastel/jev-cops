@@ -12,7 +12,7 @@ import {
 type Json = Record<string, unknown>;
 
 const HEAD: Json = {
-  schema: "jevdict.session/1",
+  schema: "jev-cops.session/1",
   id: "evt_01M3PP723DWGXKY6ZN6TC6ZMXZ",
   harness: "claude-code",
   session: { id: "sess_abc" },
@@ -60,7 +60,7 @@ function without(source: Json, key: string): Json {
 
 describe("parseSessionEvent: each kind", () => {
   test("constants", () => {
-    expect(SESSION_SCHEMA).toBe("jevdict.session/1");
+    expect(SESSION_SCHEMA).toBe("jev-cops.session/1");
     expect([...SESSION_EVENT_KINDS]).toEqual(["start", "prompt", "end", "config-change"]);
     expect(PERMISSION_MODES).toContain("bypassPermissions");
     expect(CONFIG_SOURCES).toContain("policy_settings");
@@ -116,7 +116,7 @@ describe("parseSessionEvent: rejects", () => {
   test.each([
     ["an unknown kind", { ...HEAD, kind: "resume" }, "kind"],
     ["a missing kind", HEAD, "kind"],
-    ["another schema tag", { ...PROMPT, schema: "jevdict.event/1" }, "schema"],
+    ["another schema tag", { ...PROMPT, schema: "jev-cops.event/1" }, "schema"],
     ["an unknown harness", { ...PROMPT, harness: "cursor" }, "harness"],
     ["an unknown top-level key", { ...PROMPT, task: "wider" }, "task"],
     ["a key of another kind", { ...PROMPT, intact: true }, "intact"],
@@ -128,7 +128,7 @@ describe("parseSessionEvent: rejects", () => {
     expect(paths(invalid(input))).toContain(path);
   });
 
-  test("ids are validated like jevdict.event/1", () => {
+  test("ids are validated like jev-cops.event/1", () => {
     expect(paths(invalid({ ...PROMPT, id: "evt_nope" }))).toContain("id");
     expect(paths(invalid({ ...PROMPT, id: "01M3PP723DWGXKY6ZN6TC6ZMXZ" }))).toContain("id");
     expect(paths(invalid({ ...PROMPT, session: { id: "abc" } }))).toContain("session.id");

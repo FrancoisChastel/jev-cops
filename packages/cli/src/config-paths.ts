@@ -1,4 +1,4 @@
-import { type DaemonConfig, DEFAULT_DAEMON_CONFIG, loadConfig } from "@jevdict/daemon";
+import { type DaemonConfig, DEFAULT_DAEMON_CONFIG, loadConfig } from "@jev-cops/daemon";
 
 /** The daemon paths the CLI talks to or reads. */
 export interface ConfiguredPaths {
@@ -15,7 +15,7 @@ function pathsOf(config: DaemonConfig): ConfiguredPaths {
 }
 
 /**
- * The audit log and socket paths from `jevdict.toml` (same precedence as `jevdictd`),
+ * The audit log and socket paths from `cops.toml` (same precedence as `copsd`),
  * falling back to the defaults when no config can be loaded; the CLI never needs the
  * daemon to be running to read the audit log.
  */

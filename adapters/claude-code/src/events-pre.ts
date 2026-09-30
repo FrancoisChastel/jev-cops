@@ -5,7 +5,7 @@
  * An interactive hold loads the T8 confirm view with the view-only token the daemon sent in
  * a response header (D-079) and asks; no view, no ask.
  */
-import { sessionIdsOf } from "@jevdict/daemon/claude-code/post";
+import { sessionIdsOf } from "@jev-cops/daemon/claude-code/post";
 import { TIMEOUT } from "./client.ts";
 import type { HookDeps } from "./deps.ts";
 import { toPreEvent } from "./mapper.ts";
@@ -30,7 +30,7 @@ export function causeOf(error: unknown): string {
   return `judge unreachable (${message.replace(/\s+/g, " ").slice(0, 160)})`;
 }
 
-/** jevdict's id for the session of a hook input (log lines). */
+/** jev-cops's id for the session of a hook input (log lines). */
 export function sessionOf(i: { session_id: string; agent_id?: string | undefined }): string {
   return sessionIdsOf(i.session_id, i.agent_id).id;
 }

@@ -14,8 +14,8 @@
  * `permissionDecision: "allow"` ("skips the permission prompt") and `"defer"` (ignored on
  * multi-call turns) are never emitted. `detail` only ever reaches an `ask`.
  */
-import type { SessionMode, Verdict } from "@jevdict/core";
-import { NO_HUMAN_PERMISSION_MODES, PERMISSION_MODES } from "@jevdict/core/schema";
+import type { SessionMode, Verdict } from "@jev-cops/core";
+import { NO_HUMAN_PERMISSION_MODES, PERMISSION_MODES } from "@jev-cops/core/schema";
 
 /** What the hook process ends with: its exit code, stdout (JSON) and stderr. */
 export interface HookOutput {
@@ -39,7 +39,7 @@ export interface Judged {
 export interface ConfirmView {
   readonly raw: string;
   readonly detail: string | null;
-  /** The held event, for `jevdict explain` (the full decision); null when the view omits it. */
+  /** The held event, for `cops explain` (the full decision); null when the view omits it. */
   readonly eventId?: string | null;
 }
 
@@ -55,12 +55,12 @@ export const PROCEED: HookOutput = Object.freeze({ exitCode: 0, stdout: null, st
 const KNOWN_MODES: ReadonlySet<string> = new Set(PERMISSION_MODES);
 const NO_HUMAN_MODES: ReadonlySet<string> = new Set(NO_HUMAN_PERMISSION_MODES);
 
-/** Every agent- or user-facing line jevdict writes starts with this. */
-const tag = (text: string) => `jevdict: ${text}`;
+/** Every agent- or user-facing line jev-cops writes starts with this. */
+const tag = (text: string) => `jev-cops: ${text}`;
 
 /**
  * True when a human can answer an `ask`: an interactive session whose permission mode
- * prompts. `dontAsk` and `bypassPermissions` never prompt, and a mode jevdict does not know
+ * prompts. `dontAsk` and `bypassPermissions` never prompt, and a mode jev-cops does not know
  * counts as "no human" (D-078); headless `-p` runs deny an ask they have no host for, and
  * then show its reason to Claude (observed on 2.1.280), so they never get one (D-008).
  */
@@ -76,10 +76,10 @@ export function humanCanAnswer(a: Audience): boolean {
  * detail, and where to read the full decision. Never the tool input's own prose (T8).
  */
 export function askText(reason: string, view: ConfirmView): string {
-  const command = `Command, as jevdict normalized it:\n${view.raw}`;
-  const explain = view.eventId ? [`Full decision: jevdict explain ${view.eventId}`] : [];
+  const command = `Command, as jev-cops normalized it:\n${view.raw}`;
+  const explain = view.eventId ? [`Full decision: cops explain ${view.eventId}`] : [];
   const parts = [
-    `jevdict hold: ${reason}`,
+    `jev-cops hold: ${reason}`,
     command,
     ...(view.detail === null ? [] : [view.detail]),
     ...explain,

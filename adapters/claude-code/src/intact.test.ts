@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   checkIntact,
   type HookIdentity,
-  isJevdictHandler,
+  isJevCopsHandler,
   MIN_TIMEOUT_S,
   REQUIRED_EVENTS,
   registeredEvents,
@@ -17,7 +17,7 @@ let bin = "";
 let id: HookIdentity;
 beforeEach(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "jvcc-int-")));
-  bin = join(dir, "jevdict-hook");
+  bin = join(dir, "cops-hook");
   writeFileSync(bin, "#!/bin/sh\n");
   chmodSync(bin, 0o755);
   id = {
@@ -35,8 +35,8 @@ type Json = Record<string, unknown>;
 const ARGS = ["--harness", "claude-code", "--socket", "/run/j.sock"];
 const handler = (over: Json = {}): Json => ({ type: "command", command: bin, args: ARGS, ...over });
 
-/** A settings object registering jevdict on every required event (what the installer writes). */
-function jevdictSettings(over: Json = {}): Json {
+/** A settings object registering jev-cops on every required event (what the installer writes). */
+function jevCopsSettings(over: Json = {}): Json {
   const groups = (event: string) => [
     { hooks: [handler({ timeout: event === "PreToolUse" ? 30 : 10 })] },
   ];
@@ -50,13 +50,13 @@ const file = (scope: SettingsFile["scope"], path = `/${scope}.json`): SettingsFi
 const ok = (value: Json): SettingsRead => ({ kind: "ok", value });
 const MISSING: SettingsRead = { kind: "missing" };
 
-describe("isJevdictHandler: this hook, on every call of the event", () => {
-  test("the installer's entry is jevdict's", () => {
-    expect(isJevdictHandler("PreToolUse", {}, handler(), id)).toBe(true);
-    expect(isJevdictHandler("PreToolUse", { matcher: "*" }, handler({ timeout: 30 }), id)).toBe(
+describe("isJevCopsHandler: this hook, on every call of the event", () => {
+  test("the installer's entry is jev-cops's", () => {
+    expect(isJevCopsHandler("PreToolUse", {}, handler(), id)).toBe(true);
+    expect(isJevCopsHandler("PreToolUse", { matcher: "*" }, handler({ timeout: 30 }), id)).toBe(
       true,
     );
-    expect(isJevdictHandler("PreToolUse", { matcher: "" }, handler(), id)).toBe(true);
+    expect(isJevCopsHandler("PreToolUse", { matcher: "" }, handler(), id)).toBe(true);
   });
 
   test.each([
@@ -75,63 +75,61 @@ describe("isJevdictHandler: this hook, on every call of the event", () => {
     ["a non-string arg", {}, { args: ["--harness", 1] }],
     ["an http handler", {}, { type: "http", url: "http://127.0.0.1:7/v1/hooks/claude-code" }],
   ] as const)("not with %s", (_name, group, over) => {
-    expect(isJevdictHandler("PreToolUse", group, handler(over), id)).toBe(false);
+    expect(isJevCopsHandler("PreToolUse", group, handler(over), id)).toBe(false);
   });
 
   test("a symlink to the binary and a bare name on PATH are the same hook", () => {
     const link = join(dir, "link-hook");
     symlinkSync(bin, link);
-    expect(isJevdictHandler("PreToolUse", {}, handler({ command: link }), id)).toBe(true);
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ command: link }), id)).toBe(true);
     const onPath = { ...id, path: `/nonexistent:${dir}` };
-    expect(isJevdictHandler("PreToolUse", {}, handler({ command: "jevdict-hook" }), onPath)).toBe(
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ command: "cops-hook" }), onPath)).toBe(
       true,
     );
-    expect(isJevdictHandler("PreToolUse", {}, handler({ command: "jevdict-hook" }), id)).toBe(
-      false,
-    );
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ command: "cops-hook" }), id)).toBe(false);
   });
 
   test("the CLAUDE_PROJECT_DIR placeholder is substituted in the command", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Claude Code's literal placeholder
-    const entry = handler({ command: "${CLAUDE_PROJECT_DIR}/jevdict-hook" });
-    expect(isJevdictHandler("PreToolUse", {}, entry, id)).toBe(true);
+    const entry = handler({ command: "${CLAUDE_PROJECT_DIR}/cops-hook" });
+    expect(isJevCopsHandler("PreToolUse", {}, entry, id)).toBe(true);
   });
 
   test("from source: bun, the same script, then the flags", () => {
     const script = join(dir, "hook-main.ts");
     writeFileSync(script, "");
     const src = { ...id, leading: [script] };
-    expect(isJevdictHandler("PreToolUse", {}, handler({ args: [script, ...ARGS] }), src)).toBe(
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ args: [script, ...ARGS] }), src)).toBe(
       true,
     );
     const other = join(dir, "other.ts");
     writeFileSync(other, "");
-    expect(isJevdictHandler("PreToolUse", {}, handler({ args: [other, ...ARGS] }), src)).toBe(
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ args: [other, ...ARGS] }), src)).toBe(
       false,
     );
   });
 
-  test("`jevdict hook`: the subcommand must be there", () => {
+  test("`cops hook`: the subcommand must be there", () => {
     const cli = { ...id, leading: ["hook"] };
-    expect(isJevdictHandler("PreToolUse", {}, handler({ args: ["hook", ...ARGS] }), cli)).toBe(
+    expect(isJevCopsHandler("PreToolUse", {}, handler({ args: ["hook", ...ARGS] }), cli)).toBe(
       true,
     );
-    expect(isJevdictHandler("PreToolUse", {}, handler(), cli)).toBe(false);
+    expect(isJevCopsHandler("PreToolUse", {}, handler(), cli)).toBe(false);
   });
 
   test("UserPromptSubmit ignores matchers", () => {
-    expect(isJevdictHandler("UserPromptSubmit", { matcher: "x" }, handler(), id)).toBe(true);
+    expect(isJevCopsHandler("UserPromptSubmit", { matcher: "x" }, handler(), id)).toBe(true);
   });
 
   test("an HTTP post handler is not intact: the hook cannot tell a decoy port from the daemon's", () => {
     const http = { type: "http", url: "http://127.0.0.1:8791/v1/hooks/claude-code", timeout: 15 };
-    expect(isJevdictHandler("PostToolUse", {}, http, id)).toBe(false);
+    expect(isJevCopsHandler("PostToolUse", {}, http, id)).toBe(false);
   });
 });
 
 describe("registeredEvents", () => {
-  test("lists the required events a settings object registers jevdict on", () => {
-    expect([...registeredEvents(jevdictSettings(), id)].sort()).toEqual(
+  test("lists the required events a settings object registers jev-cops on", () => {
+    expect([...registeredEvents(jevCopsSettings(), id)].sort()).toEqual(
       [...REQUIRED_EVENTS].sort(),
     );
     const partial = { hooks: { PreToolUse: [{ hooks: [handler()] }], Stop: "junk" } };
@@ -140,8 +138,8 @@ describe("registeredEvents", () => {
     expect([...registeredEvents({}, id)]).toEqual([]);
   });
 
-  test("a foreign handler next to jevdict's does not matter", () => {
-    const s = jevdictSettings();
+  test("a foreign handler next to jev-cops's does not matter", () => {
+    const s = jevCopsSettings();
     const hooks = s.hooks as Record<string, Json[]>;
     const withForeign = {
       hooks: {
@@ -153,18 +151,18 @@ describe("registeredEvents", () => {
   });
 });
 
-describe("checkIntact: after the change, the jevdict hook is still in force", () => {
+describe("checkIntact: after the change, the cops hook is still in force", () => {
   test("installed in user settings; an unrelated project change is intact", () => {
     const check = checkIntact(
       [
-        { file: file("user"), read: ok(jevdictSettings()) },
+        { file: file("user"), read: ok(jevCopsSettings()) },
         { file: file("project"), read: ok({ permissions: { allow: ["Read"] } }) },
       ],
       id,
     );
     expect(check).toEqual({
       intact: true,
-      why: "the jevdict hook is registered on every required event",
+      why: "the cops hook is registered on every required event",
     });
   });
 
@@ -178,7 +176,7 @@ describe("checkIntact: after the change, the jevdict hook is still in force", ()
     const check = checkIntact(
       [
         { file: file("user"), read: ok({}) },
-        { file: file("local"), read: ok(jevdictSettings()) },
+        { file: file("local"), read: ok(jevCopsSettings()) },
       ],
       id,
     );
@@ -186,7 +184,7 @@ describe("checkIntact: after the change, the jevdict hook is still in force", ()
   });
 
   test("the ConfigChange entry alone removed: not intact (the next change would go unseen)", () => {
-    const s = jevdictSettings();
+    const s = jevCopsSettings();
     const { ConfigChange: _gone, ...rest } = s.hooks as Json;
     expect(checkIntact([{ file: file("user"), read: ok({ hooks: rest }) }], id)).toMatchObject({
       intact: false,
@@ -197,7 +195,7 @@ describe("checkIntact: after the change, the jevdict hook is still in force", ()
   test("disableAllHooks in any non-managed file disables a non-managed install", () => {
     const check = checkIntact(
       [
-        { file: file("user"), read: ok(jevdictSettings()) },
+        { file: file("user"), read: ok(jevCopsSettings()) },
         { file: file("local"), read: ok({ disableAllHooks: true }) },
       ],
       id,
@@ -208,7 +206,7 @@ describe("checkIntact: after the change, the jevdict hook is still in force", ()
   test("a managed install survives disableAllHooks outside managed settings", () => {
     const check = checkIntact(
       [
-        { file: file("managed"), read: ok(jevdictSettings()) },
+        { file: file("managed"), read: ok(jevCopsSettings()) },
         { file: file("user"), read: ok({ disableAllHooks: true }) },
       ],
       id,
@@ -218,14 +216,14 @@ describe("checkIntact: after the change, the jevdict hook is still in force", ()
 
   test("managed disableAllHooks, or allowManagedHooksOnly over a user install: not intact", () => {
     const managedOff = checkIntact(
-      [{ file: file("managed"), read: ok(jevdictSettings({ disableAllHooks: true })) }],
+      [{ file: file("managed"), read: ok(jevCopsSettings({ disableAllHooks: true })) }],
       id,
     );
     expect(managedOff.intact).toBe(false);
     const onlyManaged = checkIntact(
       [
         { file: file("managed"), read: ok({ allowManagedHooksOnly: true }) },
-        { file: file("user"), read: ok(jevdictSettings()) },
+        { file: file("user"), read: ok(jevCopsSettings()) },
       ],
       id,
     );
@@ -238,7 +236,7 @@ describe("checkIntact: after the change, the jevdict hook is still in force", ()
   test("a changed file that is not valid JSON: not intact", () => {
     const check = checkIntact(
       [
-        { file: file("user"), read: ok(jevdictSettings()) },
+        { file: file("user"), read: ok(jevCopsSettings()) },
         { file: file("project"), read: { kind: "invalid", error: "Unexpected token" } },
       ],
       id,

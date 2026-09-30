@@ -1,5 +1,5 @@
 import { type FSWatcher, watch } from "node:fs";
-import { loadPolicies, type PolicyDefinition } from "@jevdict/core";
+import { loadPolicies, type PolicyDefinition } from "@jev-cops/core";
 
 /** The policy set in force; replaced whole on a successful reload, never mutated. */
 export interface PolicySnapshot {

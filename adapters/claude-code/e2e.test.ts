@@ -1,7 +1,7 @@
 /**
  * M1 steps 4–5 gate: the Claude Code command hook, spawned as a real subprocess by a fake
  * Claude Code (testing/fake-claude.ts, the documented exit-code/JSON semantics), against a
- * real `jevdictd` on a temp socket enforcing the repo's own `policies/`.
+ * real `copsd` on a temp socket enforcing the repo's own `policies/`.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -11,7 +11,7 @@ import type { AuditLine } from "../../packages/daemon/src/audit.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { makeRepo } from "../../packages/daemon/src/testing/git.ts";
 import { DECLINED, FakeClaudeCode, type FakeClaudeOptions } from "./testing/fake-claude.ts";
-import { hookCommand, jevdictSettings } from "./testing/setup.ts";
+import { hookCommand, jevCopsSettings } from "./testing/setup.ts";
 
 const REPO_POLICIES = join(import.meta.dir, "..", "..", "policies");
 const TASK = "Fix the flaky test in auth/";
@@ -90,7 +90,7 @@ describe("Claude Code hook end to end: repo policies, enforce", () => {
       const c = await started({ cwd: repo, headless: true });
       const call = await c.tool("Bash", { command: "git push --force origin main" });
       expect(call.decision.outcome).toBe("deny");
-      expect(call.result).toBe("jevdict: Irreversible git operation on the default branch.");
+      expect(call.result).toBe("jev-cops: Irreversible git operation on the default branch.");
       expect(c.claudeSees.join("\n")).not.toContain("default main/master");
     } finally {
       rmSync(repo, { recursive: true, force: true });
@@ -144,12 +144,12 @@ describe("Claude Code hook end to end: kill and the session latch (T1, D-076)", 
     expect(c.turnEnded).toBe(true);
     expect(kill.result).toContain("would change the harness or judge configuration");
     const ls = await c.tool("Bash", { command: "ls" });
-    expect(ls.result).toBe("jevdict: session terminated by jevdict");
+    expect(ls.result).toBe("jev-cops: session terminated by jev-cops");
     const sub = await c.tool("Read", { file_path: join(work, "a") }, "", { agentId: "agent-1" });
     expect(sub.decision.outcome).toBe("deny");
     const next = await c.prompt("try again");
     expect(next.blocked).toBe(true);
-    expect(c.userSees.at(-1)).toContain("session terminated by jevdict");
+    expect(c.userSees.at(-1)).toContain("session terminated by jev-cops");
   });
 });
 
@@ -160,9 +160,9 @@ describe("Claude Code hook end to end: ConfigChange (T1)", () => {
     return { dir, settings: join(dir, ".claude", "settings.json") };
   }
 
-  test("a change that keeps the jevdict block applies", async () => {
+  test("a change that keeps the jev-cops block applies", async () => {
     const { dir, settings } = project();
-    writeFileSync(settings, JSON.stringify(jevdictSettings(td.config.daemon.socket)));
+    writeFileSync(settings, JSON.stringify(jevCopsSettings(td.config.daemon.socket)));
     const c = await started({ cwd: dir });
     const change = await c.configChange("project_settings", settings);
     expect(change.blocked).toBe(false);
@@ -172,13 +172,13 @@ describe("Claude Code hook end to end: ConfigChange (T1)", () => {
   test("a change that removes the block is blocked and latches the session", async () => {
     const { dir, settings } = project();
     const socket = td.config.daemon.socket;
-    writeFileSync(settings, JSON.stringify(jevdictSettings(socket)));
+    writeFileSync(settings, JSON.stringify(jevCopsSettings(socket)));
     const c = await started({ cwd: dir });
     writeFileSync(settings, JSON.stringify({ permissions: { allow: ["Bash"] } }));
     const change = await c.configChange("project_settings", settings);
     expect(change.blocked).toBe(true);
     expect((await c.tool("Bash", { command: "ls" })).result).toBe(
-      "jevdict: session terminated by jevdict",
+      "jev-cops: session terminated by jev-cops",
     );
     const anomaly = td.audit().find((l) => l.payload.reason === "hook block removed or altered");
     expect(anomaly?.session_id).toBe(`sess_${c.sessionId}`);
@@ -186,7 +186,7 @@ describe("Claude Code hook end to end: ConfigChange (T1)", () => {
 
   test("a block pointed at another socket is not intact", async () => {
     const { dir, settings } = project();
-    writeFileSync(settings, JSON.stringify(jevdictSettings(join(work, "evil.sock"))));
+    writeFileSync(settings, JSON.stringify(jevCopsSettings(join(work, "evil.sock"))));
     const c = await started({ cwd: dir });
     expect((await c.configChange("local_settings", settings)).blocked).toBe(true);
   });

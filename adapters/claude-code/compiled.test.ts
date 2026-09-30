@@ -1,5 +1,5 @@
 /**
- * The compiled `jevdict-hook` (D-079 proposal): a lean bundle (no tree-sitter, no WASM), its
+ * The compiled `cops-hook` (D-079 proposal): a lean bundle (no tree-sitter, no WASM), its
  * cold start on a benign call, and one end-to-end run of the binary under the fake Claude
  * Code. Built into a temp directory, so the test never depends on `bun run build`.
  */
@@ -29,7 +29,7 @@ async function build(args: string[]): Promise<void> {
 beforeAll(async () => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "jvcc-bin-")));
   mkdirSync(join(dir, "home"));
-  binary = join(dir, "jevdict-hook");
+  binary = join(dir, "cops-hook");
   await build(["--compile", HOOK_SOURCE, "--outfile", binary]);
   await build([HOOK_SOURCE, "--target", "bun", "--outdir", join(dir, "bundle")]);
   td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
@@ -54,7 +54,7 @@ function benign(): string {
   });
 }
 
-describe("compiled jevdict-hook", () => {
+describe("compiled cops-hook", () => {
   test("the bundle is lean: no tree-sitter grammar, no WASM, under 2 MB", () => {
     const bundle = join(dir, "bundle", "hook-main.js");
     const source = readFileSync(bundle, "utf8");
@@ -79,7 +79,7 @@ describe("compiled jevdict-hook", () => {
     const cold = times[0] ?? Number.POSITIVE_INFINITY;
     const p50 = [...times].sort((a, b) => a - b)[Math.floor(RUNS / 2)] ?? cold;
     process.stderr.write(
-      `jevdict-hook: cold ${cold.toFixed(0)} ms, p50 ${p50.toFixed(0)} ms over ${RUNS} runs (daemon allow)\n`,
+      `cops-hook: cold ${cold.toFixed(0)} ms, p50 ${p50.toFixed(0)} ms over ${RUNS} runs (daemon allow)\n`,
     );
     expect(cold).toBeLessThan(MAX_COLD_MS);
     expect(p50).toBeLessThan(MAX_COLD_MS);
@@ -97,7 +97,7 @@ describe("compiled jevdict-hook", () => {
     });
     expect(kill.decision).toMatchObject({ outcome: "deny", stop: true });
     expect((await c.tool("Bash", { command: "ls" })).result).toBe(
-      "jevdict: session terminated by jevdict",
+      "jev-cops: session terminated by jev-cops",
     );
   });
 });

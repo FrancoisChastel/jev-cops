@@ -9,12 +9,12 @@ const dir = mkdtempSync(join(tmpdir(), "jvsdk-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("registerSdkModule", () => {
-  test("a policy outside any package resolves @jevdict/sdk to this SDK's own copy", async () => {
+  test("a policy outside any package resolves @jev-cops/sdk to this SDK's own copy", async () => {
     // Arrange: /tmp has no node_modules and no tsconfig path for the package.
     const file = join(dir, "outside.ts");
     writeFileSync(
       file,
-      `import { definePolicy, VERDICTS } from "@jevdict/sdk";
+      `import { definePolicy, VERDICTS } from "@jev-cops/sdk";
 export const verdicts = VERDICTS;
 export const define = definePolicy;
 export default definePolicy({

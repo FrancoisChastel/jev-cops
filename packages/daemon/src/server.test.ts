@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { statSync } from "node:fs";
-import { createMockJudge, parseVerdict, type VerdictResponse } from "@jevdict/core";
+import { createMockJudge, parseVerdict, type VerdictResponse } from "@jev-cops/core";
 import { buildEvent, type EventShape } from "../../../tests/fixtures/context/index.ts";
 import { createRuntime } from "./daemon.ts";
 import { SILENT_LOGGER } from "./log.ts";
@@ -37,7 +37,7 @@ async function judge(command: string, shape: EventShape = {}) {
 }
 
 describe("POST /v1/judge over the Unix socket", () => {
-  test("happy path: a valid jevdict.verdict/1 response", async () => {
+  test("happy path: a valid jev-cops.verdict/1 response", async () => {
     td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     const { event, status, body } = await judge("ls");
     expect(status).toBe(200);
@@ -47,7 +47,7 @@ describe("POST /v1/judge over the Unix socket", () => {
 
   test("an invalid event is 400 with the schema issues", async () => {
     td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
-    const res = await td.call("POST", "/v1/judge", { schema: "jevdict.event/1", phase: "pre" });
+    const res = await td.call("POST", "/v1/judge", { schema: "jev-cops.event/1", phase: "pre" });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: expect.any(String), issues: expect.any(Array) });
     expect((await td.call("POST", "/v1/judge", "{not json")).status).toBe(400);
@@ -86,7 +86,7 @@ describe("POST /v1/judge over the Unix socket", () => {
     });
     const { event, body } = await judge("ls");
     expect(body.verdict).toBe("allow");
-    expect(body.context_note).toStartWith("jevdict would have: deny — ");
+    expect(body.context_note).toStartWith("jev-cops would have: deny — ");
     const line = td.audit().find((l) => l.event_id === event.id);
     expect(line?.payload).toMatchObject({ decision: { verdict: "deny" }, enforcement: "observe" });
   });

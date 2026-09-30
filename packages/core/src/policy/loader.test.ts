@@ -20,7 +20,7 @@ function policySource(name: string, version: number, extra = ""): string {
 let dir = "";
 
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "jevdict-loader-"));
+  dir = await mkdtemp(join(tmpdir(), "jev-cops-loader-"));
   const files: Record<string, string> = {
     "a-alpha.ts": policySource("alpha", 2, 'range: ["annotate", "deny"],'),
     "b-beta.js": policySource("beta", 1),
@@ -128,7 +128,7 @@ describe("validatePolicy", () => {
 
 describe("loadPolicies with cacheBust (daemon hot reload)", () => {
   test("a changed file is re-imported, an unchanged one is not", async () => {
-    const own = await mkdtemp(join(tmpdir(), "jevdict-reload-"));
+    const own = await mkdtemp(join(tmpdir(), "jev-cops-reload-"));
     try {
       await writeFile(join(own, "gamma.ts"), policySource("gamma", 1));
       const first = await loadPolicies(own, { cacheBust: true });

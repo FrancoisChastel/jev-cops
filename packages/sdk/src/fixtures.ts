@@ -9,13 +9,13 @@ import {
   preEventSchema,
   type Result,
   verdictSchema,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { z } from "zod";
 
 /**
  * The `*.fixtures.json` format (spec: "every policy ships with a `*.fixtures.json` file
  * of events and expected verdicts; fixtures replace Jev answers with recorded ones").
- * JSON is canonical so `jevdict test` and `jevdict replay` can read the files without
+ * JSON is canonical so `cops test` and `cops replay` can read the files without
  * running TypeScript; {@link defineFixtures} is the typed TypeScript alternative.
  */
 
@@ -73,7 +73,7 @@ export const fixtureConfigSchema = z.strictObject({
 /** One case: history fed to the case file in order, then the judged pre event. */
 export const fixtureCaseSchema = z.strictObject({
   name: z.string().min(1),
-  /** The judged event: a `jevdict.event/1` pre event. */
+  /** The judged event: a `jev-cops.event/1` pre event. */
   event: preEventSchema,
   /** Earlier pre and post events, fed in order before `event`. */
   history: z.array(eventSchema).optional(),
@@ -81,7 +81,7 @@ export const fixtureCaseSchema = z.strictObject({
   task: z.string().min(1).optional(),
   /**
    * Recorded judge answers by question name. A bare name belongs to the fixture's
-   * policy; `policy/name` or `jevdict:serves_task` are used verbatim. Absent → the
+   * policy; `policy/name` or `jev-cops:serves_task` are used verbatim. Absent → the
    * judge is disabled, as with the semantic layer switched off.
    */
   answers: z.record(z.string().min(1), fixtureAnswerSchema).optional(),

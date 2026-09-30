@@ -1,7 +1,7 @@
 {
-  "name": "@jevdict/core",
+  "name": "@jev-cops/core",
   "version": "0.0.0",
-  "description": "Jevdict core: canonical event schema, bash normalizer, context engine, policy engine",
+  "description": "jev-cops core: canonical event schema, bash normalizer, context engine, policy engine",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./src/index.ts",

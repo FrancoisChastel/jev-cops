@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
-import { FEATURE_NAMES, gitSchema } from "@jevdict/core";
-import { type AuditLine, readAudit } from "@jevdict/daemon";
+import { FEATURE_NAMES, gitSchema } from "@jev-cops/core";
+import { type AuditLine, readAudit } from "@jev-cops/daemon";
 import { isLatchedLine, latchedView } from "../audit-session.ts";
 import { type JudgePayload, judgeView } from "../audit-view.ts";
 import { configuredPaths } from "../config-paths.ts";
@@ -21,7 +21,7 @@ function header(line: AuditLine, p: JudgePayload): string[] {
   ];
 }
 
-/** `env.git` as judged, and where it came from: the adapter, or jevdictd's derivation (D-058). */
+/** `env.git` as judged, and where it came from: the adapter, or copsd's derivation (D-058). */
 function gitLine(p: JudgePayload): string {
   const env = typeof p.event === "object" && p.event !== null ? Reflect.get(p.event, "env") : null;
   const sent = gitSchema.safeParse(typeof env === "object" && env !== null ? env.git : undefined);
@@ -38,7 +38,7 @@ function gitLine(p: JudgePayload): string {
   ];
   const keys = Object.keys(derived);
   const from =
-    keys.length === 0 ? "sent by the adapter" : `derived by jevdictd from cwd: ${keys.join(", ")}`;
+    keys.length === 0 ? "sent by the adapter" : `derived by copsd from cwd: ${keys.join(", ")}`;
   return `env.git: ${fields.join(" · ")} (${from})`;
 }
 
@@ -143,7 +143,7 @@ function render(
 }
 
 /**
- * `jevdict explain <event-id> [--audit path] [--json]`: reads the audit log directly (no
+ * `cops explain <event-id> [--audit path] [--json]`: reads the audit log directly (no
  * daemon needed) and prints the decision for one judged event. Exit 1 when the event is
  * not in the log or its line is malformed; 2 on usage errors.
  */
@@ -157,12 +157,12 @@ export async function runExplainCommand(argv: readonly string[], io: Io): Promis
       strict: true,
     });
   } catch (cause) {
-    io.err(`jevdict explain: ${(cause as Error).message}`);
+    io.err(`cops explain: ${(cause as Error).message}`);
     return EXIT.usage;
   }
   const [eventId, ...extra] = parsed.positionals;
   if (eventId === undefined || extra.length > 0) {
-    io.err("jevdict explain: expected exactly one event id");
+    io.err("cops explain: expected exactly one event id");
     return EXIT.usage;
   }
   const path = parsed.values.audit ?? configuredPaths().audit;
@@ -170,7 +170,7 @@ export async function runExplainCommand(argv: readonly string[], io: Io): Promis
   const related = all.filter((l) => l.event_id === eventId);
   const line = related.findLast((l) => l.kind === "judge");
   if (line === undefined) {
-    io.err(`jevdict explain: no judged event ${eventId} in ${path}`);
+    io.err(`cops explain: no judged event ${eventId} in ${path}`);
     return EXIT.failed;
   }
   const others = related.filter((l) => l !== line);
@@ -180,7 +180,7 @@ export async function runExplainCommand(argv: readonly string[], io: Io): Promis
   }
   const rendered = render(line, others, all);
   if (!rendered.ok) {
-    io.err(`jevdict explain: malformed audit line: ${rendered.error}`);
+    io.err(`cops explain: malformed audit line: ${rendered.error}`);
     return EXIT.failed;
   }
   for (const text of rendered.lines) io.out(text);

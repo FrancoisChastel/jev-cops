@@ -3,7 +3,7 @@ import {
   type OpaqueReason,
   type PolicyContext,
   type PolicyEvent,
-} from "@jevdict/sdk";
+} from "@jev-cops/sdk";
 
 /**
  * opaque-exec (spec §Starter policy set): interpreters, `eval`, base64 pipes, freshly
@@ -71,7 +71,7 @@ export default definePolicy({
   },
   reason: "Runs code the judge cannot fully read (interpreter, eval or encoded input).",
   contextNote: (e, ctx) =>
-    `jevdict could not read everything this runs (${why(e, ctx).join(", ")}); it was logged.`,
+    `jev-cops could not read everything this runs (${why(e, ctx).join(", ")}); it was logged.`,
   detail: (e, ctx) =>
     [
       `opaque: ${why(e, ctx).join(", ")}`,

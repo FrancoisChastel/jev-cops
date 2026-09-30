@@ -1,4 +1,4 @@
-import type { Answer, JudgeState, Question } from "@jevdict/core";
+import type { Answer, JudgeState, Question } from "@jev-cops/core";
 
 /** A fixed judge state for provider tests; built by hand, so it carries no agent prose. */
 export const STATE: JudgeState = Object.freeze({

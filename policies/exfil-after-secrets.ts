@@ -1,4 +1,4 @@
-import { definePolicy, jev } from "@jevdict/sdk";
+import { definePolicy, jev } from "@jev-cops/sdk";
 
 /**
  * exfil-after-secrets (spec §Policy-as-code DSL example, §Starter policy set): a network

@@ -1,4 +1,4 @@
-import type { ChoiceQuestion, NoulQuestion, ScoreQuestion } from "@jevdict/core";
+import type { ChoiceQuestion, NoulQuestion, ScoreQuestion } from "@jev-cops/core";
 
 /** Yes/no criteria shown to the judge next to a noul question. */
 export interface NoulCriteria {

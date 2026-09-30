@@ -1,13 +1,13 @@
 {
-  "name": "@jevdict/adapter-claude-code",
+  "name": "@jev-cops/adapter-claude-code",
   "version": "0.0.0",
-  "description": "Jevdict command hook for Claude Code: forwards hook events to jevdictd and maps verdicts back, failing closed",
+  "description": "jev-cops command hook for Claude Code: forwards hook events to copsd and maps verdicts back, failing closed",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "bin": {
-    "jevdict-hook": "./src/hook-main.ts"
+    "cops-hook": "./src/hook-main.ts"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -18,8 +18,8 @@
     "README.md"
   ],
   "dependencies": {
-    "@jevdict/core": "workspace:*",
-    "@jevdict/daemon": "workspace:*",
+    "@jev-cops/core": "workspace:*",
+    "@jev-cops/daemon": "workspace:*",
     "zod": "^4.6.5"
   }
 }

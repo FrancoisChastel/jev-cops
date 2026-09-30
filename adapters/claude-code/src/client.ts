@@ -4,7 +4,7 @@
  * {@link TIMEOUT}, any other failure with the transport error, and the caller fails closed
  * on both (D-055 parity). A reply's body that is not JSON is `undefined`.
  */
-import type { PostEvent, PreEvent, SessionEvent } from "@jevdict/core";
+import type { PostEvent, PreEvent, SessionEvent } from "@jev-cops/core";
 
 /** The reason every deadline failure carries (spec T3: "judge timeout"). */
 export const TIMEOUT = "judge timeout";
@@ -12,7 +12,7 @@ export const TIMEOUT = "judge timeout";
  * Response header carrying a Claude Code hold's view-only token (D-079); the daemon's
  * `VIEW_TOKEN_HEADER` (a test keeps the two equal without bundling the daemon's holds).
  */
-export const VIEW_TOKEN_HEADER = "x-jevdict-view-token";
+export const VIEW_TOKEN_HEADER = "x-jev-cops-view-token";
 
 /** A daemon reply: HTTP status, parsed JSON body (null when empty) and the view token. */
 export interface Reply {

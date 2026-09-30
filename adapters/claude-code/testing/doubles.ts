@@ -2,7 +2,7 @@
  * In-process test doubles for the hook runtime: a scripted daemon client and a
  * {@link HookDeps} whose log lines are recorded. Not part of the hook binary.
  */
-import type { PostEvent, PreEvent, SessionEvent } from "@jevdict/core";
+import type { PostEvent, PreEvent, SessionEvent } from "@jev-cops/core";
 import type { DaemonClient, Reply } from "../src/client.ts";
 import type { HookDeps } from "../src/deps.ts";
 import type { HookLogLine } from "../src/log.ts";

@@ -3,10 +3,10 @@
  * prompt decides and the hook never learns the answer, so the daemon mints no resolvable
  * `hold_token` for a `claude-code` hold and `/v1/resolve` refuses it. The hook still needs
  * the T8 confirm view (raw + detail for the human-only `permissionDecisionReason`): it is
- * unlocked by a view-only token sent in the `x-jevdict-view-token` response header.
+ * unlocked by a view-only token sent in the `x-jev-cops-view-token` response header.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import type { PreEvent, VerdictResponse } from "@jevdict/core";
+import type { PreEvent, VerdictResponse } from "@jev-cops/core";
 import {
   buildEvent,
   CTX_SESSION,

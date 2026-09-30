@@ -4,7 +4,7 @@
  * through `/v1/session` reports and is cached per root session.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import type { PreEvent, VerdictResponse } from "@jevdict/core";
+import type { PreEvent, VerdictResponse } from "@jev-cops/core";
 import { buildEvent, type EventShape } from "../../../tests/fixtures/context/index.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "./testing/daemon.ts";
 import { policyModule } from "./testing/policies.ts";

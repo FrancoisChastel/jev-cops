@@ -5,14 +5,14 @@
  * Required outcome: `kill`; with OpenShell the write also fails at the kernel; `ConfigChange` hook fires in Claude Code
  *
  * Status: live on the daemon side (M1 step 3): a Claude Code config change reported with a
- * broken jevdict hook block latches the session killed, and so does any `kill` verdict; every
+ * broken cops hook block latches the session killed, and so does any `kill` verdict; every
  * later call of the session or its subagents is `kill`, its prompts are reported killed, and
  * only the admin socket clears the latch. Live on Claude Code (M1 steps 2, 4–5, fake Claude
  * Code + the real hook + the repo policies): a Write to `.claude/settings.json` is `kill`
  * (`config-tamper`), the hook exits 2 with `continue: false`, and every later call and prompt
  * of the session is blocked; the `ConfigChange` hook blocks a settings change that drops the
- * jevdict hook and the session is latched. Live for the `config-tamper` policy through a real
- * jevdictd running the repo's starter set: edits of the harness settings, hook, plugin and
+ * cops hook and the session is latched. Live for the `config-tamper` policy through a real
+ * copsd running the repo's starter set: edits of the harness settings, hook, plugin and
  * extension files and writes to the daemon's own `policies/` are killed (the daemon appends
  * its policies dir to `protectedPaths` itself). Todo: OpenShell read-only mounts (M2).
  */
@@ -20,8 +20,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { VerdictResponse } from "@jevdict/core";
-import { jevdictSettings } from "../../adapters/claude-code/testing/setup.ts";
+import type { VerdictResponse } from "@jev-cops/core";
+import { jevCopsSettings } from "../../adapters/claude-code/testing/setup.ts";
 import {
   startTestDaemon,
   type TestDaemon,
@@ -54,7 +54,7 @@ async function daemon(): Promise<TestDaemon> {
   return td;
 }
 
-/** A jevdictd running the repo's starter policies, `config-tamper` among them. */
+/** A copsd running the repo's starter policies, `config-tamper` among them. */
 async function starterDaemon(): Promise<TestDaemon> {
   const policiesDir = join(import.meta.dir, "..", "..", "policies");
   td = await startTestDaemon({ policies: {}, policiesDir });
@@ -96,7 +96,7 @@ describe("T1 config tampering", () => {
       expect(kill.decision).toMatchObject({ outcome: "deny", stop: true });
       expect(c.turnEnded).toBe(true);
       expect((await c.tool("Bash", { command: "ls" })).result).toBe(
-        "jevdict: session terminated by jevdict",
+        "jev-cops: session terminated by jev-cops",
       );
       expect((await c.prompt("carry on")).blocked).toBe(true);
     } finally {
@@ -104,20 +104,20 @@ describe("T1 config tampering", () => {
     }
   });
 
-  test("Claude Code: the ConfigChange hook fires, blocks a change that drops the jevdict hook, and latches the session", async () => {
+  test("Claude Code: the ConfigChange hook fires, blocks a change that drops the cops hook, and latches the session", async () => {
     td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
     const t = td;
     const ws = claudeWorkspace();
     try {
       const settings = join(ws.cwd, ".claude", "settings.json");
       mkdirSync(join(ws.cwd, ".claude"));
-      writeFileSync(settings, JSON.stringify(jevdictSettings(t.config.daemon.socket)));
+      writeFileSync(settings, JSON.stringify(jevCopsSettings(t.config.daemon.socket)));
       const c = claudeCode(t.config.daemon.socket, ws);
       expect((await c.configChange("project_settings", settings)).blocked).toBe(false);
       writeFileSync(settings, JSON.stringify({ disableAllHooks: true }));
       expect((await c.configChange("project_settings", settings)).blocked).toBe(true);
       expect((await c.tool("Bash", { command: "ls" })).result).toBe(
-        "jevdict: session terminated by jevdict",
+        "jev-cops: session terminated by jev-cops",
       );
     } finally {
       ws.dispose();
@@ -127,7 +127,7 @@ describe("T1 config tampering", () => {
   test.todo(`OpenShell: ${REQUIRED_OUTCOME}`, pending("M2 (OpenShell read-only mounts)"));
 });
 
-describe("T1 the config-tamper policy through jevdictd (starter set)", () => {
+describe("T1 the config-tamper policy through copsd (starter set)", () => {
   const edits: ReadonlyArray<readonly [string, string, Record<string, unknown>]> = [
     [
       "Edit ~/.claude/settings.json",
@@ -138,12 +138,12 @@ describe("T1 the config-tamper policy through jevdictd (starter set)", () => {
     [
       "Write an OpenCode plugin file",
       "Write",
-      { file_path: "/home/dev/.config/opencode/plugin/jevdict.ts" },
+      { file_path: "/home/dev/.config/opencode/plugin/jev-cops.ts" },
     ],
     [
       "Write a Pi extension file",
       "Write",
-      { file_path: "/home/dev/.pi/agent/extensions/jevdict.ts" },
+      { file_path: "/home/dev/.pi/agent/extensions/jev-cops.ts" },
     ],
   ];
 
@@ -165,7 +165,7 @@ describe("T1 the config-tamper policy through jevdictd (starter set)", () => {
 });
 
 describe("T1 Claude Code, daemon side: tampering terminates the session", () => {
-  test("a config change that removes the jevdict hook latches the session and every later call is kill", async () => {
+  test("a config change that removes the cops hook latches the session and every later call is kill", async () => {
     const t = await daemon();
     expect((await ls(t)).body.verdict).toBe("allow");
     const removed = { source: "user_settings", file_path: "/home/dev/.claude/settings.json" };
@@ -175,7 +175,7 @@ describe("T1 Claude Code, daemon side: tampering terminates the session", () => 
       killed: true,
     });
     const after = await ls(t);
-    expect(after.body).toMatchObject({ verdict: "kill", reason: "session terminated by jevdict" });
+    expect(after.body).toMatchObject({ verdict: "kill", reason: "session terminated by jev-cops" });
     expect(after.mapping).toEqual(["sessionKilled"]);
     const sub = { sessionId: SUB, parentId: CTX_SESSION, actor: "subagent" } as const;
     expect((await ls(t, sub)).body.verdict).toBe("kill");

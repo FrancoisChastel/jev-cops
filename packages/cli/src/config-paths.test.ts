@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_DAEMON_CONFIG } from "@jevdict/daemon";
+import { DEFAULT_DAEMON_CONFIG } from "@jev-cops/daemon";
 import { configuredPaths } from "./config-paths.ts";
 
 let dir: string;
@@ -10,12 +10,12 @@ let saved: string | undefined;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "jvcp-"));
-  saved = process.env.JEVDICT_CONFIG;
+  saved = process.env.JEV_COPS_CONFIG;
 });
 
 afterEach(() => {
-  if (saved === undefined) delete process.env.JEVDICT_CONFIG;
-  else process.env.JEVDICT_CONFIG = saved;
+  if (saved === undefined) delete process.env.JEV_COPS_CONFIG;
+  else process.env.JEV_COPS_CONFIG = saved;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -33,7 +33,7 @@ describe("configuredPaths", () => {
         "",
       ].join("\n"),
     );
-    process.env.JEVDICT_CONFIG = file;
+    process.env.JEV_COPS_CONFIG = file;
     expect(configuredPaths()).toEqual({
       audit: join(dir, "audit.jsonl"),
       socket: join(dir, "agent.sock"),
@@ -44,7 +44,7 @@ describe("configuredPaths", () => {
   test("an unloadable config falls back to the defaults (the CLI still reads logs)", () => {
     const bad = join(dir, "bad.toml");
     writeFileSync(bad, "[daemon\nsocket = ");
-    process.env.JEVDICT_CONFIG = bad;
+    process.env.JEV_COPS_CONFIG = bad;
     expect(configuredPaths()).toEqual({
       audit: DEFAULT_DAEMON_CONFIG.audit.path,
       socket: DEFAULT_DAEMON_CONFIG.daemon.socket,

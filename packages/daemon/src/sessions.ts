@@ -7,7 +7,7 @@ import {
   type RiskBudget,
   resetBudget,
   SqliteCaseFileStore,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 
 /** A root session idle this long is closed: its precedents end, its case file stays. */
 export const SESSION_IDLE_MS = 24 * 3_600_000;

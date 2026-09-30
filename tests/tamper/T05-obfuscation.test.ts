@@ -28,7 +28,7 @@ import {
   type PreEvent,
   resolveContextConfig,
   resolvePolicyConfig,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   bashPost,
   bashPre,

@@ -45,7 +45,7 @@ async function prepareSocket(path: string): Promise<void> {
   }
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   if (!existsSync(path)) return;
-  if (await socketInUse(path)) throw new Error(`jevdictd is already running on ${path}`);
+  if (await socketInUse(path)) throw new Error(`copsd is already running on ${path}`);
   unlinkSync(path);
 }
 

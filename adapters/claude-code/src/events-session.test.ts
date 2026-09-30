@@ -57,8 +57,8 @@ describe("UserPromptSubmit → /v1/session prompt", () => {
     const { deps } = testDeps({ session: () => live(true) });
     expect(await runHook(text("user-prompt-submit"), deps)).toEqual({
       exitCode: 2,
-      stdout: JSON.stringify({ decision: "block", reason: `jevdict: ${KILLED_PROMPT}` }),
-      stderr: `jevdict: ${KILLED_PROMPT}`,
+      stdout: JSON.stringify({ decision: "block", reason: `jev-cops: ${KILLED_PROMPT}` }),
+      stderr: `jev-cops: ${KILLED_PROMPT}`,
     });
   });
 
@@ -136,13 +136,13 @@ describe("ConfigChange → intact check, /v1/session config-change, block unless
   test("not intact: reported as such, and blocked", async () => {
     const { deps, calls, logged } = testDeps(
       { session: () => live(true) },
-      { configCheck: () => ({ intact: false, why: "no jevdict hook on PreToolUse" }) },
+      { configCheck: () => ({ intact: false, why: "no cops hook on PreToolUse" }) },
     );
     const out = await runHook(text("config-change"), deps);
     expect(out.exitCode).toBe(2);
     expect(JSON.parse(out.stdout ?? "{}")).toEqual({
       decision: "block",
-      reason: "jevdict: settings change blocked: no jevdict hook on PreToolUse",
+      reason: "jev-cops: settings change blocked: no cops hook on PreToolUse",
     });
     expect(calls.session[0]).toMatchObject({ intact: false });
     expect(logged).toHaveLength(1);

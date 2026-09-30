@@ -5,7 +5,7 @@ import { toolInputSchema } from "./event.ts";
 import { eventIdSchema } from "./ids.ts";
 
 /** Version tag every verdict response carries; any other value is rejected. */
-export const VERDICT_SCHEMA = "jevdict.verdict/1";
+export const VERDICT_SCHEMA = "jev-cops.verdict/1";
 
 /** The verdict ladder, least to most severe. Verdicts only ever move up it. */
 export const VERDICTS = ["allow", "annotate", "rewrite", "hold", "deny", "kill"] as const;
@@ -96,7 +96,7 @@ const verdictResponseShape = z.strictObject({
 });
 
 /**
- * Canonical `jevdict.verdict/1` response. `updated_input` is set exactly when the
+ * Canonical `jev-cops.verdict/1` response. `updated_input` is set exactly when the
  * verdict is `rewrite`, so an adapter never runs a rewrite without its new input.
  * `detail` is optional so a harness-facing response can omit it entirely.
  * `hold_token` appears only on a `hold` the harness will show a human: the adapter keeps
@@ -117,7 +117,7 @@ export const verdictResponseSchema = verdictResponseShape
 export type JevAnswer = z.output<typeof jevAnswerSchema>;
 /** A validated risk budget snapshot. */
 export type Budget = z.output<typeof budgetSchema>;
-/** A validated `jevdict.verdict/1` response. */
+/** A validated `jev-cops.verdict/1` response. */
 export type VerdictResponse = z.output<typeof verdictResponseSchema>;
 
 /** Validates an untrusted value as a verdict response. Never throws. */

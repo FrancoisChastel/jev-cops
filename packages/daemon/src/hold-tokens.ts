@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { sha256Hex } from "@jevdict/core";
+import { sha256Hex } from "@jev-cops/core";
 
 /**
  * Hold tokens (T7/T8): the capability `POST /v1/resolve` requires. The daemon mints one

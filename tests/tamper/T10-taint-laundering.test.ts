@@ -14,7 +14,7 @@ import {
   createCaseFile,
   resolveContextConfig,
   taintFraction,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   bashPost,
   bashPre,

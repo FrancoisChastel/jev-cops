@@ -2,13 +2,13 @@ import { describe, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { type PolicyDefinition, validatePolicy } from "@jevdict/core";
+import { type PolicyDefinition, validatePolicy } from "@jev-cops/core";
 import { type FixtureFile, parseFixtures } from "./fixtures.ts";
 import { runFixtureCase } from "./runner.ts";
 
 /**
  * `bun:test` adapter for policy fixtures: `bun test policies/` is the M0 gate until
- * `jevdict test` exists. Kept out of the SDK's main entry so loading a policy never
+ * `cops test` exists. Kept out of the SDK's main entry so loading a policy never
  * imports the test runner.
  */
 

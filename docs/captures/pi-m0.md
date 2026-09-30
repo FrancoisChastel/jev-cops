@@ -1,5 +1,8 @@
 # Pi capture — M0 step 10 (block + rewrite end to end)
 
+> Recorded before the rename to `jev-cops` (D-088): names below (`jevdict`, `jevdictd`,
+> `jevdict.event/1`, `adapters/pi/jevdict.ts`) are the ones in use at the time.
+
 Captured 2026-09-29 on macOS with the real `pi` CLI and a real `jevdictd`. Paths are
 redacted: `$W` is a fresh temp directory, `~` the home directory. Long ids are cut with `…`.
 

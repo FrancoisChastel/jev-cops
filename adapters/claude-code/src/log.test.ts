@@ -7,11 +7,11 @@ import { appendHookLog, hookLogPath } from "./log.ts";
 let home = "";
 afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-describe("the hook's local log (~/.jevdict/claude-code-hook.log)", () => {
+describe("the hook's local log (~/.jev-cops/claude-code-hook.log)", () => {
   test("creates the directory and appends one line per call, owner-only", () => {
     home = mkdtempSync(join(tmpdir(), "jvcc-log-"));
     const path = hookLogPath(home);
-    expect(path).toBe(join(home, ".jevdict", "claude-code-hook.log"));
+    expect(path).toBe(join(home, ".jev-cops", "claude-code-hook.log"));
     const at = new Date("2026-09-29T10:00:00.000Z");
     appendHookLog(
       path,

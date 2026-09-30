@@ -1,5 +1,5 @@
 /**
- * @jevdict/core — canonical event schema, bash normalizer, context engine,
+ * @jev-cops/core — canonical event schema, bash normalizer, context engine,
  * policy engine and verdict ladder. Adapters and the daemon build on this;
  * nothing here knows about any harness.
  */

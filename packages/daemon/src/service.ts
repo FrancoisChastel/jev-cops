@@ -5,7 +5,7 @@ import {
   type PreEvent,
   parseEvent,
   type VerdictResponse,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   judgePayload,
   latchedPayload,

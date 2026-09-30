@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
-import type { AuditLine } from "@jevdict/daemon";
+import type { AuditLine } from "@jev-cops/daemon";
 import { captureIo } from "../io.ts";
 import {
   breakLatch,
@@ -13,7 +13,7 @@ import { runExplainCommand } from "./explain.ts";
 import { renderLatched, taskLine } from "./explain-session.ts";
 
 /**
- * `jevdict explain` on an M1 Claude Code log: calls that carry no task, `session` lines
+ * `cops explain` on an M1 Claude Code log: calls that carry no task, `session` lines
  * that set it, and judge lines answered by the kill latch (no decision, no policy ran).
  */
 
@@ -31,7 +31,7 @@ async function explain(id: string, path = log.path) {
   return { code, out: io.stdout.join("\n"), err: io.stderr.join("\n") };
 }
 
-describe("jevdict explain: the session's task", () => {
+describe("cops explain: the session's task", () => {
   test("a call with no task shows the task from the session's first prompt line", async () => {
     const { code, out } = await explain(log.ids.rootCall);
     expect(code).toBe(0);
@@ -46,17 +46,17 @@ describe("jevdict explain: the session's task", () => {
   });
 });
 
-describe("jevdict explain: latched judge lines", () => {
+describe("cops explain: latched judge lines", () => {
   test("a call answered by a kill latch says the session was terminated, and by what", async () => {
     const { code, out, err } = await explain(log.ids.latchedByKill);
     expect(code).toBe(0);
     expect(err).toBe("");
     expect(out).toContain(
-      `session terminated by jevdict (latched since ${log.ids.killWrite}, cause kill)`,
+      `session terminated by jev-cops (latched since ${log.ids.killWrite}, cause kill)`,
     );
     expect(out).toContain("returned to the harness: kill (sessionKilled; enforcement enforce)");
     expect(out).toContain("no policy ran");
-    expect(out).toContain(`jevdict explain ${log.ids.killWrite}`);
+    expect(out).toContain(`cops explain ${log.ids.killWrite}`);
     expect(out).toContain(`task: ${SESSION_TASK}`);
     expect(out).toContain("call: Bash ls");
     expect(out).not.toContain("malformed");
@@ -66,7 +66,7 @@ describe("jevdict explain: latched judge lines", () => {
     const { code, out } = await explain(log.ids.latchedByConfig);
     expect(code).toBe(0);
     expect(out).toContain(
-      `session terminated by jevdict (latched since ${log.ids.configChange}, cause config-change)`,
+      `session terminated by jev-cops (latched since ${log.ids.configChange}, cause config-change)`,
     );
     expect(out).toContain("config change: user_settings /home/dev/.claude/settings.json");
   });
@@ -100,7 +100,7 @@ describe("explain-session renderers on hand-built lines", () => {
   const latched = (cause: string, event: unknown = NO_TASK) => ({
     event,
     latched: { root: "sess_x", session: "sess_x", cause, at: 0, event_id: "evt_origin" },
-    returned: { verdict: "kill" as const, reason: "session terminated by jevdict" },
+    returned: { verdict: "kill" as const, reason: "session terminated by jev-cops" },
     mapping: ["sessionKilled"],
     enforcement: "enforce",
     home: "/home/dev",
@@ -126,7 +126,7 @@ describe("explain-session renderers on hand-built lines", () => {
   test("a config-change latch whose report is not in the log; no task anywhere", () => {
     const p = latched("config-change");
     const out = renderLatched(line(p), p, [], []).join("\n");
-    expect(out).toContain("config change: unknown settings lost the jevdict hook block");
+    expect(out).toContain("config change: unknown settings lost the cops hook block");
     expect(taskLine(p.event, [])).toBe(
       "task: none recorded (not on the event, and no session prompt set one)",
     );

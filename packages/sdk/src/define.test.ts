@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { PolicyContext, PolicyEvent } from "@jevdict/core";
+import type { PolicyContext, PolicyEvent } from "@jev-cops/core";
 import { definePolicy } from "./define.ts";
 import { jev } from "./jev.ts";
 

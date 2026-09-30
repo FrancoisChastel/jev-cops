@@ -1,5 +1,5 @@
 import { Database, type Statement } from "bun:sqlite";
-import type { PolicyContext, PolicyEvent, PrecedentLookup, PrecedentMatch } from "@jevdict/core";
+import type { PolicyContext, PolicyEvent, PrecedentLookup, PrecedentMatch } from "@jev-cops/core";
 import { hashHoldToken, sameHash } from "./hold-tokens.ts";
 import { matchScore, type PrecedentScope, scopeKey, taskHash } from "./precedent-scope.ts";
 

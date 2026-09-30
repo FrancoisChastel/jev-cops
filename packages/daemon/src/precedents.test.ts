@@ -4,7 +4,7 @@ import {
   type NormalizedEvent,
   type PolicyContext,
   type PolicyEvent,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { bashPre, CTX_SESSION } from "../../../tests/fixtures/context/index.ts";
 import { mintHoldToken } from "./hold-tokens.ts";
 import {

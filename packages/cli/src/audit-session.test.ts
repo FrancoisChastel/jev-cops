@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AuditLine } from "@jevdict/daemon";
+import type { AuditLine } from "@jev-cops/daemon";
 import {
   eventSessionOf,
   isLatchedLine,
@@ -38,7 +38,7 @@ const judgeEvent = (session: string, parent: string | null, task?: string) => ({
 const LATCHED = {
   event: judgeEvent(ROOT, null),
   latched: { root: ROOT, session: ROOT, cause: "kill", at: 5_000, event_id: "evt_kill" },
-  returned: { verdict: "kill", reason: "session terminated by jevdict" },
+  returned: { verdict: "kill", reason: "session terminated by jev-cops" },
   mapping: ["sessionKilled"],
   enforcement: "enforce",
   home: "/home/dev",

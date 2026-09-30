@@ -13,7 +13,7 @@
  * 2.1.280: the rewritten command ran, and permission rules applied to it).
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import { register } from "../../adapters/pi/jevdict.ts";
+import { register } from "../../adapters/pi/jev-cops.ts";
 import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { bashPre } from "../fixtures/context/index.ts";

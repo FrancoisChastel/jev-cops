@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { PreEvent } from "@jevdict/core";
+import type { PreEvent } from "@jev-cops/core";
 import { claudeCodePayload } from "../../../tests/fixtures/claude-code/index.ts";
 import { reply, testDeps } from "../testing/doubles.ts";
 import { TIMEOUT } from "./client.ts";
@@ -40,7 +40,7 @@ describe("runHook PreToolUse: the daemon's verdict", () => {
 
   test("deny: exit 2 with the reason", async () => {
     const { deps } = testDeps({ judge: (e) => verdict(e, { verdict: "deny" }) });
-    expect(await runHook(BASH, deps)).toMatchObject({ exitCode: 2, stderr: "jevdict: because" });
+    expect(await runHook(BASH, deps)).toMatchObject({ exitCode: 2, stderr: "jev-cops: because" });
   });
 
   test("hold, interactive: the confirm view is loaded with the header token and asked (T8)", async () => {
@@ -157,7 +157,7 @@ describe("runHook PreToolUse: fail closed (plan §5 rows 2–5)", () => {
     expect(performance.now() - started).toBeLessThan(1_000);
     expect(out).toMatchObject({
       exitCode: 2,
-      stderr: `jevdict: ${TIMEOUT}; blocking (fail closed)`,
+      stderr: `jev-cops: ${TIMEOUT}; blocking (fail closed)`,
     });
     const read = await runHook(preText("Read", { file_path: "/w/a" }), deps);
     expect(read.exitCode).toBe(0);

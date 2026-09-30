@@ -1,20 +1,20 @@
 /**
  * A Claude Code command hook's stdin (hooks#common-input-fields and each event's input,
  * code.claude.com/docs/en/hooks, v2.1.285) → a typed {@link HookInput}. Strict on the fields
- * jevdict reads, lenient on every other key (dropped): a field Claude Code adds later must
+ * jev-cops reads, lenient on every other key (dropped): a field Claude Code adds later must
  * not make every call fail. `PostToolUse`/`PostToolUseFailure` go through the daemon's own
- * schema (`@jevdict/daemon/claude-code/post`), the one source of truth shared with the HTTP
+ * schema (`@jev-cops/daemon/claude-code/post`), the one source of truth shared with the HTTP
  * post route. Never throws; an error never echoes the payload.
  */
-import { CONFIG_SOURCES, START_SOURCES } from "@jevdict/core/schema";
+import { CONFIG_SOURCES, START_SOURCES } from "@jev-cops/core/schema";
 import {
   type ClaudeCodePostInput,
   hookIdSchema,
   parseClaudeCodePost,
-} from "@jevdict/daemon/claude-code/post";
+} from "@jev-cops/daemon/claude-code/post";
 import { z } from "zod";
 
-/** The hook events jevdict registers (SubagentStart and the rest are not, PLAN-M1 §2 row 13). */
+/** The hook events jev-cops registers (SubagentStart and the rest are not, PLAN-M1 §2 row 13). */
 export const HOOK_EVENTS = [
   "PreToolUse",
   "PostToolUse",
@@ -35,7 +35,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** `tool_input` passed through as the same object, every key intact (D-010). */
 const toolInput = z.custom<Record<string, unknown>>(isRecord, { error: "expected a JSON object" });
 
-/** What every event carries that jevdict reads; the rest is dropped. */
+/** What every event carries that jev-cops reads; the rest is dropped. */
 const common = {
   session_id: hookIdSchema,
   cwd: z.string().min(1),

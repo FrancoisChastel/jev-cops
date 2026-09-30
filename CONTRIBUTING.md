@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for helping. Jevdict is security tooling, so the bar is: every behaviour has a
+Thanks for helping. jev-cops is security tooling, so the bar is: every behaviour has a
 test, every adapter has zero policy logic, and nothing is allowed because something
 timed out.
 
 ## Setup
 
 ```bash
-git clone https://github.com/FrancoisChastel/jevdict && cd jevdict
+git clone https://github.com/FrancoisChastel/jev-cops && cd jev-cops
 bun install
 bun run check        # lint + typecheck + tests
 ```
@@ -23,7 +23,7 @@ Bun ≥ 1.3 is required (`bun:sqlite`, `bun build --compile`). Node is not a sup
 - Fail closed on the `deny` class, fail open on `observe`. A daemon timeout is never an allow.
 - Verdicts are monotonic. No model answer lowers the deterministic floor by more than 0.2.
   There is a test for this; keep it green.
-- Every policy in `policies/` ships with a `*.fixtures.json`; `jevdict test` fails on any mismatch.
+- Every policy in `policies/` ships with a `*.fixtures.json`; `cops test` fails on any mismatch.
 - Every threat T1–T13 in the spec has a file under `tests/tamper/`. Do not delete or
   weaken one; if it cannot pass yet, leave it as `test.todo` with the spec outcome as its name.
 - No features outside the spec. Ambiguity listed under "Open decisions" gets asked in an

@@ -5,7 +5,7 @@ import type { PolicyMatch } from "./evaluate.ts";
 import type { PolicyContext, PolicyEvent } from "./types.ts";
 
 /** Name of the engine's own scope question in a batch; `:` never appears in a policy name. */
-export const SCOPE_QUESTION = "jevdict:serves_task";
+export const SCOPE_QUESTION = "jev-cops:serves_task";
 
 /** The batch name of a policy's question: `policy/question`, unique across policies. */
 export function qualify(policyName: string, questionName: string): string {

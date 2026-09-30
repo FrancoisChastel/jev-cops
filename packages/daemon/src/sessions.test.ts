@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createBudget, DEFAULT_CONTEXT_CONFIG, type Event } from "@jevdict/core";
+import { createBudget, DEFAULT_CONTEXT_CONFIG, type Event } from "@jev-cops/core";
 import { bashPost, buildEvent, CTX_SESSION } from "../../../tests/fixtures/context/index.ts";
 import { SESSION_IDLE_MS, SessionStore } from "./sessions.ts";
 
@@ -18,7 +18,7 @@ function open(path = ":memory:"): SessionStore {
 
 beforeEach(() => {
   at = 1_000_000;
-  dir = mkdtempSync(join(tmpdir(), "jevdict-sessions-"));
+  dir = mkdtempSync(join(tmpdir(), "jev-cops-sessions-"));
   store = open();
 });
 

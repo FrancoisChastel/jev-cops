@@ -7,7 +7,7 @@ import {
   ok,
   type Question,
   type Result,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { isRecord } from "../answers.ts";
 import {
   ANSWER_SCHEMA_NAME,
@@ -23,9 +23,9 @@ export const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 /** Environment variable the factory reads the OpenRouter key from. */
 export const OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY";
 /** `HTTP-Referer` attribution header sent unless the config names another. */
-export const OPENROUTER_DEFAULT_REFERER = "https://github.com/FrancoisChastel/jevdict";
+export const OPENROUTER_DEFAULT_REFERER = "https://github.com/FrancoisChastel/jev-cops";
 /** `X-Title` attribution header sent unless the config names another. */
-export const OPENROUTER_DEFAULT_TITLE = "jevdict";
+export const OPENROUTER_DEFAULT_TITLE = "jev-cops";
 
 /** What the OpenRouter provider needs; the key is already resolved by the factory. */
 export interface OpenRouterOptions {

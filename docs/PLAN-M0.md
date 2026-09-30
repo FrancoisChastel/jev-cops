@@ -3,7 +3,7 @@
 Source of truth: [SPEC.md](./SPEC.md). M0 definition of done (spec §Milestones):
 canonical schema, normalizer with tree-sitter-bash, context engine with all five
 features, SDK with `definePolicy`, three starter policies with fixtures, Pi adapter
-blocking and rewriting end to end. Gate: `jevdict test` green.
+blocking and rewriting end to end. Gate: `cops test` green.
 
 This session delivers the first three rows of the table below and stops.
 
@@ -18,9 +18,9 @@ This session delivers the first three rows of the table below and stops.
 | 4 | `packages/core/src/judge` | provider-agnostic `Judge` interface, mock provider, cache | judge tests, T6 assertion |
 | 5 | `packages/core/src/policy` | floor risk, policy loader, monotonic combination | combine tests (monotonic floor −0.2 max) |
 | 6 | `packages/sdk` | `definePolicy`, `jev.noul/choice/score`, fixture runner | fixture runner tests |
-| 7 | `policies/` | `tainted-destructive`, `default-branch-guard`, `off-repo-write` + fixtures | `jevdict test` |
+| 7 | `policies/` | `tainted-destructive`, `default-branch-guard`, `off-repo-write` + fixtures | `cops test` |
 | 8 | `packages/daemon` | Unix socket + localhost HTTP, `POST /v1/judge`, `POST /v1/observe`, SQLite stores, JSONL audit chain | daemon tests, T2/T3 assertions |
-| 9 | `packages/cli` | `jevdict test`, `jevdict explain` (rest of the CLI is M1+) | `jevdict test` green on the repo |
+| 9 | `packages/cli` | `cops test`, `cops explain` (rest of the CLI is M1+) | `cops test` green on the repo |
 | 10 | `adapters/pi` | `tool_call` / `tool_result` / `before_agent_start` extension, < 150 lines, zero policy | captured run: block + rewrite end to end |
 
 Judge providers beyond `mock` (`jev`, `openrouter`, `vercel-ai`) land in step 4 behind
@@ -64,7 +64,7 @@ type Phase = "pre" | "post";
 type Harness = "claude-code" | "codex" | "opencode" | "pi";
 type CallKind = "exec" | "fs.read" | "fs.write" | "fs.delete" | "net" | "spawn" | "other";
 interface Event {
-  schema: "jevdict.event/1";
+  schema: "jev-cops.event/1";
   id: string;                       // evt_<ULID>, required
   phase: Phase;                     // required
   harness: Harness; harness_version?: string;
@@ -184,8 +184,8 @@ T5, T6, T9, T10, T11 have their core-level assertions live in this session.
 1. **Headless `hold`** — **decided 2026-09-29: `deny` with the reason.** Applies to
    headless sessions on every harness and to Pi, whose `tool_call` can only allow or block.
 2. **Thresholds/budget** — **decided 2026-09-29: spec defaults** (100 points, 10/min decay,
-   0.3 / 0.5 / 0.8 bands) as the `jevdict.toml` defaults for the pilot.
-3. **Name** — `jevdict` and `@jevdict/*` are free on npm (checked 2026-09-29). PyPI and
+   0.3 / 0.5 / 0.8 bands) as the `cops.toml` defaults for the pilot.
+3. **Name** — `jev-cops` and `@jev-cops/*` are free on npm (checked 2026-09-29). PyPI and
    the `.dev` domain still to check; owner will decide.
 
 Answered by your ground rules: Jev behind a feature flag and mocked in tests (data path);

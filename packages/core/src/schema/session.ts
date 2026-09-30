@@ -5,7 +5,7 @@ import { HARNESSES, SESSION_MODES } from "./event.ts";
 import { eventIdSchema, sessionIdSchema } from "./ids.ts";
 
 /** Version tag every session report carries; any other value is rejected. */
-export const SESSION_SCHEMA = "jevdict.session/1";
+export const SESSION_SCHEMA = "jev-cops.session/1";
 
 /**
  * What a session report says: the session began (`start`), the user submitted a prompt
@@ -95,7 +95,7 @@ export const sessionEndSchema = z.strictObject({
 
 /**
  * `config-change`: a settings file changed mid-session. `intact` is the adapter's check
- * that the file still carries the jevdict hook block and does not disable hooks.
+ * that the file still carries the cops hook block and does not disable hooks.
  */
 export const sessionConfigChangeSchema = z.strictObject({
   ...head,
@@ -106,7 +106,7 @@ export const sessionConfigChangeSchema = z.strictObject({
 });
 
 /**
- * Canonical `jevdict.session/1`: strict at every level, discriminated on `kind`. A
+ * Canonical `jev-cops.session/1`: strict at every level, discriminated on `kind`. A
  * subagent report (`parent_id` set) must use the id `<parent_id>.<agent_id>`.
  */
 export const sessionEventSchema = z
@@ -135,7 +135,7 @@ export type SessionEventKind = (typeof SESSION_EVENT_KINDS)[number];
 export type PermissionMode = (typeof PERMISSION_MODES)[number];
 /** One of {@link CONFIG_SOURCES}. */
 export type ConfigSource = (typeof CONFIG_SOURCES)[number];
-/** A validated `jevdict.session/1` report; narrow on `kind`. */
+/** A validated `jev-cops.session/1` report; narrow on `kind`. */
 export type SessionEvent = z.output<typeof sessionEventSchema>;
 
 /**

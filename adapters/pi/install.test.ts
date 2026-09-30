@@ -13,7 +13,7 @@ function temp(): string {
   dirs.push(d);
   return d;
 }
-const SOURCE = readFileSync(join(import.meta.dir, "jevdict.ts"), "utf8");
+const SOURCE = readFileSync(join(import.meta.dir, "jev-cops.ts"), "utf8");
 
 describe("installPiExtension", () => {
   test("project install copies the extension into <project>/.pi/extensions", () => {
@@ -40,7 +40,7 @@ describe("installPiExtension", () => {
 
   test("a socket is baked into the installed file as a string literal", () => {
     const project = temp();
-    const socket = '/var/run/jevdict/d "q".sock';
+    const socket = '/var/run/jev-cops/d "q".sock';
     const r = installPiExtension({ projectDir: project, socket, print: () => undefined });
     const text = readFileSync(r.path, "utf8");
     expect(text).toContain(`const INSTALLED_SOCKET: string | null = ${JSON.stringify(socket)};`);
@@ -49,11 +49,11 @@ describe("installPiExtension", () => {
     expect(statSync(r.path).mode & 0o777).toBe(0o644);
   });
 
-  test("the installed copy loads and uses the baked socket over $JEVDICT_SOCKET", async () => {
+  test("the installed copy loads and uses the baked socket over $JEV_COPS_SOCKET", async () => {
     const socket = "/run/j$&v/$1.sock";
     const r = installPiExtension({ projectDir: temp(), socket, print: () => undefined });
     const mod = (await import(r.path)) as { socketPath(env: Record<string, string>): string };
-    expect(mod.socketPath({ JEVDICT_SOCKET: "/elsewhere.sock" })).toBe(socket);
+    expect(mod.socketPath({ JEV_COPS_SOCKET: "/elsewhere.sock" })).toBe(socket);
   });
 
   test.each([

@@ -1,4 +1,4 @@
-import { DEFAULT_CONTEXT_CONFIG, DEFAULT_POLICY_CONFIG } from "@jevdict/core";
+import { DEFAULT_CONTEXT_CONFIG, DEFAULT_POLICY_CONFIG } from "@jev-cops/core";
 
 /** A plain JSON-ish table as TOML produces it. */
 export type Table = Readonly<Record<string, unknown>>;

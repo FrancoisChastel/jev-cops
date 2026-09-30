@@ -1,4 +1,4 @@
-import { type CallKind, sha256Hex } from "@jevdict/core";
+import { type CallKind, sha256Hex } from "@jev-cops/core";
 
 /**
  * The narrowest key the daemon proposes for a precedent (spec §Precedents): tool kind,

@@ -5,7 +5,7 @@
  * socket can clear it.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import { parseVerdict, type VerdictResponse } from "@jevdict/core";
+import { parseVerdict, type VerdictResponse } from "@jev-cops/core";
 import { buildEvent, type EventShape } from "../../../tests/fixtures/context/index.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "./testing/daemon.ts";
 import { policyModule } from "./testing/policies.ts";
@@ -104,7 +104,7 @@ describe("a kill latches the session", () => {
     const t = await daemon("observe");
     const killed = await judge(t, "rm -rf /srv/killme");
     expect(killed.body.verdict).toBe("allow");
-    expect(killed.body.context_note).toStartWith("jevdict would have: kill");
+    expect(killed.body.context_note).toStartWith("jev-cops would have: kill");
     expect((await judge(t, "ls")).body.context_note).toBeNull();
     expect(t.daemon.runtime.latch.count()).toBe(0);
   });

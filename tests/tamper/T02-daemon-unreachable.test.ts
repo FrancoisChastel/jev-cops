@@ -1,7 +1,7 @@
 /**
  * T2 — Daemon killed or unreachable (spec §Threat model).
  *
- * Attack: Agent stops `jevdictd` or blocks the socket
+ * Attack: Agent stops `copsd` or blocks the socket
  * Required outcome: Adapter fails closed for any event a `deny`-class policy could match; observe-only events log locally and continue
  *
  * Status: live (daemon side): an internal failure answers non-200 with an `anomaly` audit
@@ -10,12 +10,12 @@
  * write and unknown tools are blocked; read-only tools continue and warn locally. Live
  * (Claude Code hook, M1): the command hook, run as a subprocess by the fake Claude Code,
  * exits 2 for exec, write and MCP calls; reads proceed with a warning and a line in
- * `~/.jevdict/claude-code-hook.log`.
+ * `~/.jev-cops/claude-code-hook.log`.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { register } from "../../adapters/pi/jevdict.ts";
+import { register } from "../../adapters/pi/jev-cops.ts";
 import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import {
   startTestDaemon,
@@ -99,7 +99,7 @@ describe("T2 daemon killed or unreachable", () => {
       }
       const read = await c.tool("Read", { file_path: join(ws.cwd, "README.md") }, "# readme");
       expect(read.ran).not.toBeNull();
-      const log = readFileSync(join(ws.home, ".jevdict", "claude-code-hook.log"), "utf8");
+      const log = readFileSync(join(ws.home, ".jev-cops", "claude-code-hook.log"), "utf8");
       expect(log).toContain("Read: judge unreachable");
       expect(log).toContain("read-only Read allowed (fail open)");
     } finally {

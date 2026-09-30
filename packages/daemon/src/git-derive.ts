@@ -1,6 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
-import { err, type GitInfo, ok, type Result } from "@jevdict/core";
+import { err, type GitInfo, ok, type Result } from "@jev-cops/core";
 import { worktreeDirty } from "./git-dirty.ts";
 import type { GitOutput, GitRunner } from "./git-run.ts";
 import { remoteHost } from "./repo-hints.ts";

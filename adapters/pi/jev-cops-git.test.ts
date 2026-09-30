@@ -1,5 +1,5 @@
 /**
- * Pi sends no `env.git` (D-058); jevdictd derives it from the call's cwd. Driven by the
+ * Pi sends no `env.git` (D-058); copsd derives it from the call's cwd. Driven by the
  * fake Pi runner against a real daemon with the repo's own `policies/`, from inside a
  * real temp repository whose default branch comes from `origin/HEAD`.
  */
@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { AuditLine } from "../../packages/daemon/src/audit.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { makeRepo } from "../../packages/daemon/src/testing/git.ts";
-import { register } from "./jevdict.ts";
+import { register } from "./jev-cops.ts";
 import { FakePi, fakeContext } from "./testing/fake-pi.ts";
 
 const REPO_POLICIES = join(import.meta.dir, "..", "..", "policies");
@@ -56,7 +56,7 @@ type Payload = {
   why: { environment: string[]; scope: string[] };
 };
 
-describe("Pi end to end: jevdictd derives env.git from the call's cwd", () => {
+describe("Pi end to end: copsd derives env.git from the call's cwd", () => {
   test("`git push --force` with no refspec on main: the guard matches on the branch", async () => {
     const { pi, ctx } = await session(join(repo, "sub"));
     const run = await pi.run(ctx, "bash", { command: "git push --force" });

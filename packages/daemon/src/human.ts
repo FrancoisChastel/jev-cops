@@ -1,4 +1,4 @@
-import { eventIdSchema, sessionIdSchema } from "@jevdict/core";
+import { eventIdSchema, sessionIdSchema } from "@jev-cops/core";
 import { z } from "zod";
 import { readAudit } from "./audit.ts";
 import { DAEMON_VERSION, type Runtime } from "./daemon.ts";

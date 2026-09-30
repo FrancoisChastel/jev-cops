@@ -1,7 +1,7 @@
 {
-  "name": "@jevdict/sdk",
+  "name": "@jev-cops/sdk",
   "version": "0.0.0",
-  "description": "Jevdict policy SDK: definePolicy, jev question builders, fixture format and runner",
+  "description": "jev-cops policy SDK: definePolicy, jev question builders, fixture format and runner",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -16,7 +16,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@jevdict/core": "workspace:*",
+    "@jev-cops/core": "workspace:*",
     "zod": "^4.6.5"
   }
 }

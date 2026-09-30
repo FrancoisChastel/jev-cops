@@ -1,6 +1,9 @@
-# Jevdict
+# jev-cops
 
-**A harness-side judge for coding agents.** Jevdict scores every agent tool call in its
+*The cops for your coding agents. They don't lock anyone up (that's the sandbox's job),
+but they watch every move, write it all down, and call for backup when it matters.*
+
+**A harness-side judge for coding agents.** jev-cops scores every agent tool call in its
 context — who typed the arguments, does the action serve the declared task, what
 happened just before, how exposed is the target, can it be undone — and returns a
 graduated verdict: `allow · annotate · rewrite · hold · deny · kill`.
@@ -13,13 +16,13 @@ not the command string.
 > starter policies, judge providers, daemon, CLI and the **Pi adapter** are built and
 > tested; a real `pi` run blocks and rewrites tool calls end to end
 > ([capture](docs/captures/pi-m0.md)). **M1 in progress:** the Claude Code command hook is
-> built and verified against the real `claude` binary; `jevdict install`/`doctor` come
+> built and verified against the real `claude` binary; `cops install`/`doctor` come
 > next. Codex and OpenCode in M3. Not production-ready yet: see [docs/STATUS.md](docs/STATUS.md).
 
 ## How it works
 
 ```text
-harness ──pre-tool event──▶ adapter ──canonical JSON──▶ jevdictd
+harness ──pre-tool event──▶ adapter ──canonical JSON──▶ copsd
                                                           │  1. normalize  (tree-sitter-bash, decode, expand, resolve)
                                                           │  2. context    (taint · scope · sequence · environment · reversibility)
                                                           │  3. policies   (deterministic floor, then typed questions to a judge)
@@ -35,42 +38,42 @@ harness ◀──allow/deny/rewrite/ask── adapter ◀─verdict────�
 - **Pluggable semantic judge.** TypeSafe Jev, OpenRouter, or any Vercel AI SDK provider,
   all behind one typed interface and mocked in tests. Off by default.
 - **Thin adapters.** Claude Code, Codex, OpenCode, Pi — each under 150 lines, zero policy logic.
-- **Audit trail.** Append-only JSONL with a hash chain; `jevdict explain <event-id>` shows
+- **Audit trail.** Append-only JSONL with a hash chain; `cops explain <event-id>` shows
   the features, policies and answers behind any verdict.
 
-Jevdict is not a sandbox and not the last line of defence. Anything that must never
+jev-cops is not a sandbox and not the last line of defence. Anything that must never
 happen belongs to a kernel-enforced policy such as [OpenShell](https://github.com/NVIDIA/openshell);
-Jevdict compiles its hard findings down to it.
+jev-cops compiles its hard findings down to it.
 
 ## Quickstart
 
 Requires [Bun](https://bun.sh) ≥ 1.3. Node is not a supported runtime.
 
 ```bash
-git clone https://github.com/FrancoisChastel/jevdict && cd jevdict
+git clone https://github.com/FrancoisChastel/jev-cops && cd jev-cops
 bun install
 bun run check          # lint + typecheck + 2600 tests
-bun run gate           # jevdict test: every starter policy against its fixtures
-bun run build          # dist/jevdictd, dist/jevdict, dist/jevdict-hook (WASM grammar embedded)
+bun run gate           # cops test: every starter policy against its fixtures
+bun run build          # dist/copsd, dist/cops, dist/cops-hook (WASM grammar embedded)
 ```
 
 Run the judge and ask it about a tool call:
 
 ```bash
-./dist/jevdictd --enforce --socket /tmp/jevdictd.sock      # default mode is observe
-curl -s --unix-socket /tmp/jevdictd.sock -X POST http://localhost/v1/judge \
+./dist/copsd --enforce --socket /tmp/copsd.sock      # default mode is observe
+curl -s --unix-socket /tmp/copsd.sock -X POST http://localhost/v1/judge \
   -H 'content-type: application/json' --data @tests/fixtures/events/pre-bash.json
-./dist/jevdict explain <event-id> --audit ~/.jevdict/audit.jsonl
+./dist/cops explain <event-id> --audit ~/.jev-cops/audit.jsonl
 ```
 
-Configuration lives in `~/.config/jevdict/jevdict.toml` (see `packages/daemon/src/config.ts`
-for every key and default); a repo-local `.jevdict.toml` may only tighten it. Judge API keys
+Configuration lives in `~/.config/jev-cops/cops.toml` (see `packages/daemon/src/config.ts`
+for every key and default); a repo-local `.cops.toml` may only tighten it. Judge API keys
 are read from the environment only (`.env.example`).
 
 To try it with [Pi](https://pi.dev), see [adapters/pi/README.md](adapters/pi/README.md); with
-Claude Code (manual settings block until `jevdict install` lands), see
+Claude Code (manual settings block until `cops install` lands), see
 [adapters/claude-code/README.md](adapters/claude-code/README.md).
-`jevdict install <harness>` and `jevdict doctor` arrive with M1.
+`cops install <harness>` and `cops doctor` arrive with M1.
 
 ## Writing a policy
 
@@ -78,7 +81,7 @@ Policies are TypeScript in a git-tracked `policies/` directory. Deterministic pr
 first, typed questions only when needed, code returns the verdict:
 
 ```ts
-import { definePolicy, jev } from "@jevdict/sdk";
+import { definePolicy, jev } from "@jev-cops/sdk";
 
 export default definePolicy({
   name: "exfil-after-secrets",
@@ -94,7 +97,7 @@ export default definePolicy({
 });
 ```
 
-Every policy ships with a `*.fixtures.json`; `jevdict test` fails on any mismatch. The
+Every policy ships with a `*.fixtures.json`; `cops test` fails on any mismatch. The
 full author guide is [packages/sdk/README.md](packages/sdk/README.md); judge providers are
 described in [packages/judge/README.md](packages/judge/README.md).
 
@@ -102,10 +105,10 @@ described in [packages/judge/README.md](packages/judge/README.md).
 
 ```text
 packages/core       event schema, normalizer, context engine, judge interface, policy engine
-packages/sdk        definePolicy, question builders, fixture runner  (@jevdict/sdk)
+packages/sdk        definePolicy, question builders, fixture runner  (@jev-cops/sdk)
 packages/judge      semantic judge providers: TypeSafe Jev, OpenRouter, Vercel AI SDK
-packages/daemon     jevdictd: socket + loopback HTTP, SQLite stores, hash-chained audit log
-packages/cli        jevdict test | explain | replay | budget   (install, doctor: M1)
+packages/daemon     copsd: socket + loopback HTTP, SQLite stores, hash-chained audit log
+packages/cli        cops test | explain | replay | budget   (install, doctor: M1)
 adapters/           pi (M0) · claude-code command hook (M1) · codex, opencode (M3)
 policies/           starter policy set, one *.fixtures.json per policy
 tests/tamper        T1–T13 anti-tamper acceptance tests (see tests/tamper/README.md)

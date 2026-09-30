@@ -1,4 +1,4 @@
-import { type Answer, err, type JudgeState, type Question, type Result } from "@jevdict/core";
+import { type Answer, err, type JudgeState, type Question, type Result } from "@jev-cops/core";
 import { collectAnswers, isRecord, readChoice, readReportedNoul, readScore } from "./answers.ts";
 
 /** A JSON value, as sent in a request body or a JSON Schema. */
@@ -27,7 +27,7 @@ export const SYSTEM_PROMPT = [
 ].join("\n");
 
 /** Name of the structured-output schema sent to the provider. */
-export const ANSWER_SCHEMA_NAME = "jevdict_answers";
+export const ANSWER_SCHEMA_NAME = "jev_cops_answers";
 
 /** The two prompt parts: fixed `system`, and `user` carrying the state and the questions. */
 export interface LlmPrompt {

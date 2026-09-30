@@ -1,19 +1,19 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import type { Event, VerdictResponse } from "@jevdict/core";
+import type { Event, VerdictResponse } from "@jev-cops/core";
 import { buildEvent } from "../../../tests/fixtures/context/index.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "./testing/daemon.ts";
 import { policyModule } from "./testing/policies.ts";
 
 /**
- * The daemon protects its own inputs (PLAN-M1 §4.5 "Jevdict" row): through a real
- * jevdictd running the repo's starter policies, `config-tamper` kills a write to the
+ * The daemon protects its own inputs (PLAN-M1 §4.5 "jev-cops" row): through a real
+ * copsd running the repo's starter policies, `config-tamper` kills a write to the
  * policies dir, the audit log, the config file or the hook binary, because the daemon
  * appended them to `[policy] protectedPaths` at startup, not because a test configured them.
  */
 
 const POLICIES = join(import.meta.dir, "..", "..", "..", "policies");
-const HOOK = "/opt/jv/bin/jevdict-hook";
+const HOOK = "/opt/jv/bin/cops-hook";
 
 let td: TestDaemon;
 
@@ -56,7 +56,7 @@ describe("the daemon's own paths are killed by config-tamper", () => {
   });
 
   test("a Write to the daemon's config file is a kill", async () => {
-    expect((await write(join(td.dir, "jevdict.toml"))).body.verdict).toBe("kill");
+    expect((await write(join(td.dir, "cops.toml"))).body.verdict).toBe("kill");
   });
 
   test("a copy over the configured hook binary is a kill", async () => {

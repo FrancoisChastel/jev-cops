@@ -58,7 +58,7 @@ describe("applyArgs", () => {
   });
 });
 
-describe("jevdictd process", () => {
+describe("copsd process", () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "jvm-"));
@@ -103,7 +103,7 @@ describe("jevdictd process", () => {
     proc.kill("SIGTERM");
     expect(await proc.exited).toBe(0);
     const stderr = await new Response(proc.stderr).text();
-    expect(stderr).toContain(`jevdictd listening on ${socket}`);
+    expect(stderr).toContain(`copsd listening on ${socket}`);
     expect(stderr).toContain(`admin ${join(dir, "a.sock")}`);
     expect(stderr).toContain("1 policy");
     expect(stderr).toContain("judge off");
@@ -194,10 +194,10 @@ describe("main, in process", () => {
     const exited = main(["--config", config(), "--enforce"]);
     const socket = join(dir, "d.sock");
     const deadline = Date.now() + 5_000;
-    while (!err.join("").includes("jevdictd listening") && Date.now() < deadline) {
+    while (!err.join("").includes("copsd listening") && Date.now() < deadline) {
       await Bun.sleep(10);
     }
-    expect(err.join("")).toContain(`jevdictd listening on ${socket}`);
+    expect(err.join("")).toContain(`copsd listening on ${socket}`);
     expect(err.join("")).toContain("enforcement enforce");
     expect(err.join("")).toMatch(/ · \d+ protected paths/);
     expect(err.join("")).toContain("WARNING: judge = off");
@@ -212,7 +212,7 @@ describe("main, in process", () => {
   test("SIGINT stops it too; an injected stop replaces the signals", async () => {
     const exited = main(["--config", config()]);
     const deadline = Date.now() + 5_000;
-    while (!err.join("").includes("jevdictd listening") && Date.now() < deadline) {
+    while (!err.join("").includes("copsd listening") && Date.now() < deadline) {
       await Bun.sleep(10);
     }
     process.emit("SIGINT");

@@ -5,7 +5,7 @@ import {
   VERDICT_SCHEMA,
   type VerdictResponse,
   verdictRank,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import type { EnforcementMode } from "./config.ts";
 import type { NoHumanReason } from "./session-facts.ts";
 
@@ -17,7 +17,7 @@ export const PERMISSION_MODE_HOLD_DENIED = "permissionModeHoldDenied";
 export const SESSION_KILLED = "sessionKilled";
 export const OBSERVE_ONLY = "observe";
 /** The agent-facing reason of every call of a latched session. */
-export const SESSION_KILLED_REASON = "session terminated by jevdict";
+export const SESSION_KILLED_REASON = "session terminated by jev-cops";
 /** Resolution of the risk a harness sees; the audit line keeps the exact value. */
 export const HARNESS_RISK_STEP = 0.1;
 
@@ -49,14 +49,14 @@ function forHarness(r: VerdictResponse): VerdictResponse {
 }
 
 /**
- * The `jevdict.verdict/1` response the harness receives for `decision`:
+ * The `jev-cops.verdict/1` response the harness receives for `decision`:
  * 1. `detail` is stripped (spec: never returned to the harness; `explain` shows it), and
  *    so are the scores: `features: {}`, `jev: []`, `risk` to one decimal (T6).
  * 2. D-008: a `hold` in a session where no human can answer becomes `deny` with the same
  *    reason: headless, or a permission mode that never prompts (`noHuman`, plan §5 rows
  *    10–11), traced as `headlessHoldDenied` / `permissionModeHoldDenied`.
  * 3. `observe` enforcement: the verdict becomes `allow` with no rewrite; for a verdict
- *    of `hold` or above the context note says what jevdict would have done.
+ *    of `hold` or above the context note says what jev-cops would have done.
  * Rewrites never survive a mapping, so `updated_input` stays null unless `rewrite`.
  */
 export function harnessVerdict(
@@ -74,7 +74,7 @@ export function harnessVerdict(
   if (enforcement === "observe" && response.verdict !== "allow") {
     const note =
       verdictRank(response.verdict) >= verdictRank("hold")
-        ? `jevdict would have: ${response.verdict} — ${response.reason}`
+        ? `jev-cops would have: ${response.verdict} — ${response.reason}`
         : null;
     response = { ...response, verdict: "allow", updated_input: null, context_note: note };
     mapping.push(OBSERVE_ONLY);

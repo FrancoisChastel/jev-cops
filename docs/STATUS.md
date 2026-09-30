@@ -7,8 +7,8 @@ Updated: 2026-09-29
 - Spec at `docs/SPEC.md`; M0 plan (`docs/PLAN-M0.md`); owner decisions D-008/D-009 recorded.
 - Repo skeleton: Bun workspace, Biome lint/format, strict tsconfig, CI (ubuntu + macos),
   contribution docs, security policy, Apache-2.0.
-- **M0 step 1 — schema** (`packages/core/src/schema`): `jevdict.event/1` and
-  `jevdict.verdict/1` zod schemas, strict at every level, `parseEvent`/`parseVerdict`
+- **M0 step 1 — schema** (`packages/core/src/schema`): `jev-cops.event/1` and
+  `jev-cops.verdict/1` zod schemas, strict at every level, `parseEvent`/`parseVerdict`
   never throw, ULID/prefixed id validators, verdict ladder (`maxVerdict`, `raiseVerdict`,
   `isDenyClass`). 127 tests. Fixtures under `tests/fixtures/events/`. Decisions D-010–D-012.
 - **M0 step 2 — normalizer** (`packages/core/src/normalizer`): tree-sitter-bash via WASM,
@@ -41,34 +41,34 @@ Updated: 2026-09-29
   1–5 + budget + precedents with a named test per rule, `createPolicyEngine` (139 lines).
   T6 floor-cap test live. 178 tests. Decisions D-028–D-037.
 
-- **M0 steps 6–7 — SDK and starter policies**: `@jevdict/sdk` (`definePolicy` with
+- **M0 steps 6–7 — SDK and starter policies**: `@jev-cops/sdk` (`definePolicy` with
   inferred answer types, `jev.noul/choice/score`, JSON fixture format + runner,
   `describeFixtures` for `bun test`), policies `tainted-destructive`,
   `default-branch-guard`, `off-repo-write`, `exfil-after-secrets` with 27 fixture cases
   that pass alone and with the whole set. Review fixes: D-038 (noul confidence), D-039
   (exfil fallback), D-040 (`/private/tmp`). 95 tests. Decisions D-038–D-041.
 
-- **M0 step 4 (providers) — `@jevdict/judge`**: `createJudge(config)` factory over
+- **M0 step 4 (providers) — `@jev-cops/judge`**: `createJudge(config)` factory over
   `off | mock | jev | openrouter | vercel-ai`; TypeSafe Jev via `@typesafe-ai/sdk`,
   OpenRouter via plain `fetch` + `response_format.json_schema`, Vercel AI SDK v7 via
   `generateText` + `Output.object`; shared prompt/schema; contract suite (11 checks × 3
   providers) on fake transports; no network in tests. `.env.example`. 114 tests.
   Decisions D-042–D-046.
 
-- **M0 steps 8–9 — daemon and CLI**: `jevdictd` (`packages/daemon`: TOML config with
+- **M0 steps 8–9 — daemon and CLI**: `copsd` (`packages/daemon`: TOML config with
   tighten-only repo override, hash-chained append-only audit log, SQLite precedents +
   sessions, policy hot reload, Unix socket + loopback HTTP, routes `/v1/judge`,
   `/v1/observe`, `/v1/resolve`, `/v1/explain/:id`, `/v1/health`, `/v1/budget/reset`,
-  headless hold→deny, observe mode, 504 judge deadline); `jevdict` (`packages/cli`:
+  headless hold→deny, observe mode, 504 judge deadline); `jev-cops` (`packages/cli`:
   `test`, `explain`, `replay`, `budget`; `install`/`doctor` stubbed to M1); `bun run build`
-  compiles both with the WASM grammar embedded; `dist/jevdict test policies` → PASS.
+  compiles both with the WASM grammar embedded; `dist/cops test policies` → PASS.
   Smoke-tested end to end: the spec's `git push --force` on `main`, headless → `deny`.
   T2/T3 (daemon side), T6 audit flag, T7 scope/TTL, T12 chain live. 137 tests.
   Decisions D-047–D-053.
 
 - **M0 step 10 — Pi adapter** (`adapters/pi`): extension with 147 lines of logic, Node
   built-ins only, zero policy; installer with the known-gaps list; 20 end-to-end tests
-  against a real `jevdictd` through a fake Pi runtime (block, headless deny, interactive
+  against a real `copsd` through a fake Pi runtime (block, headless deny, interactive
   confirm, rewrite, fail closed, judge timeout, task-once, kill). **Real `pi` run
   captured** (`docs/captures/pi-m0.md`): headless `git push --force origin main` blocked,
   relative `rm -rf ./build` rewritten to the pinned absolute path and executed. Pi
@@ -89,7 +89,7 @@ coverage 98.4 % functions / 99.0 % lines (gate: 80 % per file), `bun run gate` P
 | SDK with `definePolicy` | done |
 | Three starter policies with fixtures | done (five, incl. `opaque-exec`) |
 | Pi adapter blocking and rewriting end to end | done, captured on real `pi` |
-| Gate: `jevdict test` | PASS (4 policies, 27 cases, 54 runs) |
+| Gate: `cops test` | PASS (4 policies, 27 cases, 54 runs) |
 
 ## M0 gate review (Fable 5.1, 2026-09-29): yes-with-fixes
 
@@ -123,8 +123,8 @@ clone → check → gate → build all green. Fixes before M1:
   events (PreToolUse refused over HTTP). T1/T11 daemon side live. 2181 tests. Decisions
   D-075–D-080.
 
-- **M1 steps 4–5 — Claude Code hook** (`adapters/claude-code`, `jevdict hook`,
-  `dist/jevdict-hook`): fail-closed command hook (exit 2 on every failure path, own 13 s
+- **M1 steps 4–5 — Claude Code hook** (`adapters/claude-code`, `cops hook`,
+  `dist/cops-hook`): fail-closed command hook (exit 2 on every failure path, own 13 s
   deadline), tighten-only verdict mapping, hold→ask only with a human, session/prompt/
   config-change/post events, ConfigChange intact check. Verified live on `claude` 2.1.280
   against a local fake API (rewrite via `updatedInput`, kill via `continue: false`, prompt
@@ -134,7 +134,7 @@ clone → check → gate → build all green. Fixes before M1:
 
 **Totals:** 2615 tests + 6 todo, `bun run check` green, coverage 98.6 % functions /
 99.1 % lines (80 % per file enforced), `bun run gate` PASS (6 policies, 93 cases, 186 runs),
-`bun run build` → `dist/jevdictd`, `dist/jevdict`, `dist/jevdict-hook`.
+`bun run build` → `dist/copsd`, `dist/cops`, `dist/cops-hook`.
 
 ## In progress
 
@@ -148,9 +148,9 @@ clone → check → gate → build all green. Fixes before M1:
 - Carriers not yet parsed: `watch`, `script -c`, `tmux`/`screen` command strings, `flock`,
   `chroot`, `nsenter`, `sudo -s`, `vim -c '!…'`, `parallel`; T5 "exec of a freshly written
   file is judged on its content" uses the write's taint, not its content.
-- M1 steps 6–9: `jevdict install claude-code`/`install pi` (writes the settings block,
-  `[daemon] hook_binary`, `~/.jevdict/claude-code.json` with the Claude Code version),
-  `jevdict doctor` + offline/live canary, T4 installer gap, a real interactive `claude`
+- M1 steps 6–9: `cops install claude-code`/`install pi` (writes the settings block,
+  `[daemon] hook_binary`, `~/.jev-cops/claude-code.json` with the Claude Code version),
+  `cops doctor` + offline/live canary, T4 installer gap, a real interactive `claude`
   capture covering: the ask dialog (text, newlines, whether a declined ask hides our reason
   from Claude), auto mode's classifier after a hook ask, ConfigChange on a real edit, SDK /
   VS Code parent argv (SDK hosts are headless today, D-086), `stopReason` display.

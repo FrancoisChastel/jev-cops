@@ -1,6 +1,6 @@
-# @jevdict/judge
+# @jev-cops/judge
 
-Semantic-judge providers for Jevdict. Each one answers the policy engine's typed
+Semantic-judge providers for jev-cops. Each one answers the policy engine's typed
 questions (noul, choice, score) behind the core `Judge` interface (D-004). The daemon
 picks one with `judge.provider = "off" | "mock" | "jev" | "openrouter" | "vercel-ai"`.
 
@@ -67,7 +67,7 @@ Core removes it before any provider sees the state (D-032).
 ### Jev
 
 ```ts
-import { createJudge } from "@jevdict/judge";
+import { createJudge } from "@jev-cops/judge";
 
 // Key from TYPESAFE_API_KEY, model "jev-latest", 10 s timeout, cached.
 const judge = createJudge({ provider: "jev" });
@@ -81,13 +81,13 @@ if (result.ok) console.log(result.answers["exfil/sends_secret"]);
 ### OpenRouter
 
 ```ts
-import { createJudge } from "@jevdict/judge";
+import { createJudge } from "@jev-cops/judge";
 
 // Key from OPENROUTER_API_KEY. Pick a model that supports structured outputs.
 const judge = createJudge({
   provider: "openrouter",
   model: "openai/gpt-5-mini",
-  title: "jevdict (security team)", // X-Title; HTTP-Referer defaults to the project URL
+  title: "jev-cops (security team)", // X-Title; HTTP-Referer defaults to the project URL
 });
 
 const result = await judge.ask(state, questions);
@@ -97,7 +97,7 @@ const result = await judge.ask(state, questions);
 
 ```ts
 import { createOpenAI } from "@ai-sdk/openai"; // or any AI SDK provider package
-import { createJudge } from "@jevdict/judge";
+import { createJudge } from "@jev-cops/judge";
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -116,7 +116,7 @@ the environment, clock and guard config.
 
 ## Dependencies
 
-`@jevdict/core`, `@typesafe-ai/sdk@0.6.0` (MIT), `ai@^7.0.122` (Apache-2.0) and `zod@^4`
+`@jev-cops/core`, `@typesafe-ai/sdk@0.6.0` (MIT), `ai@^7.0.122` (Apache-2.0) and `zod@^4`
 (MIT). The AI SDK pulls in `@ai-sdk/*`, `@vercel/oidc` and `@workflow/serde`
 (Apache-2.0), `eventsource-parser` and `@standard-schema/spec` (MIT), and `json-schema`
 (AFL-2.1 or BSD-3-Clause). This package depends on no model vendor: you bring the model

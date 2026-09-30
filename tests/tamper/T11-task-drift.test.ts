@@ -16,7 +16,7 @@ import {
   InMemoryCaseFileStore,
   openCaseFile,
   resolveContextConfig,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   startTestDaemon,
   type TestDaemon,

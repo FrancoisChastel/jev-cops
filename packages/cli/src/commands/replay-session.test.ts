@@ -18,7 +18,7 @@ import {
 import { runReplayCommand } from "./replay.ts";
 
 /**
- * `jevdict replay` on an M1 Claude Code log: the task comes from `session` prompt lines
+ * `cops replay` on an M1 Claude Code log: the task comes from `session` prompt lines
  * (the events carry none), and judge lines answered by the kill latch are replayed as
  * `kill` and reported apart: the latch is state, not a policy decision.
  */
@@ -28,7 +28,7 @@ let root: string;
 
 beforeAll(async () => {
   log = await recordSessionAudit();
-  root = mkdtempSync(join(tmpdir(), "jevdict-replay-m1-"));
+  root = mkdtempSync(join(tmpdir(), "jev-cops-replay-m1-"));
 });
 
 afterAll(() => {
@@ -56,7 +56,7 @@ async function replayText(dir: string): Promise<string> {
   return io.stdout.join("\n");
 }
 
-describe("jevdict replay: session lines", () => {
+describe("cops replay: session lines", () => {
   test("the task is rebuilt from the root's first prompt: unchanged policies, zero deltas", async () => {
     const { code, report } = await replay(policies("same", TASK_GATE));
     expect(code).toBe(0);
@@ -71,7 +71,7 @@ describe("jevdict replay: session lines", () => {
   });
 });
 
-describe("jevdict replay: a root's end line expires its precedents, as in the daemon", () => {
+describe("cops replay: a root's end line expires its precedents, as in the daemon", () => {
   const GUARD = policyModule("guard", 1, "hold").replace(
     "when: () => true",
     'when: (e) => e.kind === "fs.delete"',
@@ -105,7 +105,7 @@ describe("jevdict replay: a root's end line expires its precedents, as in the da
   });
 });
 
-describe("jevdict replay: latched judge lines", () => {
+describe("cops replay: latched judge lines", () => {
   test("replayed as kill, reported apart, never a delta or a problem", async () => {
     const { report } = await replay(policies("latched", TASK_GATE));
     expect(report.latched.map((l) => [l.eventId, l.verdict, l.cause, l.latchedBy])).toEqual([

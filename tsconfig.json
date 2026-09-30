@@ -18,15 +18,15 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
-      "@jevdict/core": ["./packages/core/src/index.ts"],
-      "@jevdict/core/*": ["./packages/core/src/*"],
-      "@jevdict/sdk": ["./packages/sdk/src/index.ts"],
-      "@jevdict/sdk/*": ["./packages/sdk/src/*"],
-      "@jevdict/judge": ["./packages/judge/src/index.ts"],
-      "@jevdict/daemon": ["./packages/daemon/src/index.ts"],
-      "@jevdict/cli": ["./packages/cli/src/index.ts"],
-      "@jevdict/adapter-claude-code": ["./adapters/claude-code/src/index.ts"],
-      "@jevdict/adapter-claude-code/*": ["./adapters/claude-code/src/*"]
+      "@jev-cops/core": ["./packages/core/src/index.ts"],
+      "@jev-cops/core/*": ["./packages/core/src/*"],
+      "@jev-cops/sdk": ["./packages/sdk/src/index.ts"],
+      "@jev-cops/sdk/*": ["./packages/sdk/src/*"],
+      "@jev-cops/judge": ["./packages/judge/src/index.ts"],
+      "@jev-cops/daemon": ["./packages/daemon/src/index.ts"],
+      "@jev-cops/cli": ["./packages/cli/src/index.ts"],
+      "@jev-cops/adapter-claude-code": ["./adapters/claude-code/src/index.ts"],
+      "@jev-cops/adapter-claude-code/*": ["./adapters/claude-code/src/*"]
     }
   },
   "include": ["packages/**/*.ts", "adapters/**/*.ts", "policies/**/*.ts", "tests/**/*.ts"],

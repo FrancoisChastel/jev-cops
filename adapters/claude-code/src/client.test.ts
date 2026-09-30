@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PreEvent } from "@jevdict/core";
+import type { PreEvent } from "@jev-cops/core";
 import type { Server } from "bun";
 import { VIEW_TOKEN_HEADER as DAEMON_VIEW_TOKEN_HEADER } from "../../../packages/daemon/src/holds.ts";
 import { createClient, TIMEOUT, VIEW_TOKEN_HEADER } from "./client.ts";

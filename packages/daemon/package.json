@@ -1,13 +1,13 @@
 {
-  "name": "@jevdict/daemon",
+  "name": "@jev-cops/daemon",
   "version": "0.0.0",
-  "description": "jevdictd: the Jevdict judging daemon (Unix socket + localhost HTTP, SQLite stores, JSONL audit chain)",
+  "description": "copsd: the jev-cops judging daemon (Unix socket + localhost HTTP, SQLite stores, JSONL audit chain)",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "bin": {
-    "jevdictd": "./src/main.ts"
+    "copsd": "./src/main.ts"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -17,9 +17,9 @@
     "src"
   ],
   "dependencies": {
-    "@jevdict/core": "workspace:*",
-    "@jevdict/judge": "workspace:*",
+    "@jev-cops/core": "workspace:*",
+    "@jev-cops/judge": "workspace:*",
     "zod": "^4.6.5",
-    "@jevdict/sdk": "workspace:*"
+    "@jev-cops/sdk": "workspace:*"
   }
 }

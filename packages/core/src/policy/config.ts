@@ -95,7 +95,7 @@ export const DEFAULT_POLICY_CONFIG: Readonly<PolicyConfig> = deepFreeze({
       budget: "The session's risk budget is exhausted; a human must review further actions.",
       missingRewrite: "A safer form of this action could not be produced; a human must review it.",
     },
-    annotateNote: "Jevdict flagged this action as moderately risky; stay within the task.",
+    annotateNote: "jev-cops flagged this action as moderately risky; stay within the task.",
     budgetNote: "Most of this session's risk budget is spent; further risky actions will be held.",
     maxReasonChars: 300,
     maxNoteChars: 1_000,

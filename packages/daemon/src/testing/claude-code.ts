@@ -4,7 +4,7 @@
  * `POST /v1/hooks/claude-code`.
  */
 
-/** Claude Code's own session id (a UUID); jevdict's is `sess_` + this. */
+/** Claude Code's own session id (a UUID); jev-cops's is `sess_` + this. */
 export const CLAUDE_SESSION = "0d8c3f5e-5a3b-4f0e-9d1c-2b7a6e4f9a10";
 
 type Json = Record<string, unknown>;

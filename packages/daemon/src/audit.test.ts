@@ -8,7 +8,7 @@ let dir: string;
 let path: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "jevdict-audit-"));
+  dir = mkdtempSync(join(tmpdir(), "jev-cops-audit-"));
   path = join(dir, "sub", "audit.jsonl");
 });
 

@@ -6,7 +6,7 @@
  * `claude-code/holds.test.ts`.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import type { VerdictResponse } from "@jevdict/core";
+import type { VerdictResponse } from "@jev-cops/core";
 import { buildEvent, type EventShape } from "../../../tests/fixtures/context/index.ts";
 import { startTestDaemon, type TestDaemon, withFreshId } from "./testing/daemon.ts";
 import { policyModule } from "./testing/policies.ts";

@@ -26,7 +26,7 @@ describe("remote parsing", () => {
 describe("RepoHintsCache", () => {
   let repo: string;
   beforeEach(() => {
-    repo = mkdtempSync(join(tmpdir(), "jevdict-repo-"));
+    repo = mkdtempSync(join(tmpdir(), "jev-cops-repo-"));
     mkdirSync(join(repo, ".git"));
     writeFileSync(
       join(repo, ".git", "config"),

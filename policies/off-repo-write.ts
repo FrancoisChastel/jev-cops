@@ -1,4 +1,4 @@
-import { definePolicy, type PolicyContext, type PolicyEvent } from "@jevdict/sdk";
+import { definePolicy, type PolicyContext, type PolicyEvent } from "@jev-cops/sdk";
 
 /**
  * off-repo-write (spec §Starter policy set): `fs.write` or `fs.delete` outside the repo

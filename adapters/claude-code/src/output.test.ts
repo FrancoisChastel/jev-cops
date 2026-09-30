@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Verdict } from "@jevdict/core";
+import type { Verdict } from "@jev-cops/core";
 import {
   type Audience,
   askText,
@@ -82,8 +82,10 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
     );
     if (blocked) {
       expect(decision).toBe("deny");
-      expect(out.stderr).toBe(`jevdict: policy says ${verdict}`);
-      expect(specific(out.stdout).permissionDecisionReason).toBe(`jevdict: policy says ${verdict}`);
+      expect(out.stderr).toBe(`jev-cops: policy says ${verdict}`);
+      expect(specific(out.stdout).permissionDecisionReason).toBe(
+        `jev-cops: policy says ${verdict}`,
+      );
     }
     const seenByModel = blocked ? `${out.stdout}${out.stderr}` : "";
     expect(seenByModel).not.toContain("HUMAN DETAIL");
@@ -97,7 +99,7 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
 
   test("a note on any verdict is additionalContext (observe mode's 'would have')", () => {
     const out = toHookOutput(
-      judged("allow", "jevdict would have: deny"),
+      judged("allow", "jev-cops would have: deny"),
       AUDIENCES[0] as Audience,
       null,
     );
@@ -106,7 +108,7 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
       stdout: JSON.stringify({
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
-          additionalContext: "jevdict: jevdict would have: deny",
+          additionalContext: "jev-cops: jev-cops would have: deny",
         },
       }),
       stderr: null,
@@ -122,7 +124,7 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
     expect(out.exitCode).toBe(0);
     expect(specific(out.stdout)).toEqual({
       hookEventName: "PreToolUse",
-      additionalContext: "jevdict: README is generated",
+      additionalContext: "jev-cops: README is generated",
     });
   });
 
@@ -183,10 +185,10 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: "jevdict: policy says deny",
+          permissionDecisionReason: "jev-cops: policy says deny",
         },
       }),
-      stderr: "jevdict: policy says deny",
+      stderr: "jev-cops: policy says deny",
     });
   });
 
@@ -195,11 +197,11 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
     expect(out.exitCode).toBe(2);
     expect(json(out.stdout)).toEqual({
       continue: false,
-      stopReason: "jevdict: policy says kill",
+      stopReason: "jev-cops: policy says kill",
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: "jevdict: policy says kill",
+        permissionDecisionReason: "jev-cops: policy says kill",
       },
     });
   });
@@ -208,13 +210,13 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
 describe("askText", () => {
   test("reason, the daemon's normalized command, then its detail", () => {
     expect(askText("Irreversible.", VIEW)).toBe(
-      "jevdict hold: Irreversible.\n\nCommand, as jevdict normalized it:\ngit push --force origin main\n\nHUMAN DETAIL: rewrites main",
+      "jev-cops hold: Irreversible.\n\nCommand, as jev-cops normalized it:\ngit push --force origin main\n\nHUMAN DETAIL: rewrites main",
     );
     expect(askText("Irreversible.", { raw: "ls", detail: null })).toBe(
-      "jevdict hold: Irreversible.\n\nCommand, as jevdict normalized it:\nls",
+      "jev-cops hold: Irreversible.\n\nCommand, as jev-cops normalized it:\nls",
     );
     expect(askText("Irreversible.", { raw: "ls", detail: "d", eventId: "evt_X" })).toBe(
-      "jevdict hold: Irreversible.\n\nCommand, as jevdict normalized it:\nls\n\nd\n\nFull decision: jevdict explain evt_X",
+      "jev-cops hold: Irreversible.\n\nCommand, as jev-cops normalized it:\nls\n\nd\n\nFull decision: cops explain evt_X",
     );
   });
 });
@@ -224,9 +226,9 @@ describe("other outputs", () => {
     expect(failOpen("judge unreachable (x); read-only Read allowed (fail open)")).toEqual({
       exitCode: 0,
       stdout: JSON.stringify({
-        systemMessage: "jevdict: judge unreachable (x); read-only Read allowed (fail open)",
+        systemMessage: "jev-cops: judge unreachable (x); read-only Read allowed (fail open)",
       }),
-      stderr: "jevdict: judge unreachable (x); read-only Read allowed (fail open)",
+      stderr: "jev-cops: judge unreachable (x); read-only Read allowed (fail open)",
     });
   });
 
@@ -234,14 +236,14 @@ describe("other outputs", () => {
     expect(failClosed("judge timeout; blocking (fail closed)")).toEqual({
       exitCode: 2,
       stdout: null,
-      stderr: "jevdict: judge timeout; blocking (fail closed)",
+      stderr: "jev-cops: judge timeout; blocking (fail closed)",
     });
   });
 
   test("warn: exit 0 with a systemMessage", () => {
     expect(warn("task not recorded")).toMatchObject({
       exitCode: 0,
-      stderr: "jevdict: task not recorded",
+      stderr: "jev-cops: task not recorded",
     });
   });
 
@@ -251,8 +253,8 @@ describe("other outputs", () => {
   ] as const)("block %s: exit 2 + decision block + stderr", (_name, block) => {
     expect(block("no")).toEqual({
       exitCode: 2,
-      stdout: JSON.stringify({ decision: "block", reason: "jevdict: no" }),
-      stderr: "jevdict: no",
+      stdout: JSON.stringify({ decision: "block", reason: "jev-cops: no" }),
+      stderr: "jev-cops: no",
     });
   });
 });

@@ -36,11 +36,11 @@ function fixtures(expected: string): string {
 
 let dir: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "jevdict-cli-test-"));
+  dir = mkdtempSync(join(tmpdir(), "jev-cops-cli-test-"));
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-describe("jevdict test", () => {
+describe("cops test", () => {
   test("the repo's policies are green (the M0 gate)", async () => {
     const io = captureIo();
     expect(await runTestCommand([REPO_POLICIES], io)).toBe(0);

@@ -1,8 +1,8 @@
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { loadPolicies, type PolicyDefinition } from "@jevdict/core";
-import { type CaseResult, type FixtureFile, loadFixtures, runFixtures } from "@jevdict/sdk";
+import { loadPolicies, type PolicyDefinition } from "@jev-cops/core";
+import { type CaseResult, type FixtureFile, loadFixtures, runFixtures } from "@jev-cops/sdk";
 import { EXIT, type Io } from "../io.ts";
 import { renderTable } from "../table.ts";
 
@@ -16,7 +16,7 @@ export interface FixtureRow {
   readonly failures: ReadonlyArray<{ mode: "alone" | "with set"; name: string; diff: string }>;
 }
 
-/** What `jevdict test` found; `ok` only when no row failed and nothing was a problem. */
+/** What `cops test` found; `ok` only when no row failed and nothing was a problem. */
 export interface TestReport {
   readonly dir: string;
   readonly policies: number;
@@ -58,7 +58,7 @@ async function fixtureFiles(dir: string): Promise<string[]> {
 }
 
 /**
- * The M0 gate (spec: "`jevdict test` fails the build on any mismatch"): loads `dir` the
+ * The M0 gate (spec: "`cops test` fails the build on any mismatch"): loads `dir` the
  * way the daemon does, runs every `*.fixtures.json` through the SDK runner against its
  * policy alone and against the whole set. Loader problems, fixtures for unknown policies
  * and policies without fixtures are failures too.
@@ -121,7 +121,7 @@ export function renderReport(report: TestReport): string[] {
   return [...table, "", ...failures, ...problems, `${summary} → ${report.ok ? "PASS" : "FAIL"}`];
 }
 
-/** `jevdict test [dir] [--json]`: exit 0 green, 1 on any mismatch or problem, 2 usage. */
+/** `cops test [dir] [--json]`: exit 0 green, 1 on any mismatch or problem, 2 usage. */
 export async function runTestCommand(argv: readonly string[], io: Io): Promise<number> {
   let parsed: { values: { json?: boolean }; positionals: string[] };
   try {
@@ -132,11 +132,11 @@ export async function runTestCommand(argv: readonly string[], io: Io): Promise<n
       strict: true,
     });
   } catch (cause) {
-    io.err(`jevdict test: ${(cause as Error).message}`);
+    io.err(`cops test: ${(cause as Error).message}`);
     return EXIT.usage;
   }
   if (parsed.positionals.length > 1) {
-    io.err("jevdict test: expected at most one directory");
+    io.err("cops test: expected at most one directory");
     return EXIT.usage;
   }
   const report = await testPolicies(resolve(parsed.positionals[0] ?? "policies"));

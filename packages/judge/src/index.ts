@@ -1,5 +1,5 @@
 /**
- * @jevdict/judge — real semantic-judge providers behind the core `Judge` interface
+ * @jev-cops/judge — real semantic-judge providers behind the core `Judge` interface
  * (D-004). `createJudge` picks one from config; every real provider is wrapped with the
  * core guards (question limit → cache → validation → timeout), so the floor, routing,
  * timeout and cache rules are identical whichever model answers.
@@ -10,7 +10,7 @@ import {
   createMockJudge,
   DEFAULT_JUDGE_CONFIG,
   type Judge,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { createJevJudge, JEV_API_KEY_ENV } from "./providers/jev.ts";
 import { createOpenRouterJudge, OPENROUTER_API_KEY_ENV } from "./providers/openrouter.ts";
 import { createVercelAiJudge } from "./providers/vercel-ai.ts";

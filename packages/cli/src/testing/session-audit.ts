@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Event } from "@jevdict/core";
+import type { Event } from "@jev-cops/core";
 import { buildEvent, type EventShape } from "../../../../tests/fixtures/context/index.ts";
 import {
   startTestDaemon,
@@ -11,7 +11,7 @@ import {
 import { sessionReport, TEST_SESSION } from "../../../daemon/src/testing/session.ts";
 
 /**
- * A Claude Code session as M1 logs it, recorded through a real jevdictd (enforce mode):
+ * A Claude Code session as M1 logs it, recorded through a real copsd (enforce mode):
  * `session` lines (start, the task-setting prompt, a later prompt, a subagent's start and
  * prompt, a blocked prompt, an unlatch, a config change, the end), calls that carry no
  * task, a `kill` that latches the session, latched judge lines for both latch causes.
@@ -141,7 +141,7 @@ export async function recordSessionAudit(
   const latchedByConfig = await judge(td, bash("ls -la"));
   await report(td, "end", { reason: "logout" });
   await td.daemon.stop();
-  const keep = mkdtempSync(join(tmpdir(), "jevdict-m1-audit-"));
+  const keep = mkdtempSync(join(tmpdir(), "jev-cops-m1-audit-"));
   const path = join(keep, "audit.jsonl");
   await Bun.write(path, Bun.file(td.config.audit.path));
   rmSync(td.dir, { recursive: true, force: true });

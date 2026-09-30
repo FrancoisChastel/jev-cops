@@ -1,5 +1,10 @@
 # Jevdict — Handoff Spec for Claude Code
 
+> **Renamed 2026-09-29: the project is now `jev-cops`** (binaries `cops`, `copsd`,
+> `cops-hook`; packages `@jev-cops/*`; wire schemas `jev-cops.*/1`). This spec is kept
+> verbatim as the original source of truth; see `docs/DECISIONS.md` D-088 for the full
+> name map.
+
 Sep 29, 2026 · @Francois
 
 ## Purpose and positioning

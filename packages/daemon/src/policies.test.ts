@@ -9,7 +9,7 @@ let dir: string;
 let set: PolicySet | null;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "jevdict-policies-"));
+  dir = mkdtempSync(join(tmpdir(), "jev-cops-policies-"));
   set = null;
 });
 

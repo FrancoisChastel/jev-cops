@@ -1,8 +1,8 @@
-import { definePolicy, type PolicyContext, type PolicyEvent } from "@jevdict/sdk";
+import { definePolicy, type PolicyContext, type PolicyEvent } from "@jev-cops/sdk";
 
 /**
  * config-tamper (spec §Starter policy set, T1; PLAN-M1 §4.5 as amended by §9): a call
- * that changes a harness's or jevdict's own configuration. Deterministic; asks nothing.
+ * that changes a harness's or jev-cops's own configuration. Deterministic; asks nothing.
  *
  * Tiers, matched case-insensitively on absolute paths (`~` is the daemon's home,
  * `ctx.config.home`; project-relative entries are checked under the cwd, the repo root
@@ -11,8 +11,8 @@ import { definePolicy, type PolicyContext, type PolicyEvent } from "@jevdict/sdk
  *   `settings.json`/`settings.local.json` (user and project), `~/.claude.json`, the
  *   managed-settings dirs, `hooks/`, `~/.claude/plugins/`; Codex `~/.codex/{config.toml,
  *   hooks.json,rules}` and a project's `.codex/`; OpenCode `plugin(s)/` dirs and
- *   `opencode.json[c]`; Pi `extensions/` and `settings.json`; jevdict's
- *   `~/.config/jevdict/`, `~/.jevdict/`, `.jevdict.toml`, and `ctx.config.protectedPaths`
+ *   `opencode.json[c]`; Pi `extensions/` and `settings.json`; jev-cops's
+ *   `~/.config/jev-cops/`, `~/.jev-cops/`, `.cops.toml`, and `ctx.config.protectedPaths`
  *   (the hook and daemon binaries, the daemon's policies dir);
  * - hold: instruction persistence and everything else under a harness config dir
  *   (`CLAUDE.md`/`AGENTS.md` there, `skills/`, `agents/`, `commands/`, `output-styles/`),
@@ -81,8 +81,8 @@ const TREES: readonly Tree[] = [
     rest: "hold",
     rules: { "agent/extensions": "kill", "agent/settings.json": "kill" },
   },
-  { anchor: "home", root: ".config/jevdict", rest: "kill" },
-  { anchor: "home", root: ".jevdict", rest: "kill" },
+  { anchor: "home", root: ".config/jev-cops", rest: "kill" },
+  { anchor: "home", root: ".jev-cops", rest: "kill" },
   {
     anchor: "project",
     root: ".claude",
@@ -104,7 +104,7 @@ const TREES: readonly Tree[] = [
     rest: "hold",
     rules: { extensions: "kill", "settings.json": "kill" },
   },
-  { anchor: "project", root: ".jevdict.toml", rest: "kill" },
+  { anchor: "project", root: ".cops.toml", rest: "kill" },
   { anchor: "project", root: ".mcp.json", rest: "hold" },
   { anchor: "absolute", root: "/library/application support/claudecode", rest: "kill" },
   { anchor: "absolute", root: "/etc/claude-code", rest: "kill" },
@@ -268,7 +268,7 @@ function top(e: PolicyEvent, ctx: PolicyContext): Finding {
 
 function reasonFor(f: Finding): string {
   if (f.tier === "annotate") {
-    return `Writing to ${f.target} changes data the harness manages; jevdict logged it.`;
+    return `Writing to ${f.target} changes data the harness manages; jev-cops logged it.`;
   }
   switch (f.how) {
     case "cli":
@@ -293,7 +293,7 @@ export default definePolicy({
   decide: (e, ctx) => top(e, ctx).tier,
   reason: (e, ctx) => reasonFor(top(e, ctx)),
   contextNote: (e, ctx) =>
-    `${top(e, ctx).target} is data the harness manages (memory, plans, todos); jevdict logged this write.`,
+    `${top(e, ctx).target} is data the harness manages (memory, plans, todos); jev-cops logged this write.`,
   detail: (e, ctx) =>
     findings(e, ctx)
       .map((f) => `${f.tier}: ${f.how} ${f.target}`)

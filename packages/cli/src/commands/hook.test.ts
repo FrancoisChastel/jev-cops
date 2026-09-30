@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HookPort } from "@jevdict/adapter-claude-code/process";
+import type { HookPort } from "@jev-cops/adapter-claude-code/process";
 import type { Server } from "bun";
 import { claudeCodePayloadText } from "../../../../tests/fixtures/claude-code/index.ts";
 import { captureIo } from "../io.ts";
@@ -42,7 +42,7 @@ function port(stdin: string) {
   return { p, rec };
 }
 
-describe("jevdict hook", () => {
+describe("cops hook", () => {
   test("--harness claude-code judges the stdin payload through the daemon", async () => {
     const socket = join(temp(), "d.sock");
     servers.push(
@@ -57,7 +57,7 @@ describe("jevdict hook", () => {
     const { p, rec } = port(claudeCodePayloadText("pre-tool-use.bash"));
     const argv = ["--harness", "claude-code", "--socket", socket];
     expect(await runHookCommand(argv, captureIo(), p)).toBe(2);
-    expect(rec.err).toBe("jevdict: no\n");
+    expect(rec.err).toBe("jev-cops: no\n");
     expect(rec.exits).toEqual([2]);
   });
 

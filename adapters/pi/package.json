@@ -1,17 +1,17 @@
 {
-  "name": "@jevdict/adapter-pi",
+  "name": "@jev-cops/adapter-pi",
   "version": "0.0.0",
-  "description": "Jevdict extension for the Pi coding agent: forwards tool calls to jevdictd and maps verdicts back",
+  "description": "jev-cops extension for the Pi coding agent: forwards tool calls to copsd and maps verdicts back",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "./jevdict.ts",
-  "types": "./jevdict.ts",
+  "main": "./jev-cops.ts",
+  "types": "./jev-cops.ts",
   "exports": {
-    ".": "./jevdict.ts",
+    ".": "./jev-cops.ts",
     "./install": "./install.ts"
   },
   "files": [
-    "jevdict.ts",
+    "jev-cops.ts",
     "install.ts",
     "README.md"
   ]

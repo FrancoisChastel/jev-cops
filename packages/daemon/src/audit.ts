@@ -10,7 +10,7 @@ import {
   writeSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import { canonicalJson, sha256Hex } from "@jevdict/core";
+import { canonicalJson, sha256Hex } from "@jev-cops/core";
 
 /** `prev` of the first line of a chain. */
 export const AUDIT_GENESIS = "0".repeat(64);

@@ -1,5 +1,5 @@
 /**
- * @jevdict/cli — `jevdict`: the human interface of M0 (spec: "no web UI; `jevdict
+ * @jev-cops/cli — `jev-cops`: the human interface of M0 (spec: "no web UI; `jev-cops
  * explain <event-id>` and the audit log are the interface"). `test` is the M0 gate.
  */
 export * from "./commands/budget.ts";

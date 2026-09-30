@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { JudgeState } from "@jevdict/core";
+import type { JudgeState } from "@jev-cops/core";
 import {
   ANSWER_SCHEMA_NAME,
   buildAnswerSchema,

@@ -5,7 +5,7 @@ import {
   type SessionEvent,
   sessionIdSchema,
   sha256Hex,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { z } from "zod";
 import type { Runtime } from "./daemon.ts";
 import type { Reply } from "./service.ts";
@@ -80,7 +80,7 @@ function onEnd(rt: Runtime, r: SessionEvent & { kind: "end" }, root: string): Pa
 }
 
 /**
- * A settings change whose file lost the intact jevdict hook block (D-077 proposal): an
+ * A settings change whose file lost the intact cops hook block (D-077 proposal): an
  * `anomaly` line, and in `enforce` mode the session is latched killed (plan §5 row 7).
  * `policy_settings` cannot be blocked by the harness: reported and audited only.
  */
@@ -143,7 +143,7 @@ export function handleUnlatch(rt: Runtime, body: unknown): Reply {
 }
 
 /**
- * `POST /v1/session` (agent surface, D-071 proposal): validates a `jevdict.session/1`
+ * `POST /v1/session` (agent surface, D-071 proposal): validates a `jev-cops.session/1`
  * report, caches its facts on the root session (harness, version, model, mode,
  * permission mode), applies its kind (task once, close, config-change latch), appends a
  * `session` audit line and answers `{ ok, task, killed }`. `killed` tells the harness hook

@@ -10,7 +10,7 @@ import {
   parseEvent,
   resolveContextConfig,
   resolvePolicyConfig,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   startTestDaemon,
   type TestDaemon,
@@ -22,7 +22,7 @@ import configTamper from "./config-tamper.ts";
 /**
  * What the fixtures cannot express: a human-granted precedent never lowers a
  * config-tamper kill (spec §Precedents, D-035), checked through the real engine, alone
- * and with the whole starter set; and, through a real jevdictd, observe mode turning the
+ * and with the whole starter set; and, through a real copsd, observe mode turning the
  * kill into an allow with the "would have" note, and `[policy] protectedPaths` reaching
  * the policy.
  */
@@ -31,7 +31,7 @@ const HOME = "/home/dev";
 
 function write(path: string): PreEvent {
   const parsed = parseEvent({
-    schema: "jevdict.event/1",
+    schema: "jev-cops.event/1",
     id: "evt_01M3PP8CTP0010000000000000",
     phase: "pre",
     harness: "claude-code",
@@ -85,7 +85,7 @@ describe("config-tamper and precedents (D-035)", () => {
   });
 });
 
-describe("config-tamper through jevdictd", () => {
+describe("config-tamper through copsd", () => {
   let td: TestDaemon | null = null;
   afterEach(async () => {
     await td?.stop();
@@ -113,14 +113,14 @@ describe("config-tamper through jevdictd", () => {
     );
   });
 
-  test("observe: the kill is returned as allow with what jevdict would have done", async () => {
+  test("observe: the kill is returned as allow with what jev-cops would have done", async () => {
     const body = await judge("observe", "/home/dev/.claude/settings.json");
     expect(body.verdict).toBe("allow");
-    expect(body.context_note).toStartWith("jevdict would have: kill");
+    expect(body.context_note).toStartWith("jev-cops would have: kill");
   });
 
   test("[policy] protectedPaths from the daemon config reaches the policy", async () => {
-    const body = await judge("enforce", "/home/dev/bin/jevdict-hook", ["~/bin/jevdict-hook"]);
+    const body = await judge("enforce", "/home/dev/bin/cops-hook", ["~/bin/cops-hook"]);
     expect(body.verdict).toBe("kill");
   });
 });

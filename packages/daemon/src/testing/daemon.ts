@@ -8,8 +8,8 @@ import {
   mergeConfig,
   mintEventId,
   type PolicyConfigInput,
-} from "@jevdict/core";
-import { registerSdkModule } from "@jevdict/sdk/register";
+} from "@jev-cops/core";
+import { registerSdkModule } from "@jev-cops/sdk/register";
 import { type AuditLine, readAudit } from "../audit.ts";
 import type { DaemonConfig, EnforcementMode, HttpBind } from "../config.ts";
 import type { GitRunner } from "../git-run.ts";
@@ -23,7 +23,7 @@ export interface TestDaemonOptions {
   /**
    * Copy the policies of this directory (e.g. the repo's `policies/`) instead; `policies`
    * is then ignored. The copy lives in the test daemon's own directory, with
-   * `@jevdict/sdk` registered as the binary does, so a test daemon never watches or
+   * `@jev-cops/sdk` registered as the binary does, so a test daemon never watches or
    * re-imports the source directory.
    */
   policiesDir?: string;
@@ -158,8 +158,8 @@ export async function startTestDaemon(opts: TestDaemonOptions): Promise<TestDaem
   const config = testConfig(dir, opts);
   const daemon = await startDaemon(config, {
     log: SILENT_LOGGER,
-    // As if loaded from `<dir>/jevdict.toml`; never the developer's own config file.
-    inputs: { configFiles: [join(dir, "jevdict.toml")], selfBinary: null },
+    // As if loaded from `<dir>/cops.toml`; never the developer's own config file.
+    inputs: { configFiles: [join(dir, "cops.toml")], selfBinary: null },
     ...(opts.judge === undefined ? {} : { judge: opts.judge }),
     ...(opts.now === undefined ? {} : { now: opts.now }),
     ...(opts.gitRunner === undefined ? {} : { gitRunner: opts.gitRunner }),

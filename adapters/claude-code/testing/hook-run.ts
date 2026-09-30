@@ -7,7 +7,7 @@
  *   ignored), otherwise plain text; JSON that does not parse is a non-blocking error;
  * - exit 2 blocks (the event's own meaning); any other code without valid JSON is a
  *   non-blocking error: the action proceeds.
- * Used by the fake runner (fake-claude.ts); it knows nothing about jevdict.
+ * Used by the fake runner (fake-claude.ts); it knows nothing about jev-cops.
  */
 import { join } from "node:path";
 

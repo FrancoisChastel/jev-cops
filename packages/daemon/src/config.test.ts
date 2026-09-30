@@ -9,10 +9,10 @@ let home: string;
 let cwd: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "jevdict-config-"));
+  root = mkdtempSync(join(tmpdir(), "jev-cops-config-"));
   home = join(root, "home");
   cwd = join(root, "repo");
-  mkdirSync(join(home, ".config", "jevdict"), { recursive: true });
+  mkdirSync(join(home, ".config", "jev-cops"), { recursive: true });
   mkdirSync(cwd, { recursive: true });
 });
 
@@ -25,20 +25,20 @@ function write(path: string, text: string): string {
   return path;
 }
 
-const userFile = () => join(home, ".config", "jevdict", "jevdict.toml");
+const userFile = () => join(home, ".config", "jev-cops", "cops.toml");
 const load = (opts: { configPath?: string; env?: Record<string, string> } = {}) =>
   loadConfig({ home, cwd, env: opts.env ?? {}, ...opts });
 
 describe("defaults", () => {
-  test("observe by default, judge off, HTTP off, paths under ~/.jevdict", () => {
+  test("observe by default, judge off, HTTP off, paths under ~/.jev-cops", () => {
     const { config, sources, rejected } = load();
     expect(sources).toEqual([]);
     expect(rejected).toEqual([]);
     expect(config.enforcement.mode).toBe("observe");
     expect(config.judge).toMatchObject({ provider: "off", timeoutMs: 10_000, cacheTtlMs: 600_000 });
     expect(config.daemon).toMatchObject({
-      socket: join(home, ".jevdict", "jevdictd.sock"),
-      adminSocket: join(home, ".jevdict", "jevdictd-admin.sock"),
+      socket: join(home, ".jev-cops", "copsd.sock"),
+      adminSocket: join(home, ".jev-cops", "copsd-admin.sock"),
       http: null,
       home,
       judgeDeadlineMs: 12_000,
@@ -46,8 +46,8 @@ describe("defaults", () => {
       gitProbeTimeoutMs: 300,
       hookBinary: null,
     });
-    expect(config.audit).toEqual({ path: join(home, ".jevdict", "audit.jsonl"), forward: null });
-    expect(config.store.path).toBe(join(home, ".jevdict", "jevdict.sqlite"));
+    expect(config.audit).toEqual({ path: join(home, ".jev-cops", "audit.jsonl"), forward: null });
+    expect(config.store.path).toBe(join(home, ".jev-cops", "cops.sqlite"));
     expect(config.policies.dir).toBe(join(cwd, "policies"));
   });
 
@@ -57,36 +57,36 @@ describe("defaults", () => {
   });
 });
 
-describe("precedence: --config > $JEVDICT_CONFIG > ./.jevdict.toml > user config", () => {
+describe("precedence: --config > $JEV_COPS_CONFIG > ./.cops.toml > user config", () => {
   test("user config applies, paths resolve against its directory", () => {
     write(userFile(), '[judge]\nprovider = "jev"\n[policies]\ndir = "pol"\n');
     const { config, sources } = load();
     expect(sources).toEqual([userFile()]);
     expect(config.judge.provider).toBe("jev");
-    expect(config.policies.dir).toBe(join(home, ".config", "jevdict", "pol"));
+    expect(config.policies.dir).toBe(join(home, ".config", "jev-cops", "pol"));
   });
 
-  test("$JEVDICT_CONFIG overrides the user config", () => {
+  test("$JEV_COPS_CONFIG overrides the user config", () => {
     write(userFile(), '[judge]\nprovider = "jev"\n');
     const envFile = write(join(root, "env.toml"), '[judge]\nprovider = "mock"\n');
-    const { config, sources } = load({ env: { JEVDICT_CONFIG: envFile } });
+    const { config, sources } = load({ env: { JEV_COPS_CONFIG: envFile } });
     expect(config.judge.provider).toBe("mock");
     expect(sources).toEqual([userFile(), envFile]);
   });
 
-  test("--config overrides $JEVDICT_CONFIG", () => {
+  test("--config overrides $JEV_COPS_CONFIG", () => {
     const envFile = write(join(root, "env.toml"), '[enforcement]\nmode = "enforce"\n');
     const flagFile = write(join(root, "flag.toml"), '[enforcement]\nmode = "observe"\n');
-    const { config } = load({ env: { JEVDICT_CONFIG: envFile }, configPath: flagFile });
+    const { config } = load({ env: { JEV_COPS_CONFIG: envFile }, configPath: flagFile });
     expect(config.enforcement.mode).toBe("observe");
   });
 
-  test("the repo override sits between the user file and $JEVDICT_CONFIG", () => {
+  test("the repo override sits between the user file and $JEV_COPS_CONFIG", () => {
     write(userFile(), "[context.budget]\nlimit = 100\n");
-    write(join(cwd, ".jevdict.toml"), "[context.budget]\nlimit = 50\n");
+    write(join(cwd, ".cops.toml"), "[context.budget]\nlimit = 50\n");
     expect(load().config.context).toEqual({ budget: { limit: 50 } });
     const envFile = write(join(root, "env.toml"), "[context.budget]\nlimit = 200\n");
-    expect(load({ env: { JEVDICT_CONFIG: envFile } }).config.context).toEqual({
+    expect(load({ env: { JEV_COPS_CONFIG: envFile } }).config.context).toEqual({
       budget: { limit: 200 },
     });
   });
@@ -99,19 +99,19 @@ describe("precedence: --config > $JEVDICT_CONFIG > ./.jevdict.toml > user config
 describe("repo override can only tighten", () => {
   test("enforce → observe from the repo is rejected and reported", () => {
     write(userFile(), '[enforcement]\nmode = "enforce"\n');
-    write(join(cwd, ".jevdict.toml"), '[enforcement]\nmode = "observe"\n');
+    write(join(cwd, ".cops.toml"), '[enforcement]\nmode = "observe"\n');
     const { config, rejected } = load();
     expect(config.enforcement.mode).toBe("enforce");
     expect(rejected).toEqual([expect.stringContaining("enforcement.mode")]);
   });
 
   test("observe → enforce from the repo is accepted", () => {
-    write(join(cwd, ".jevdict.toml"), '[enforcement]\nmode = "enforce"\n');
+    write(join(cwd, ".cops.toml"), '[enforcement]\nmode = "enforce"\n');
     expect(load().config.enforcement.mode).toBe("enforce");
   });
 
   test("changing the judge provider or model from the repo is rejected", () => {
-    write(join(cwd, ".jevdict.toml"), '[judge]\nprovider = "mock"\nmodel = "x/y"\n');
+    write(join(cwd, ".cops.toml"), '[judge]\nprovider = "mock"\nmodel = "x/y"\n');
     const { config, rejected } = load();
     expect(config.judge.provider).toBe("off");
     expect(config.judge.model).toBeNull();
@@ -120,18 +120,18 @@ describe("repo override can only tighten", () => {
 
   test("redirecting the audit log, store, socket or policies from the repo is rejected", () => {
     write(
-      join(cwd, ".jevdict.toml"),
+      join(cwd, ".cops.toml"),
       '[audit]\npath = "/tmp/x"\n[store]\npath = "/tmp/y"\n[policies]\ndir = "mine"\n',
     );
     const { config, rejected } = load();
-    expect(config.audit.path).toBe(join(home, ".jevdict", "audit.jsonl"));
+    expect(config.audit.path).toBe(join(home, ".jev-cops", "audit.jsonl"));
     expect(config.policies.dir).toBe(join(cwd, "policies"));
     expect(rejected).toHaveLength(3);
   });
 
   test("loosening a band or the budget is rejected, tightening is kept", () => {
     write(
-      join(cwd, ".jevdict.toml"),
+      join(cwd, ".cops.toml"),
       "[policy.bands]\nhold = 0.4\ndeny = 0.9\n[context.budget]\nlimit = 500\n",
     );
     const { config, rejected } = load();
@@ -148,7 +148,7 @@ describe("repo override can only tighten", () => {
       '[daemon]\nsocket = "/run/j/agent.sock"\nadmin_socket = "/run/j/admin.sock"\n',
     );
     write(
-      join(cwd, ".jevdict.toml"),
+      join(cwd, ".cops.toml"),
       '[daemon]\nsocket = "/tmp/mine.sock"\nadmin_socket = "/tmp/admin.sock"\n',
     );
     const { config, rejected } = load();
@@ -169,7 +169,7 @@ describe("repo override can only tighten", () => {
 
   test("a longer hold token life from the repo is rejected; the user file may set it", () => {
     write(userFile(), "[daemon]\nhold_token_ttl_ms = 120000\n");
-    write(join(cwd, ".jevdict.toml"), "[daemon]\nhold_token_ttl_ms = 86400000\n");
+    write(join(cwd, ".cops.toml"), "[daemon]\nhold_token_ttl_ms = 86400000\n");
     const { config, rejected } = load();
     expect(config.daemon.holdTokenTtlMs).toBe(120_000);
     expect(rejected).toEqual([expect.stringContaining("daemon.hold_token_ttl_ms")]);
@@ -177,21 +177,21 @@ describe("repo override can only tighten", () => {
 
   test("the git probe budget cannot be changed from the repo; the user file may set it", () => {
     write(userFile(), "[daemon]\ngit_probe_timeout_ms = 500\n");
-    write(join(cwd, ".jevdict.toml"), "[daemon]\ngit_probe_timeout_ms = 1\n");
+    write(join(cwd, ".cops.toml"), "[daemon]\ngit_probe_timeout_ms = 1\n");
     const { config, rejected } = load();
     expect(config.daemon.gitProbeTimeoutMs).toBe(500);
     expect(rejected).toEqual([expect.stringContaining("daemon.git_probe_timeout_ms")]);
   });
 
   test("a repo value equal to the base is not a change", () => {
-    write(join(cwd, ".jevdict.toml"), '[judge]\nprovider = "off"\n');
+    write(join(cwd, ".cops.toml"), '[judge]\nprovider = "off"\n');
     expect(load().rejected).toEqual([]);
   });
 
   test("protectedPaths and the hook binary cannot be changed from the repo", () => {
     write(userFile(), '[policy]\nprotectedPaths = ["~/bin/tool"]\n');
     write(
-      join(cwd, ".jevdict.toml"),
+      join(cwd, ".cops.toml"),
       '[daemon]\nhook_binary = "/tmp/fake-hook"\n[policy]\nprotectedPaths = []\n',
     );
     const { config, rejected } = load();
@@ -207,22 +207,22 @@ describe("repo override can only tighten", () => {
 describe("[daemon] hook_binary and the config files the daemon trusts", () => {
   test("hook_binary defaults to none and expands ~ when set", () => {
     expect(load().config.daemon.hookBinary).toBeNull();
-    write(userFile(), '[daemon]\nhook_binary = "~/bin/jevdict-hook"\n');
-    expect(load().config.daemon.hookBinary).toBe(join(home, "bin", "jevdict-hook"));
+    write(userFile(), '[daemon]\nhook_binary = "~/bin/cops-hook"\n');
+    expect(load().config.daemon.hookBinary).toBe(join(home, "bin", "cops-hook"));
   });
 
-  test("inputs: the user file even when absent, then $JEVDICT_CONFIG and --config", () => {
+  test("inputs: the user file even when absent, then $JEV_COPS_CONFIG and --config", () => {
     expect(load().inputs).toEqual([userFile()]);
     const envFile = write(join(root, "env.toml"), "");
     const flagFile = write(join(root, "flag.toml"), "");
-    const both = load({ env: { JEVDICT_CONFIG: envFile }, configPath: flagFile });
+    const both = load({ env: { JEV_COPS_CONFIG: envFile }, configPath: flagFile });
     expect(both.inputs).toEqual([userFile(), envFile, flagFile]);
   });
 
   test("inputs are absolute; the repo override is not one (config-tamper covers it)", () => {
-    write(join(cwd, ".jevdict.toml"), '[enforcement]\nmode = "enforce"\n');
-    const { inputs } = load({ env: { JEVDICT_CONFIG: "not-yet/jevdict.toml" } });
-    expect(inputs).toEqual([userFile(), resolve("not-yet/jevdict.toml")]);
+    write(join(cwd, ".cops.toml"), '[enforcement]\nmode = "enforce"\n');
+    const { inputs } = load({ env: { JEV_COPS_CONFIG: "not-yet/cops.toml" } });
+    expect(inputs).toEqual([userFile(), resolve("not-yet/cops.toml")]);
   });
 });
 

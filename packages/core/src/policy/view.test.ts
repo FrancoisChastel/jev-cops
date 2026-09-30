@@ -166,13 +166,13 @@ describe("buildPolicyContext", () => {
   });
 
   test("config: the daemon's home and the protected paths, ~ expanded, frozen", async () => {
-    const paths = ["~/bin/jevdict-hook", "$HOME/.local/bin/jevdictd", "/opt/j/", "policies", ""];
+    const paths = ["~/bin/cops-hook", "$HOME/.local/bin/copsd", "/opt/j/", "policies", ""];
     const ctx = contextFor(await bashPre("ls"), session(), paths);
     expect(ctx.config).toEqual({
       home: CTX_HOME,
       protectedPaths: [
-        `${CTX_HOME}/bin/jevdict-hook`,
-        `${CTX_HOME}/.local/bin/jevdictd`,
+        `${CTX_HOME}/bin/cops-hook`,
+        `${CTX_HOME}/.local/bin/copsd`,
         "/opt/j",
         "policies",
       ],

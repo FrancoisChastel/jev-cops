@@ -1,5 +1,5 @@
 /**
- * `POST /v1/session` (`jevdict.session/1`): the task is pinned once from the first
+ * `POST /v1/session` (`jev-cops.session/1`): the task is pinned once from the first
  * prompt (T11), start facts are cached for later events, `end` closes the session, and a
  * config change that breaks the hook block latches the session killed (T1).
  */

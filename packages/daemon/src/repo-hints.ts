@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Event, RepoHints } from "@jevdict/core";
+import type { Event, RepoHints } from "@jev-cops/core";
 
 const TTL_MS = 60_000;
 

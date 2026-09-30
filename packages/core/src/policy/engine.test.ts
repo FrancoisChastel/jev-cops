@@ -300,7 +300,7 @@ describe("createPolicyEngine: end to end over fixtures", () => {
     };
     const policyConfig = resolvePolicyConfig({
       when: { budgetMs: 1_000 },
-      protectedPaths: ["~/bin/jevdict-hook"],
+      protectedPaths: ["~/bin/cops-hook"],
     });
     const engine = createPolicyEngine({
       policies: [probe],
@@ -313,9 +313,7 @@ describe("createPolicyEngine: end to end over fixtures", () => {
     await engine.judge(pre("ls"), session(testClock()), { home: "/home/other" });
 
     // Assert
-    expect(seen).toEqual([
-      { home: "/home/other", protectedPaths: ["/home/other/bin/jevdict-hook"] },
-    ]);
+    expect(seen).toEqual([{ home: "/home/other", protectedPaths: ["/home/other/bin/cops-hook"] }]);
   });
 
   test("holdKey groups calls by kind and verbs, not by arguments (T7)", async () => {

@@ -5,12 +5,12 @@ import {
   SESSION_MODES,
   type SessionEvent,
   type SessionMode,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 
 /**
  * Why no human can answer a `hold` in a session, so it must become `deny` (D-008):
  * the session runs headless, or its harness permission mode never prompts
- * (`dontAsk`, `bypassPermissions`, or a mode jevdict does not know).
+ * (`dontAsk`, `bypassPermissions`, or a mode jev-cops does not know).
  */
 export type NoHumanReason = "headless" | "permission-mode";
 

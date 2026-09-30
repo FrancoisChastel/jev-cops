@@ -1,10 +1,10 @@
 /**
- * @jevdict/daemon — `jevdictd`: the one process that judges (spec §Architecture). Unix
+ * @jev-cops/daemon — `copsd`: the one process that judges (spec §Architecture). Unix
  * socket plus optional loopback HTTP, SQLite case files and precedents, the hash-chained
  * JSONL audit log, hot-reloaded policies, and the configured semantic judge.
  *
- * The Claude Code post-event mapper has its own entry, `@jevdict/daemon/claude-code/post`,
- * with no runtime dependency on `@jevdict/core`, so the hook binary can bundle it.
+ * The Claude Code post-event mapper has its own entry, `@jev-cops/daemon/claude-code/post`,
+ * with no runtime dependency on `@jev-cops/core`, so the hook binary can bundle it.
  */
 export * from "./audit.ts";
 export * from "./audit-payload.ts";

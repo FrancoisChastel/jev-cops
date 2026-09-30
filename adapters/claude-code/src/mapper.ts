@@ -1,14 +1,18 @@
 /**
- * Claude Code hook inputs → canonical jevdict messages: `jevdict.event/1` pre and post
- * events and `jevdict.session/1` reports. Translation only (D-054): `tool_input` is sent
+ * Claude Code hook inputs → canonical jev-cops messages: `jev-cops.event/1` pre and post
+ * events and `jev-cops.session/1` reports. Translation only (D-054): `tool_input` is sent
  * verbatim and by reference, the tool name as Claude Code spells it (core maps names), no
  * `env` (the daemon derives `env.git` from the cwd, D-067) and no `task` (the daemon pins it
  * from the first prompt, D-075). Post events reuse the daemon's mapper, so the command hook
  * and the HTTP post route build the same event.
  */
-import type { PostEvent, PreEvent, SessionEvent, SessionMode } from "@jevdict/core";
-import { mintEventId } from "@jevdict/core/schema";
-import { kindOf, toPostEvent as postEventOf, sessionIdsOf } from "@jevdict/daemon/claude-code/post";
+import type { PostEvent, PreEvent, SessionEvent, SessionMode } from "@jev-cops/core";
+import { mintEventId } from "@jev-cops/core/schema";
+import {
+  kindOf,
+  toPostEvent as postEventOf,
+  sessionIdsOf,
+} from "@jev-cops/daemon/claude-code/post";
 import type { ClaudeCodePostInput, PreToolUseInput, SessionInput } from "./payload.ts";
 
 /** What the hook knows beyond the payload. */
@@ -40,7 +44,7 @@ function actorOf(agentId: string | undefined): PreEvent["actor"] {
  */
 export function toPreEvent(i: PreToolUseInput, ctx: MapContext): PreEvent {
   return {
-    schema: "jevdict.event/1",
+    schema: "jev-cops.event/1",
     id: mintEventId(),
     phase: "pre",
     harness: "claude-code",
@@ -96,7 +100,7 @@ function kindFields(i: SessionInput, intact: boolean) {
 }
 
 /**
- * The `jevdict.session/1` report of a session event: `SessionStart` → `start` (model,
+ * The `jev-cops.session/1` report of a session event: `SessionStart` → `start` (model,
  * source), `UserPromptSubmit` → `prompt` (the first one pins the task, T11), `SessionEnd` →
  * `end`, `ConfigChange` → `config-change` with `intact` (the hook's check, see intact.ts).
  * Every report carries the session mode, cwd and permission mode, so the daemon's facts
@@ -104,7 +108,7 @@ function kindFields(i: SessionInput, intact: boolean) {
  */
 export function sessionReportOf(i: SessionInput, ctx: MapContext, intact = true): SessionEvent {
   return {
-    schema: "jevdict.session/1",
+    schema: "jev-cops.session/1",
     id: mintEventId(),
     harness: "claude-code",
     ...versionOf(ctx),

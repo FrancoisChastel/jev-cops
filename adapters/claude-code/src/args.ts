@@ -1,14 +1,14 @@
 /**
  * The hook's command line: `--harness claude-code [--socket path]`, as the settings entry
  * passes it in exec form (plan §2 row 21: the socket is an argument, never an environment
- * variable). The same parser serves the compiled `jevdict-hook`, `jevdict hook` and the
- * ConfigChange check that the registered entry is still jevdict's (intact.ts).
+ * variable). The same parser serves the compiled `cops-hook`, `cops hook` and the
+ * ConfigChange check that the registered entry is still jev-cops's (intact.ts).
  */
 import { isAbsolute, join } from "node:path";
 import { parseArgs } from "node:util";
 
 /** The daemon's default agent socket, relative to the home directory. */
-export const DEFAULT_SOCKET_RELATIVE = ".jevdict/jevdictd.sock";
+export const DEFAULT_SOCKET_RELATIVE = ".jev-cops/copsd.sock";
 
 /** Parsed hook arguments, or why they are refused. */
 export type HookArgs =
@@ -24,7 +24,7 @@ function harnessError(harness: string | undefined): string | null {
 }
 
 /**
- * Parses the hook's arguments. The socket defaults to `~/.jevdict/jevdictd.sock` under
+ * Parses the hook's arguments. The socket defaults to `~/.jev-cops/copsd.sock` under
  * `home`; an explicit one must be absolute. Unknown options and positionals are refused, so
  * a mistyped entry fails closed instead of talking to the wrong daemon.
  */

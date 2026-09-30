@@ -1,10 +1,10 @@
-# @jevdict/sdk — policy author guide
+# @jev-cops/sdk — policy author guide
 
 A policy is one file `policies/<name>.ts` whose default export is `definePolicy({...})`, next
-to a `policies/<name>.fixtures.json`. Import only from `@jevdict/sdk`.
+to a `policies/<name>.fixtures.json`. Import only from `@jev-cops/sdk`.
 
 ```ts
-import { definePolicy, jev } from "@jevdict/sdk";
+import { definePolicy, jev } from "@jev-cops/sdk";
 export default definePolicy({
   name: "exfil-after-secrets", version: 3, owner: "cyber-team", range: ["annotate", "kill"],
   when: (e, ctx) => e.call.kind === "net" && ctx.sequence.secretReadWithin("2m") && !ctx.scope.hostAllowed(e.net.host),
@@ -41,6 +41,6 @@ to the agent; `detail` only to the human. `definePolicy` throws at import on a m
 `FIXTURE_EPOCH` and stepping `stepMs` (default 1 s) per event, and `home` = `/home/dev`.
 
 **Run.** `bun test policies/` runs every fixture alone and with the whole starter set
-(`policies/policies.test.ts` uses `describeFixtures` from `@jevdict/sdk/test`). From code:
+(`policies/policies.test.ts` uses `describeFixtures` from `@jev-cops/sdk/test`). From code:
 `await runFixtures(policy, "policies/x.fixtures.json", { policies })` → `{ passed, failed,
 results }`, each failure with a `diff` and the engine's full `detail`.

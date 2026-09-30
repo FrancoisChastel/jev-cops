@@ -1,9 +1,9 @@
-import type { AuditLine } from "@jevdict/daemon";
+import type { AuditLine } from "@jev-cops/daemon";
 import { z } from "zod";
 import { eventSessionOf, type LatchedPayload, sessionTaskOf } from "../audit-session.ts";
 
 /**
- * The M1 parts of `jevdict explain`: the session's task (an event may carry none: Claude
+ * The M1 parts of `cops explain`: the session's task (an event may carry none: Claude
  * Code reports the task in a `session` prompt line), and judge lines the kill latch
  * answered, which are state, not a policy decision.
  */
@@ -47,14 +47,14 @@ function callLine(event: unknown): string {
 /** What latched the session: the kill of a judged call, or a settings change. */
 function latchOrigin(l: LatchedPayload["latched"], lines: readonly AuditLine[]): string {
   if (l.cause === "kill") {
-    return `latched by the kill of ${l.event_id}: jevdict explain ${l.event_id} shows why`;
+    return `latched by the kill of ${l.event_id}: cops explain ${l.event_id} shows why`;
   }
   if (l.cause !== "config-change") return `latched by ${l.event_id} (cause ${l.cause})`;
   const report = lines.find((x) => x.kind === "session" && x.event_id === l.event_id);
   const source = report?.payload.source;
   const file = report?.payload.file_path;
   const where = [source, file].filter((v): v is string => typeof v === "string").join(" ");
-  return `latched by a config change: ${where || "unknown settings"} lost the jevdict hook block`;
+  return `latched by a config change: ${where || "unknown settings"} lost the cops hook block`;
 }
 
 /** `related: …` for every other line naming the event (a latch, a grant, an anomaly). */
@@ -79,7 +79,7 @@ export function renderLatched(
   const l = p.latched;
   return [
     `event ${line.event_id ?? "?"} · session ${line.session_id ?? "?"} · ${iso(line.at)} · audit seq ${line.seq}`,
-    `session terminated by jevdict (latched since ${l.event_id}, cause ${l.cause})`,
+    `session terminated by jev-cops (latched since ${l.event_id}, cause ${l.cause})`,
     `returned to the harness: ${p.returned.verdict} (${p.mapping.join(", ")}; enforcement ${p.enforcement})`,
     `no policy ran: root session ${l.root} has been latched killed since ${iso(l.at)}`,
     latchOrigin(l, lines),

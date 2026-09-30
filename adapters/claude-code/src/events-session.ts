@@ -9,7 +9,7 @@
  *   blocked unless intact, and when the daemon cannot be told (T1, D-077). `policy_settings`
  *   cannot be blocked: reported only.
  */
-import { REPORT_ONLY_CONFIG_SOURCES } from "@jevdict/core/schema";
+import { REPORT_ONLY_CONFIG_SOURCES } from "@jev-cops/core/schema";
 import type { HookDeps } from "./deps.ts";
 import { causeOf, sessionOf } from "./events-pre.ts";
 import { type MapContext, sessionReportOf, toPostEvent } from "./mapper.ts";
@@ -24,7 +24,7 @@ import type {
 } from "./payload.ts";
 
 /** What the user sees on a prompt of a killed session (the daemon's latch reason). */
-export const KILLED_PROMPT = "session terminated by jevdict; start a new session";
+export const KILLED_PROMPT = "session terminated by jev-cops; start a new session";
 const REPORT_ONLY: ReadonlySet<string> = new Set(REPORT_ONLY_CONFIG_SOURCES);
 
 function contextOf(deps: HookDeps): MapContext {
@@ -84,7 +84,7 @@ export async function onSessionEnd(i: SessionEndInput, deps: HookDeps): Promise<
   return failed === null ? PROCEED : quiet(logged(deps, i, `${failed}; session end not reported`));
 }
 
-/** Checks, reports and, unless the jevdict hook is still intact and reported, blocks a settings change. */
+/** Checks, reports and, unless the cops hook is still intact and reported, blocks a settings change. */
 export async function onConfigChange(i: ConfigChangeInput, deps: HookDeps): Promise<HookOutput> {
   const check = deps.configCheck(i);
   const { failed } = await report(i, deps, check.intact);

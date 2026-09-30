@@ -12,7 +12,7 @@ import {
   type ScoreQuestion,
   scoreLevel,
   validateAnswers,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 
 /**
  * How far a provider's probabilities may sum from 1 and still be rescaled. Past this

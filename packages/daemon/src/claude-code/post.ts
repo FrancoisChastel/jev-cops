@@ -1,13 +1,13 @@
 /**
- * Claude Code post-tool hook payloads → canonical `jevdict.event/1` post events.
+ * Claude Code post-tool hook payloads → canonical `jev-cops.event/1` post events.
  *
  * Shared by the daemon's `POST /v1/hooks/claude-code` (post events over HTTP, D-066
  * proposal) and, later, the command hook's mapper. It has no runtime dependency on
- * `@jevdict/core` (type imports only), so the lean hook binary can bundle it (D-079
+ * `@jev-cops/core` (type imports only), so the lean hook binary can bundle it (D-079
  * proposal): the event id is minted by the caller and passed in.
  */
 import { createHash } from "node:crypto";
-import type { CallKind, CallResult, PostEvent, SessionMode } from "@jevdict/core";
+import type { CallKind, CallResult, PostEvent, SessionMode } from "@jev-cops/core";
 import { z } from "zod";
 
 /** Why the daemon refuses `PreToolUse` over HTTP (plan §2 row 1, §5 row 6). */
@@ -49,7 +49,7 @@ export const hookIdSchema = idPart;
 const toolInput = z.custom<Record<string, unknown>>(isRecord, { error: "expected a JSON object" });
 
 /**
- * The fields jevdict reads from every tool hook input (hooks#common-input-fields). Keys
+ * The fields jev-cops reads from every tool hook input (hooks#common-input-fields). Keys
  * Claude Code adds later are dropped, not refused: a post event lost to a new field would
  * silently lose its taint (T10).
  */
@@ -214,7 +214,7 @@ export interface PostMapContext {
 export function toPostEvent(i: ClaudeCodePostInput, ctx: PostMapContext): PostEvent {
   const ids = sessionIdsOf(i.session_id, i.agent_id);
   return {
-    schema: "jevdict.event/1",
+    schema: "jev-cops.event/1",
     id: ctx.eventId,
     phase: "post",
     harness: "claude-code",

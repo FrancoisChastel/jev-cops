@@ -4,7 +4,7 @@ import { type SchemaError, safeParse } from "./errors.ts";
 import { callIdSchema, eventIdSchema, sessionIdSchema } from "./ids.ts";
 
 /** Version tag every canonical event carries; any other value is rejected. */
-export const EVENT_SCHEMA = "jevdict.event/1";
+export const EVENT_SCHEMA = "jev-cops.event/1";
 
 export const PHASES = ["pre", "post"] as const;
 export const HARNESSES = ["claude-code", "codex", "opencode", "pi"] as const;
@@ -120,7 +120,7 @@ export const postEventSchema = z.strictObject({
 });
 
 /**
- * Canonical `jevdict.event/1`, the only shape the daemon accepts. Every object is
+ * Canonical `jev-cops.event/1`, the only shape the daemon accepts. Every object is
  * strict: an unknown key anywhere except inside `call.input` rejects the event.
  */
 export const eventSchema = z.discriminatedUnion("phase", [preEventSchema, postEventSchema]);

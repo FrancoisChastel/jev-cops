@@ -19,7 +19,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { register } from "../../adapters/pi/jevdict.ts";
+import { register } from "../../adapters/pi/jev-cops.ts";
 import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { makeRepo } from "../../packages/daemon/src/testing/git.ts";

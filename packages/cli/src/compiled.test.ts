@@ -12,7 +12,7 @@ const REPO = join(import.meta.dir, "..", "..", "..");
 let dir: string;
 
 beforeAll(async () => {
-  dir = mkdtempSync(join(tmpdir(), "jevdict-bin-"));
+  dir = mkdtempSync(join(tmpdir(), "jev-cops-bin-"));
   cpSync(join(REPO, "policies"), join(dir, "policies"), {
     recursive: true,
     filter: (src) => !src.endsWith(".test.ts"),
@@ -24,7 +24,7 @@ beforeAll(async () => {
       "--compile",
       join(REPO, "packages/cli/src/main.ts"),
       "--outfile",
-      join(dir, "jevdict"),
+      join(dir, "cops"),
     ],
     { stdout: "pipe", stderr: "pipe" },
   );
@@ -33,8 +33,8 @@ beforeAll(async () => {
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-describe("compiled jevdict", () => {
-  test("hook --harness claude-code judges stdin through the daemon, like dist/jevdict-hook", async () => {
+describe("compiled jev-cops", () => {
+  test("hook --harness claude-code judges stdin through the daemon, like dist/cops-hook", async () => {
     const socket = join(dir, "d.sock");
     const server = Bun.serve({
       unix: socket,
@@ -46,7 +46,7 @@ describe("compiled jevdict", () => {
     try {
       const payload = readFileSync(join(REPO, "tests/fixtures/claude-code/pre-tool-use.bash.json"));
       const run = Bun.spawn(
-        [join(dir, "jevdict"), "hook", "--harness", "claude-code", "--socket", socket],
+        [join(dir, "cops"), "hook", "--harness", "claude-code", "--socket", socket],
         {
           env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: dir },
           stdin: payload,
@@ -56,16 +56,19 @@ describe("compiled jevdict", () => {
       );
       expect(await run.exited).toBe(2);
       expect(JSON.parse(await new Response(run.stdout).text())).toMatchObject({
-        hookSpecificOutput: { permissionDecision: "deny", permissionDecisionReason: "jevdict: no" },
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: "jev-cops: no",
+        },
       });
-      expect(await new Response(run.stderr).text()).toBe("jevdict: no\n");
+      expect(await new Response(run.stderr).text()).toBe("jev-cops: no\n");
     } finally {
       server.stop(true);
     }
   }, 30_000);
 
   test("runs the starter fixtures outside the repo", async () => {
-    const run = Bun.spawn([join(dir, "jevdict"), "test", "policies"], { cwd: dir, stdout: "pipe" });
+    const run = Bun.spawn([join(dir, "cops"), "test", "policies"], { cwd: dir, stdout: "pipe" });
     const out = await new Response(run.stdout).text();
     expect(await run.exited).toBe(0);
     expect(out).toContain("0 failed · 0 problems → PASS");

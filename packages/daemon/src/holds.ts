@@ -1,4 +1,4 @@
-import type { CaseFile, Harness, Judgement, PreEvent, VerdictResponse } from "@jevdict/core";
+import type { CaseFile, Harness, Judgement, PreEvent, VerdictResponse } from "@jev-cops/core";
 import type { Runtime } from "./daemon.ts";
 import { HOLD_TOKEN_HASH_PREFIX, mintHoldToken } from "./hold-tokens.ts";
 import { proposeScope } from "./precedents.ts";
@@ -7,10 +7,10 @@ import { proposeScope } from "./precedents.ts";
  * The response header that carries a view-only token (lower case, as `Headers` reports
  * it): it unlocks the T8 confirm view of a hold nothing can resolve.
  */
-export const VIEW_TOKEN_HEADER = "x-jevdict-view-token";
+export const VIEW_TOKEN_HEADER = "x-jev-cops-view-token";
 
 /**
- * Harnesses whose own UI answers a `hold` without jevdict learning the answer, so no
+ * Harnesses whose own UI answers a `hold` without jev-cops learning the answer, so no
  * precedent can come from their holds (D-069 proposal): Claude Code's `ask` prompt.
  */
 export const NO_PRECEDENT_HARNESSES: ReadonlySet<Harness> = new Set<Harness>(["claude-code"]);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { holdTokenSchema, sha256Hex } from "@jevdict/core";
+import { holdTokenSchema, sha256Hex } from "@jev-cops/core";
 import { HOLD_TOKEN_BYTES, hashHoldToken, mintHoldToken, sameHash } from "./hold-tokens.ts";
 
 describe("hold tokens", () => {

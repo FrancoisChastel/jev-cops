@@ -368,7 +368,7 @@ describe("rewrite and annotate payloads", () => {
       "First contact with this host.",
     );
     expect(runCombine({ features: featuresAt(0.35) }).decision.context_note).toBe(
-      "Jevdict flagged this action as moderately risky; stay within the task.",
+      "jev-cops flagged this action as moderately risky; stay within the task.",
     );
     expect(runCombine({ features: featuresAt(0.6) }).decision.context_note).toBeNull();
   });
@@ -408,7 +408,7 @@ describe("decision output", () => {
     ["hold", featuresAt(0.6), []],
     ["kill", featuresAt(0.9), [fixed("k", "kill")]],
   ] as const)(
-    "decision converts to a valid jevdict.verdict/1 (%s)",
+    "decision converts to a valid jev-cops.verdict/1 (%s)",
     (verdict, features, policies) => {
       const { decision } = runCombine({ features, policies: [...policies] });
       const response = toVerdictResponse(decision, EVENT_ID);
@@ -418,7 +418,7 @@ describe("decision output", () => {
     },
   );
 
-  test("decision converts to a valid jevdict.verdict/1 (rewrite with jev answers)", () => {
+  test("decision converts to a valid jev-cops.verdict/1 (rewrite with jev answers)", () => {
     const pin = { ...asking("pin", "rewrite"), rewrite: () => ({ command: "ls" }) };
     const { decision } = runCombine({
       features: featuresAt(0.4),

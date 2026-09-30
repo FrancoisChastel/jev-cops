@@ -23,7 +23,7 @@ export function claudeWorkspace(): ClaudeWorkspace {
 }
 
 /**
- * A fake Claude Code (adapters/claude-code/testing) whose only hook is the jevdict command
+ * A fake Claude Code (adapters/claude-code/testing) whose only hook is the jev-cops command
  * hook, run from source as a subprocess, talking to the daemon on `socket`.
  */
 export function claudeCode(

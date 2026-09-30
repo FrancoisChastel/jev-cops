@@ -1,4 +1,4 @@
-import { definePolicy, type PolicyContext, type PolicyEvent } from "@jevdict/sdk";
+import { definePolicy, type PolicyContext, type PolicyEvent } from "@jev-cops/sdk";
 
 /**
  * default-branch-guard (spec §Starter policy set): irreversible git on the default

@@ -14,7 +14,7 @@ import {
 import { openCaseFile } from "./casefile.ts";
 import { SqliteCaseFileStore } from "./casefile-sqlite.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "jevdict-casefile-"));
+const dir = mkdtempSync(join(tmpdir(), "jev-cops-casefile-"));
 let fileCounter = 0;
 
 function tempDb(): string {

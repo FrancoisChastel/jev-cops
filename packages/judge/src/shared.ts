@@ -1,4 +1,4 @@
-import type { Judge, JudgeErrorKind, JudgeResult } from "@jevdict/core";
+import type { Judge, JudgeErrorKind, JudgeResult } from "@jev-cops/core";
 
 /** A `fetch` the providers can be given, so tests never touch the network. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;

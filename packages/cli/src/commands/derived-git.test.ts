@@ -27,7 +27,7 @@ let derivedId: string;
 let sentId: string;
 
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), "jevdict-derived-"));
+  root = mkdtempSync(join(tmpdir(), "jev-cops-derived-"));
   repo = makeRepo({ origin: "https://github.com/o/r.git", originHead: "main" });
   const td = await startTestDaemon({ policies: { "on-main.ts": ON_MAIN } });
   const bash = (git: Record<string, unknown> | null) =>
@@ -64,11 +64,11 @@ afterAll(() => {
 });
 
 describe("derived env.git in the CLI", () => {
-  test("explain says which env.git fields jevdictd derived from cwd", async () => {
+  test("explain says which env.git fields copsd derived from cwd", async () => {
     const io = captureIo();
     expect(await runExplainCommand([derivedId, "--audit", audit], io)).toBe(0);
     expect(io.stdout.join("\n")).toContain(
-      `env.git: repo ${repo} · branch main · default main · dirty no (derived by jevdictd from cwd: repo, branch, dirty, default_branch)`,
+      `env.git: repo ${repo} · branch main · default main · dirty no (derived by copsd from cwd: repo, branch, dirty, default_branch)`,
     );
     const sent = captureIo();
     expect(await runExplainCommand([sentId, "--audit", audit], sent)).toBe(0);

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { loadPolicies } from "@jevdict/core";
-import { readAudit, verifyChain } from "@jevdict/daemon";
+import { loadPolicies } from "@jev-cops/core";
+import { readAudit, verifyChain } from "@jev-cops/daemon";
 import { EXIT, type Io } from "../io.ts";
 import { type ReplayReport, replayAudit } from "../replay-engine.ts";
 
@@ -37,7 +37,7 @@ export function renderReplay(report: ReplayReport, header: string): string[] {
 }
 
 /**
- * `jevdict replay <audit.jsonl> [--policies dir] [--json]`: re-judges the recorded pre
+ * `cops replay <audit.jsonl> [--policies dir] [--json]`: re-judges the recorded pre
  * events with the current policies and prints `event_id old → new` per delta. Exit 0 with
  * the delta count (a delta is information, not a failure); 1 when the log or the
  * policies cannot be read; 2 on usage errors. A broken hash chain is reported first.
@@ -52,17 +52,17 @@ export async function runReplayCommand(argv: readonly string[], io: Io): Promise
       strict: true,
     });
   } catch (cause) {
-    io.err(`jevdict replay: ${(cause as Error).message}`);
+    io.err(`cops replay: ${(cause as Error).message}`);
     return EXIT.usage;
   }
   const [path, ...extra] = parsed.positionals;
   if (path === undefined || extra.length > 0) {
-    io.err("jevdict replay: expected exactly one audit log path");
+    io.err("cops replay: expected exactly one audit log path");
     return EXIT.usage;
   }
   const { lines, problems } = readAudit(path);
   if (lines.length === 0) {
-    io.err(`jevdict replay: no audit lines in ${path}`);
+    io.err(`cops replay: no audit lines in ${path}`);
     return EXIT.failed;
   }
   const chain = verifyChain(path);
@@ -74,7 +74,7 @@ export async function runReplayCommand(argv: readonly string[], io: Io): Promise
   const dir = resolve(parsed.values.policies ?? "policies");
   const loaded = await loadPolicies(dir);
   if (loaded.problems.length > 0) {
-    for (const p of loaded.problems) io.err(`jevdict replay: ${p}`);
+    for (const p of loaded.problems) io.err(`cops replay: ${p}`);
     return EXIT.failed;
   }
   const report = await replayAudit(lines, loaded.policies);

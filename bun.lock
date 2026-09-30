@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "jevdict-monorepo",
+      "name": "jev-cops-monorepo",
       "devDependencies": {
         "@biomejs/biome": "2.5.14",
         "@types/bun": "latest",
@@ -11,37 +11,37 @@
       },
     },
     "adapters/claude-code": {
-      "name": "@jevdict/adapter-claude-code",
+      "name": "@jev-cops/adapter-claude-code",
       "version": "0.0.0",
       "bin": {
-        "jevdict-hook": "./src/hook-main.ts",
+        "cops-hook": "./src/hook-main.ts",
       },
       "dependencies": {
-        "@jevdict/core": "workspace:*",
-        "@jevdict/daemon": "workspace:*",
+        "@jev-cops/core": "workspace:*",
+        "@jev-cops/daemon": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "adapters/pi": {
-      "name": "@jevdict/adapter-pi",
+      "name": "@jev-cops/adapter-pi",
       "version": "0.0.0",
     },
     "packages/cli": {
-      "name": "@jevdict/cli",
+      "name": "@jev-cops/cli",
       "version": "0.0.0",
       "bin": {
-        "jevdict": "./src/main.ts",
+        "cops": "./src/main.ts",
       },
       "dependencies": {
-        "@jevdict/adapter-claude-code": "workspace:*",
-        "@jevdict/core": "workspace:*",
-        "@jevdict/daemon": "workspace:*",
-        "@jevdict/sdk": "workspace:*",
+        "@jev-cops/adapter-claude-code": "workspace:*",
+        "@jev-cops/core": "workspace:*",
+        "@jev-cops/daemon": "workspace:*",
+        "@jev-cops/sdk": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/core": {
-      "name": "@jevdict/core",
+      "name": "@jev-cops/core",
       "version": "0.0.0",
       "dependencies": {
         "tree-sitter-bash": "0.25.1",
@@ -51,33 +51,33 @@
       },
     },
     "packages/daemon": {
-      "name": "@jevdict/daemon",
+      "name": "@jev-cops/daemon",
       "version": "0.0.0",
       "bin": {
-        "jevdictd": "./src/main.ts",
+        "copsd": "./src/main.ts",
       },
       "dependencies": {
-        "@jevdict/core": "workspace:*",
-        "@jevdict/judge": "workspace:*",
-        "@jevdict/sdk": "workspace:*",
+        "@jev-cops/core": "workspace:*",
+        "@jev-cops/judge": "workspace:*",
+        "@jev-cops/sdk": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/judge": {
-      "name": "@jevdict/judge",
+      "name": "@jev-cops/judge",
       "version": "0.0.0",
       "dependencies": {
-        "@jevdict/core": "workspace:*",
+        "@jev-cops/core": "workspace:*",
         "@typesafe-ai/sdk": "0.6.0",
         "ai": "^7.0.122",
         "zod": "^4.6.5",
       },
     },
     "packages/sdk": {
-      "name": "@jevdict/sdk",
+      "name": "@jev-cops/sdk",
       "version": "0.0.0",
       "dependencies": {
-        "@jevdict/core": "workspace:*",
+        "@jev-cops/core": "workspace:*",
         "zod": "^4.6.5",
       },
     },
@@ -107,19 +107,19 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.14", "", { "os": "win32", "cpu": "x64" }, "sha512-oJWmBhoHsnhUKIke+0gXDX0mltJrWHA1UyHsrTlXwX0TL64ilVZAo+TYZm97baecV0esBdpzy3k96q+09JaZUQ=="],
 
-    "@jevdict/adapter-claude-code": ["@jevdict/adapter-claude-code@workspace:adapters/claude-code"],
+    "@jev-cops/adapter-claude-code": ["@jev-cops/adapter-claude-code@workspace:adapters/claude-code"],
 
-    "@jevdict/adapter-pi": ["@jevdict/adapter-pi@workspace:adapters/pi"],
+    "@jev-cops/adapter-pi": ["@jev-cops/adapter-pi@workspace:adapters/pi"],
 
-    "@jevdict/cli": ["@jevdict/cli@workspace:packages/cli"],
+    "@jev-cops/cli": ["@jev-cops/cli@workspace:packages/cli"],
 
-    "@jevdict/core": ["@jevdict/core@workspace:packages/core"],
+    "@jev-cops/core": ["@jev-cops/core@workspace:packages/core"],
 
-    "@jevdict/daemon": ["@jevdict/daemon@workspace:packages/daemon"],
+    "@jev-cops/daemon": ["@jev-cops/daemon@workspace:packages/daemon"],
 
-    "@jevdict/judge": ["@jevdict/judge@workspace:packages/judge"],
+    "@jev-cops/judge": ["@jev-cops/judge@workspace:packages/judge"],
 
-    "@jevdict/sdk": ["@jevdict/sdk@workspace:packages/sdk"],
+    "@jev-cops/sdk": ["@jev-cops/sdk@workspace:packages/sdk"],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 

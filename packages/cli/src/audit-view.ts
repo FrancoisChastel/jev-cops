@@ -5,9 +5,9 @@ import {
   gitSchema,
   type JevQuestionType,
   verdictSchema,
-} from "@jevdict/core";
-import type { AuditLine } from "@jevdict/daemon";
-import { fixtureAnswerSchema } from "@jevdict/sdk";
+} from "@jev-cops/core";
+import type { AuditLine } from "@jev-cops/daemon";
+import { fixtureAnswerSchema } from "@jev-cops/sdk";
 import { z } from "zod";
 
 /**
@@ -57,7 +57,7 @@ const repoHintsSchema = z.looseObject({
 /** The payload of a `judge` line as the daemon writes it (`judgePayload`). */
 export const judgePayloadSchema = z.looseObject({
   event: z.unknown(),
-  /** The `env.git` fields jevdictd derived from cwd (D-058); absent when none. */
+  /** The `env.git` fields copsd derived from cwd (D-058); absent when none. */
   derived: z.looseObject({ git: gitSchema }).optional(),
   raw: z.string(),
   stateHash: z.string(),

@@ -4,7 +4,7 @@
     {
       "name": "Write tool to ~/other/notes.md (outside the repo) is held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW01010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -51,7 +51,7 @@
     {
       "name": "Edit inside the repo is allowed",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW02010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -100,7 +100,7 @@
     {
       "name": "rm of a file under /tmp is scratch space, allowed",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW03010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -121,7 +121,7 @@
           "tool": "Bash",
           "kind": "exec",
           "input": {
-            "command": "rm /tmp/jevdict-auth-test.log",
+            "command": "rm /tmp/jev-cops-auth-test.log",
             "description": "Clean up the test log"
           },
           "cwd": "/work/repo"
@@ -147,7 +147,7 @@
     {
       "name": "a write under /private/tmp (macOS /tmp) is scratch space: not matched, allow",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW04010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -194,7 +194,7 @@
     {
       "name": "cp a.txt /etc/x writes outside the repo and /tmp, held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW05010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -242,7 +242,7 @@
       "name": "rm -rf of a path outside the repo typed by the user is still held (spec worked example)",
       "task": "Delete the old checkout at /home/dev/old-app, it is no longer needed",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW06010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -289,7 +289,7 @@
     {
       "name": "a net call that writes its download outside the repo (curl -o ~/bin/tool) is held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW07010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -336,7 +336,7 @@
     {
       "name": "deleting /tmp itself is not a write under /tmp, held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8RW08010000000000000",
         "phase": "pre",
         "harness": "claude-code",

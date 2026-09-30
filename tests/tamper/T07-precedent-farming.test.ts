@@ -24,7 +24,7 @@ import {
   createBudget,
   DEFAULT_CONTEXT_CONFIG,
   type RiskBudget,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   PRECEDENT_MAX_AGE_MS,
   PrecedentStore,
@@ -261,7 +261,7 @@ describe("T7: an agent that talks to the socket directly cannot grant a preceden
       const res = await td.callWithHeaders("POST", "/v1/judge", e);
       expect(res.body).toMatchObject({ verdict: "hold" });
       expect(res.body).not.toHaveProperty("hold_token");
-      const viewOnly = res.headers["x-jevdict-view-token"];
+      const viewOnly = res.headers["x-jev-cops-view-token"];
       expect((await agentResolve(td, e.id, viewOnly)).status).toBe(403);
       expect((await agentResolve(td, e.id)).status).toBe(403);
       expect(grants(td)).toBe(0);

@@ -1,5 +1,5 @@
 /**
- * @jevdict/adapter-claude-code: the Claude Code command hook (`jevdict-hook`). Translation
+ * @jev-cops/adapter-claude-code: the Claude Code command hook (`cops-hook`). Translation
  * and fail-closed plumbing only; every decision is the daemon's (D-054). See
  * docs/adapters.md#claude-code.
  */

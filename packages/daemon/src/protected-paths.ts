@@ -4,7 +4,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type { DaemonConfig } from "./config.ts";
 
 /**
- * The judge protects its own inputs (PLAN-M1 §4.5, "Jevdict" row): `config-tamper` only
+ * The judge protects its own inputs (PLAN-M1 §4.5, "jev-cops" row): `config-tamper` only
  * knows the paths the daemon hands it in `[policy] protectedPaths`, so the daemon appends
  * everything it reads or writes to that list whenever it builds a runtime from config.
  */
@@ -15,7 +15,7 @@ export interface JudgeInputs {
   readonly configFiles: readonly string[];
   /** The running daemon binary when compiled; null under `bun run`/`bun test`. */
   readonly selfBinary: string | null;
-  /** The OS user's home: the defaults live in its `~/.jevdict/`, whatever `[daemon] home` says. */
+  /** The OS user's home: the defaults live in its `~/.jev-cops/`, whatever `[daemon] home` says. */
   readonly osHome: string;
   /** The daemon's working directory; it and every directory above it are shared. */
   readonly cwd: string;
@@ -40,7 +40,7 @@ export function compiledBinary(
 export function defaultJudgeInputs(): JudgeInputs {
   const osHome = homedir();
   return {
-    configFiles: [join(osHome, ".config", "jevdict", "jevdict.toml")],
+    configFiles: [join(osHome, ".config", "jev-cops", "cops.toml")],
     selfBinary: compiledBinary(),
     osHome,
     cwd: process.cwd(),
@@ -89,7 +89,7 @@ function fileAndDir(file: string, shared: ReadonlySet<string>, sideFiles: readon
 /**
  * Every path the judge depends on: the policies directory (whole), the audit log, the
  * store, both sockets and each config file with their directories (just the file when
- * the directory is shared), the audit's file forward, `~/.jevdict/` under the OS home and
+ * the directory is shared), the audit's file forward, `~/.jev-cops/` under the OS home and
  * `[daemon] home`, the running daemon binary when compiled and `[daemon] hook_binary`.
  * Each entry is also listed under its real path when a symlink leads to it. Absolute,
  * deduplicated, in a stable order.
@@ -106,8 +106,8 @@ export function judgeInputPaths(config: DaemonConfig, inputs: JudgeInputs): stri
     ...fileAndDir(config.daemon.socket, shared, []),
     ...fileAndDir(config.daemon.adminSocket, shared, []),
     ...inputs.configFiles.flatMap((f) => fileAndDir(f, shared, [])),
-    join(inputs.osHome, ".jevdict"),
-    join(config.daemon.home, ".jevdict"),
+    join(inputs.osHome, ".jev-cops"),
+    join(config.daemon.home, ".jev-cops"),
     ...binaries,
   ];
   return [...new Set(paths.flatMap((p) => [p, realPath(p)]))];

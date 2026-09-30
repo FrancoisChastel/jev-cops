@@ -1,4 +1,4 @@
-import type { Answer, JudgeConfig } from "@jevdict/core";
+import type { Answer, JudgeConfig } from "@jev-cops/core";
 import type { VercelAiModel } from "./providers/vercel-ai.ts";
 import type { Env, FetchLike } from "./shared.ts";
 
@@ -38,7 +38,7 @@ export interface OpenRouterConfig {
   readonly fetch?: FetchLike;
   /** `HTTP-Referer` attribution header; default the project URL. */
   readonly referer?: string;
-  /** `X-Title` attribution header; default `jevdict`. */
+  /** `X-Title` attribution header; default `jev-cops`. */
   readonly title?: string;
 }
 

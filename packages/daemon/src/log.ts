@@ -8,7 +8,7 @@ export interface Logger {
 
 /**
  * One JSON object per line on stderr: `{ at, level, msg, ...fields }`. Debug lines (for
- * example why `env.git` was not derived) only with `debug: true` (`JEVDICT_DEBUG=1`).
+ * example why `env.git` was not derived) only with `debug: true` (`JEV_COPS_DEBUG=1`).
  */
 export function stderrLogger(
   now: () => number = Date.now,

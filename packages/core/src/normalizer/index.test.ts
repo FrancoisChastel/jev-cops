@@ -11,7 +11,7 @@ describe("normalizer public API", () => {
     expect(normalizer.OPAQUE_REASONS).toContain("decoded-pipe");
   });
 
-  test("is re-exported from @jevdict/core", () => {
+  test("is re-exported from @jev-cops/core", () => {
     expect(core.normalize).toBe(normalizer.normalize);
     expect(core.normalizeCommand).toBe(normalizer.normalizeCommand);
   });

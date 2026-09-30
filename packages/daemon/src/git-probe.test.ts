@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Event } from "@jevdict/core";
+import type { Event } from "@jev-cops/core";
 import { buildEvent } from "../../../tests/fixtures/context/index.ts";
 import { GitProbe, withDerivedGit } from "./git-probe.ts";
 import { bunGitRunner, findGit, type GitRunner } from "./git-run.ts";

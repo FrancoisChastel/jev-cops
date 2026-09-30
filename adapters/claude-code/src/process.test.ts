@@ -68,19 +68,19 @@ const BASH = claudeCodePayloadText("pre-tool-use.bash");
 describe("runHookProcess: the fail-closed shell", () => {
   test("the exit code is 2 before anything else, and a fatal error exits 2 with its reason", async () => {
     const { port, rec } = fakePort(new Promise<string>(() => undefined), {
-      env: { JEVDICT_HOOK_DEADLINE_MS: "50" },
+      env: { JEV_COPS_HOOK_DEADLINE_MS: "50" },
     });
     const run = runHookProcess(["--harness", "claude-code"], [], port);
     expect(rec.exitCodes).toEqual([2]);
     rec.fatal?.("hook crashed (boom)");
-    expect(rec.err).toEqual(["jevdict: hook crashed (boom); blocking (fail closed)\n"]);
+    expect(rec.err).toEqual(["jev-cops: hook crashed (boom); blocking (fail closed)\n"]);
     expect(rec.exits).toEqual([2]);
     await run;
   });
 
   test("stdin that never closes: blocked at the deadline", async () => {
     const { port, rec } = fakePort(new Promise<string>(() => undefined), {
-      env: { JEVDICT_HOOK_DEADLINE_MS: "50" },
+      env: { JEV_COPS_HOOK_DEADLINE_MS: "50" },
     });
     expect(await runHookProcess(["--harness", "claude-code"], [], port)).toBe(2);
     expect(rec.err.join("")).toContain("unreadable hook payload (stdin not closed)");
@@ -103,9 +103,9 @@ describe("runHookProcess: the fail-closed shell", () => {
       2,
     );
     expect(JSON.parse(rec.out.join(""))).toMatchObject({
-      hookSpecificOutput: { permissionDecision: "deny", permissionDecisionReason: "jevdict: no" },
+      hookSpecificOutput: { permissionDecision: "deny", permissionDecisionReason: "jev-cops: no" },
     });
-    expect(rec.err).toEqual(["jevdict: no\n"]);
+    expect(rec.err).toEqual(["jev-cops: no\n"]);
     expect(rec.exits).toEqual([2]);
   });
 
@@ -118,14 +118,14 @@ describe("runHookProcess: the fail-closed shell", () => {
     expect(rec).toMatchObject({ out: [], err: [], exits: [0] });
   });
 
-  test("a daemon that is down: blocked, and the failure lands in ~/.jevdict/claude-code-hook.log", async () => {
+  test("a daemon that is down: blocked, and the failure lands in ~/.jev-cops/claude-code-hook.log", async () => {
     const { port, rec, home } = fakePort(BASH);
     const socket = join(tempDir(), "nobody.sock");
     expect(await runHookProcess(["--harness", "claude-code", "--socket", socket], [], port)).toBe(
       2,
     );
     expect(rec.err.join("")).toContain("judge unreachable");
-    const log = readFileSync(join(home, ".jevdict", "claude-code-hook.log"), "utf8");
+    const log = readFileSync(join(home, ".jev-cops", "claude-code-hook.log"), "utf8");
     expect(log).toContain("PreToolUse sess_abc123 Bash: judge unreachable");
   });
 
@@ -135,7 +135,7 @@ describe("runHookProcess: the fail-closed shell", () => {
     expect(await runHookProcess(["--harness", "claude-code", "--socket", socket], [], port)).toBe(
       2,
     );
-    expect(rec.err.join("")).toContain("jevdict: local log not written");
+    expect(rec.err.join("")).toContain("jev-cops: local log not written");
   });
 });
 
@@ -157,7 +157,7 @@ describe("runHookProcess: ConfigChange reads the settings files on disk", () => 
   test.each([
     [true, 0],
     [false, 2],
-  ] as const)("jevdict block complete: %p → exit %d", async (complete, code) => {
+  ] as const)("jev-cops block complete: %p → exit %d", async (complete, code) => {
     const reports: unknown[] = [];
     const socket = join(tempDir(), "d.sock");
     servers.push(
@@ -184,7 +184,7 @@ describe("runHookProcess: ConfigChange reads the settings files on disk", () => 
     const argv = ["--harness", "claude-code", "--socket", socket];
     expect(await runHookProcess(argv, [], port)).toBe(code);
     expect(reports).toEqual([expect.objectContaining({ kind: "config-change", intact: complete })]);
-    if (!complete) expect(rec.err.join("")).toContain("no jevdict hook on ConfigChange");
+    if (!complete) expect(rec.err.join("")).toContain("no cops hook on ConfigChange");
   });
 });
 
@@ -221,8 +221,9 @@ describe("selfOf: how this process was started, for the ConfigChange identity ch
   });
 
   test("compiled: the binary alone", () => {
-    expect(
-      selfOf([], { execPath: "/opt/jevdict-hook", main: "/$bunfs/root/jevdict-hook" }),
-    ).toEqual({ command: "/opt/jevdict-hook", leading: [] });
+    expect(selfOf([], { execPath: "/opt/cops-hook", main: "/$bunfs/root/cops-hook" })).toEqual({
+      command: "/opt/cops-hook",
+      leading: [],
+    });
   });
 });

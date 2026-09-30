@@ -1,6 +1,6 @@
 /**
  * M0 step 10 gate: the Pi extension driven by a fake Pi runner (v0.87.1 semantics) against a
- * real `jevdictd` on a temp Unix socket, enforcing the repo's own `policies/`.
+ * real `copsd` on a temp Unix socket, enforcing the repo's own `policies/`.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { Server } from "bun";
 import type { AuditLine } from "../../packages/daemon/src/audit.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
-import { register } from "./jevdict.ts";
+import { register } from "./jev-cops.ts";
 import { FakePi, fakeContext } from "./testing/fake-pi.ts";
 
 const REPO_POLICIES = join(import.meta.dir, "..", "..", "policies");
@@ -194,14 +194,14 @@ describe("Pi adapter end to end: rewrite, kill, annotate (test-only policies)", 
     expect(run.blocked).toBeUndefined();
     expect(run.content).toEqual([
       { type: "text", text: "# readme" },
-      { type: "text", text: "[jevdict] README is generated; edit docs/ instead." },
+      { type: "text", text: "[jev-cops] README is generated; edit docs/ instead." },
     ]);
     const observed = linesFor(td, ctx, "observe").map((l) => payload(l).head_chars);
     expect(observed).toEqual(["# readme".length]);
   });
 });
 
-/** A canned `jevdictd` on a Unix socket: every judge request gets `reply`. */
+/** A canned `copsd` on a Unix socket: every judge request gets `reply`. */
 function fakeDaemon(reply: (req: Request) => Response | Promise<Response>): {
   socket: string;
   server: Server<undefined>;
@@ -292,7 +292,7 @@ describe("Pi adapter failure modes (T2, T3)", () => {
     });
     const { pi, ctx } = await session(socket);
     const run = await pi.run(ctx, "bash", { command: "ls" });
-    expect(run.blocked).toMatchObject({ block: true, reason: "jevdict: Needs a human." });
+    expect(run.blocked).toMatchObject({ block: true, reason: "jev-cops: Needs a human." });
   });
 
   test.each([
@@ -322,7 +322,7 @@ describe("Pi adapter failure modes (T2, T3)", () => {
       const run = await pi.run(ctx, "bash", { command: "rm -rf x" }, "done");
       expect(views).toEqual([`Bearer ${token}`]);
       expect(ctx.log.confirms).toEqual([
-        { title: "Jevdict hold: Needs a human.", message: "rm -rf x\n\nHUMAN DETAIL" },
+        { title: "jev-cops hold: Needs a human.", message: "rm -rf x\n\nHUMAN DETAIL" },
       ]);
       expect(resolves).toEqual([expect.objectContaining({ decision, hold_token: token })]);
       const seen = JSON.stringify([run.blocked ?? null, run.content, ctx.log.confirms]);
@@ -346,7 +346,7 @@ describe("Pi adapter failure modes (T2, T3)", () => {
     expect(ctx.log.confirms).toEqual([]);
   });
 
-  test("the pre event is canonical jevdict.event/1 for Pi", async () => {
+  test("the pre event is canonical jev-cops.event/1 for Pi", async () => {
     const seen: unknown[] = [];
     const socket = serve(async (req) => {
       const body = (await req.json()) as { id: string };
@@ -357,7 +357,7 @@ describe("Pi adapter failure modes (T2, T3)", () => {
     await pi.run(ctx, "grep", { pattern: "TODO", path: "src" }, "src/a.ts:1: TODO");
     const [pre, post] = seen as Record<string, unknown>[];
     expect(pre).toMatchObject({
-      schema: "jevdict.event/1",
+      schema: "jev-cops.event/1",
       phase: "pre",
       harness: "pi",
       session: { id: `sess_${ctx.sessionManager.getSessionId()}`, parent_id: null, task: TASK },

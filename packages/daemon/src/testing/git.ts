@@ -15,7 +15,7 @@ const TEST_ENV = {
   GIT_TERMINAL_PROMPT: "0",
   LC_ALL: "C",
 };
-const IDENTITY = ["-c", "user.name=jevdict-tests", "-c", "user.email=tests@jevdict.invalid"];
+const IDENTITY = ["-c", "user.name=jev-cops-tests", "-c", "user.email=tests@jev-cops.invalid"];
 
 /** Runs `git <args>` in `cwd` for test setup; throws with stderr on failure. */
 export function git(cwd: string, ...args: string[]): string {

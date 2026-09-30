@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { captureIo } from "./io.ts";
 import { CLI_USAGE, main } from "./main.ts";
 
-describe("jevdict", () => {
+describe("jev-cops", () => {
   test("--help prints the usage with the exit codes", async () => {
     const io = captureIo();
     expect(await main(["--help"], io)).toBe(0);
@@ -28,7 +28,7 @@ describe("jevdict", () => {
   test.each(["install", "doctor"])("%s is not yet available (M1) and exits 2", async (name) => {
     const io = captureIo();
     expect(await main([name], io)).toBe(2);
-    expect(io.stderr).toEqual([`jevdict ${name}: not yet available (M1)`]);
+    expect(io.stderr).toEqual([`jev-cops ${name}: not yet available (M1)`]);
   });
 
   test("the binary runs as a process", async () => {

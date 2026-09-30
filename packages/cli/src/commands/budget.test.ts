@@ -25,7 +25,7 @@ afterAll(async () => {
   await td.stop();
 });
 
-describe("jevdict budget", () => {
+describe("cops budget", () => {
   test("shows through the agent socket, resets through the admin socket", async () => {
     const socket = td.config.daemon.socket;
     const adminSocket = td.config.daemon.adminSocket;

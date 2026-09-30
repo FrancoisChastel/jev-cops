@@ -1,5 +1,5 @@
 /**
- * "Intact" for a ConfigChange (T1, D-077): after the change, the jevdict hook is still in
+ * "Intact" for a ConfigChange (T1, D-077): after the change, the cops hook is still in
  * force on every event it guards. Precisely: for each of {@link REQUIRED_EVENTS}, some
  * settings file Claude Code loads registers, in a group whose matcher selects every call
  * (absent, `""` or `"*"`; `UserPromptSubmit` has no matcher), a handler that is this very
@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 import { parseHookArgs } from "./args.ts";
 import type { SettingsFile, SettingsRead } from "./settings.ts";
 
-/** The events jevdict must stay registered on: the gate, its taint feed, its prompt and config guards. */
+/** The events jev-cops must stay registered on: the gate, its taint feed, its prompt and config guards. */
 export const REQUIRED_EVENTS = [
   "PreToolUse",
   "PostToolUse",
@@ -101,7 +101,7 @@ function isOurCommand(h: Json, id: HookIdentity): boolean {
 }
 
 /** True when `handler`, in `group`, is this hook on every call of `event`. */
-export function isJevdictHandler(
+export function isJevCopsHandler(
   event: RequiredEvent,
   group: Json,
   handler: Json,
@@ -118,7 +118,7 @@ function registers(groups: unknown, event: RequiredEvent, id: HookIdentity): boo
     (g) =>
       isRecord(g) &&
       Array.isArray(g.hooks) &&
-      g.hooks.some((h) => isRecord(h) && isJevdictHandler(event, g, h, id)),
+      g.hooks.some((h) => isRecord(h) && isJevCopsHandler(event, g, h, id)),
   );
 }
 
@@ -142,7 +142,7 @@ function anySets(reads: readonly Read[], key: string): boolean {
 }
 
 /**
- * Whether the jevdict hook is still in force given every settings file as it is now
+ * Whether the cops hook is still in force given every settings file as it is now
  * (`changed`, when given, is the file the ConfigChange named: invalid JSON there fails).
  */
 export function checkIntact(
@@ -167,7 +167,7 @@ export function checkIntact(
   ]);
   const missing = REQUIRED_EVENTS.filter((e) => !inForce.has(e));
   if (missing.length === 0)
-    return { intact: true, why: "the jevdict hook is registered on every required event" };
-  const cause = blockedOthers ?? "the jevdict hook entry is missing or altered";
-  return { intact: false, why: `${cause}: no jevdict hook on ${missing.join(", ")}` };
+    return { intact: true, why: "the cops hook is registered on every required event" };
+  const cause = blockedOthers ?? "the cops hook entry is missing or altered";
+  return { intact: false, why: `${cause}: no cops hook on ${missing.join(", ")}` };
 }

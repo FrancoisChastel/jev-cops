@@ -2,7 +2,7 @@
 
 Source of truth: [SPEC.md](./SPEC.md). M1 definition of done (spec §Milestones):
 "Claude Code HTTP and command hooks, hold-to-ask and hold-to-defer mapping,
-`jevdict install claude-code` and `jevdict doctor` with a canary tool call,
+`cops install claude-code` and `cops doctor` with a canary tool call,
 config-tamper policy live." Gate: the M1 subset of `tests/tamper` green.
 
 Docs re-read on 2026-09-29 (ground rule: docs win over the spec). Claude Code is at
@@ -16,16 +16,16 @@ tools-reference,sub-agents,env-vars}`, the changelog, and issues #18312, #39344,
 
 | Item (spec §Milestones M1) | Planned as |
 |---|---|
-| Claude Code command hook | `dist/jevdict-hook` (lean compiled binary) registered in exec form on `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit`, `ConfigChange`, `SessionStart`, `SessionEnd`; fails closed (§5) |
+| Claude Code command hook | `dist/cops-hook` (lean compiled binary) registered in exec form on `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit`, `ConfigChange`, `SessionStart`, `SessionEnd`; fails closed (§5) |
 | Claude Code HTTP hook | `POST /v1/hooks/claude-code` on the daemon's loopback HTTP listener, registered for **post events only** (`--transport http`): the docs make every HTTP failure fail open (§2 row 1) |
 | hold → ask | interactive: `permissionDecision: "ask"` with the daemon's normalized raw command and `detail` as `permissionDecisionReason` (T8) |
 | hold → defer | **not used**: `defer` is `-p`-only and "ignored with a warning and the tool proceeds" on a multi-call turn (§2 row 6). Headless `hold` stays `deny` (D-008); `dontAsk`/`bypassPermissions` modes also map to `deny` |
-| `jevdict install claude-code` | settings writer: merge, backup, idempotent, refusals, `--managed`, `--uninstall`; also `jevdict install pi` (wraps M0's `installPiExtension`) |
-| `jevdict doctor` | daemon on both sockets, policies, judge, enforcement, audit chain, effective hooks, binary path, Claude Code version drift, offline canary through the installed binary, optional live canary, every known gap |
+| `cops install claude-code` | settings writer: merge, backup, idempotent, refusals, `--managed`, `--uninstall`; also `cops install pi` (wraps M0's `installPiExtension`) |
+| `cops doctor` | daemon on both sockets, policies, judge, enforcement, audit chain, effective hooks, binary path, Claude Code version drift, offline canary through the installed binary, optional live canary, every known gap |
 | `config-tamper` live | `policies/config-tamper.ts` + fixtures; kill on write/delete under the protected set; ConfigChange hook blocks out-of-band edits and the daemon latches the session killed |
 
 **Gate:** `bun test tests/tamper` with these rows live on Claude Code (fake runner, real
-`jevdictd`): T1 (config-tamper kill + ConfigChange block), T2 (hook fails closed, reads fail
+`copsd`): T1 (config-tamper kill + ConfigChange block), T2 (hook fails closed, reads fail
 open), T3 (deny "judge timeout" from the hook's own deadline), T4 installer half (refuses or
 warns on bare `Bash` allow; the OpenShell half stays `todo` for M2), T8 (ask shows the daemon's
 raw + detail, never the agent's `description`), T9 (`updatedInput` carries the pinned paths).
@@ -38,32 +38,32 @@ To be copied into `docs/adapters.md#claude-code`. "Spec" is `docs/SPEC.md` (2026
 
 | # | Fact | Spec says | Docs say today (source, quote) | Consequence |
 |---|---|---|---|---|
-| 1 | HTTP hook failure | "Ship as an HTTP hook pointing at `jevdictd` … plus a fallback command hook" | hooks#http-response-handling: "**Non-2xx status**: non-blocking error, execution continues. **Connection failure**: non-blocking error, execution continues. **Timeout**: the hook is canceled … Unlike command hooks, HTTP hooks can't signal a blocking error through status codes alone." | An HTTP hook can never fail closed. The **command hook is the only PreToolUse transport**; HTTP is offered for post events only (observe class, fail-open allowed by spec §Principles). |
+| 1 | HTTP hook failure | "Ship as an HTTP hook pointing at `copsd` … plus a fallback command hook" | hooks#http-response-handling: "**Non-2xx status**: non-blocking error, execution continues. **Connection failure**: non-blocking error, execution continues. **Timeout**: the hook is canceled … Unlike command hooks, HTTP hooks can't signal a blocking error through status codes alone." | An HTTP hook can never fail closed. The **command hook is the only PreToolUse transport**; HTTP is offered for post events only (observe class, fail-open allowed by spec §Principles). |
 | 2 | Hook timeout | T3: "Adapter returns `deny` … never allow-by-timeout" (assumes the harness timeout is safe) | hooks#timeouts: "A timed-out `command`, `http`, or `mcp_tool` hook doesn't block the tool call. The call continues through the normal permission flow, so don't count on a stalled hook to act as a gate." Default `timeout` "600 for `command`, `http`" | The hook owns its own deadline (13 s = daemon 12 s + 1 s, like Pi) and exits 2 itself; the settings `timeout: 30` is a backstop that must never fire first. |
 | 3 | Exit codes | — | hooks#other-exit-codes: "exit code 2 is the only exit code that blocks through the code alone. Without valid JSON on stdout, Claude Code treats exit code 1 as a non-blocking error and proceeds"; "A hook that can't start lands in the same non-blocking bucket … a mistyped path in `settings.json` leaves the gate silently disabled." | Default exit code is 2 from the first line of `main`; only a completed allow/annotate/rewrite path sets 0. Installer verifies the binary path; doctor prints "gate silently disabled" when it is gone. |
 | 4 | Deny channel | "map `deny` to `deny` with `permissionDecisionReason`" | hooks#exit-code-2: "exit 2 blocks whether or not you print JSON: even a JSON `permissionDecision` of `"allow"` can't override it. Claude Code still reads any valid JSON output on stdout." permissions#extend-permissions-with-hooks: "A hook that exits with code 2 stops the tool call before permission rules are evaluated, so the block applies even when an allow rule would otherwise let the call proceed." | `deny` = **exit 2 + stderr reason + JSON deny** (both channels); the block is immune to allow rules and to other hooks' `allow`. |
-| 5 | `allow` loosens | "map `rewrite` to `allow` plus `updatedInput`; map `annotate` to `allow` plus `additionalContext`" | hooks#pretooluse-decision-control: "`"allow"` skips the permission prompt". Changelog 2.1.222: "Fixed PreToolUse auto-allow hooks bypassing tool restrictions in background agent tasks". Spec: "can only tighten, never loosen". | jevdict **never emits `permissionDecision: "allow"`**. `allow` = exit 0, no output ("no decision; normal permission flow applies"). `annotate` = `additionalContext` only. `rewrite` = `updatedInput` only, no decision (verify live; fallback `ask` + `updatedInput`, never `allow`). |
+| 5 | `allow` loosens | "map `rewrite` to `allow` plus `updatedInput`; map `annotate` to `allow` plus `additionalContext`" | hooks#pretooluse-decision-control: "`"allow"` skips the permission prompt". Changelog 2.1.222: "Fixed PreToolUse auto-allow hooks bypassing tool restrictions in background agent tasks". Spec: "can only tighten, never loosen". | jev-cops **never emits `permissionDecision: "allow"`**. `allow` = exit 0, no output ("no decision; normal permission flow applies"). `annotate` = `additionalContext` only. `rewrite` = `updatedInput` only, no decision (verify live; fallback `ask` + `updatedInput`, never `allow`). |
 | 6 | `defer` | "map `hold` to … `defer` in headless mode"; #41791 "defer is only in the changelog" | #41791 closed 2026-04-28, docs updated. hooks#defer-a-tool-call-for-later: "Claude Code honors this value only in non-interactive mode with the `-p` flag. In interactive sessions it logs a warning and ignores the hook result"; "`"defer"` only works when Claude makes a single tool call in the turn. If Claude makes several tool calls at once, `"defer"` is ignored with a warning and the tool proceeds through the normal permission flow." Precedence "`deny` > `defer` > `ask` > `allow`". | `defer` can silently become allow-by-batch. Not used in M1; D-008 (`hold → deny` headless) stands and the daemon already applies it. |
 | 7 | `permissions.allow` bypass (#18312) | "a tool on the `permissions.allow` list has bypassed hook decisions … The installer must refuse to run when `Bash` is on the allow list" | #18312 closed 2026-01-19 as duplicate of #13214 (itself closed as duplicate, no fix note). hooks#permissionrequest: "PreToolUse hooks run before every tool call, whether or not it needs permission." permissions: "To run all Bash commands without prompts except for a few you want blocked, add `"Bash"` to your allow list and register a PreToolUse hook that rejects those specific commands." hooks-guide#hooks-and-permission-modes: "A hook that returns `permissionDecision: "deny"` blocks the tool even in `bypassPermissions` mode". | Exit-2 deny is documented as immune to allow rules; a hook **`ask`** against a bare `Bash` allow is not stated. Installer keeps the spec's refusal for a bare `Bash`/`PowerShell` allow (any scope), `--force` overrides and prints the gap; doctor prints it; the live canary tests it. |
 | 8 | Hook `ask` vs `permissions.deny` (#39344) | "a hook `ask` has overridden a `permissions.deny` rule" | Closed 2026-04-18: "This was fixed in **v2.1.101** — A PreToolUse hook returning permissionDecision 'ask' no longer overrides explicit `permissions.deny` rules." hooks: "Deny and ask rules are still evaluated regardless of what the hook returns". Changelog 2.1.77: "Fixed PreToolUse hooks returning `"allow"` bypassing `deny` permission rules". | Gap closed; `doctor` warns only below v2.1.101. |
 | 9 | Session termination on `kill` | "Deny plus session terminated" | hooks#json-output: `continue: false` "Claude stops processing entirely after the hook runs. Takes precedence over any event-specific decision fields"; "For `PreToolUse` and `PostToolUse` hooks, the stop applies even when the tool call fails or completes while Claude is still streaming". `stopReason` "stays in the conversation, so Claude sees it". No API ends the process. | `kill` = exit 2 + JSON deny + `continue: false` + `stopReason` (= `reason`, agent-safe). The daemon **latches the session killed** (§4, D-072): every later call is denied, every later prompt is blocked by the UserPromptSubmit hook. |
 | 10 | Headless detection | `session.mode` from the harness | Hook input carries `permission_mode` ("`default`, `plan`, `acceptEdits`, `auto`, `dontAsk`, or `bypassPermissions`") but no interactive/print flag. headless: "In a `-p` run with no host, these requests are denied either way"; "`-p` run offers `AskUserQuestion` only when it has a permission host, such as an MCP tool you pass with `--permission-prompt-tool`". | Mode = `headless` iff the parent `claude` argv has `-p`/`--print` and no `--permission-prompt-tool` (Linux `/proc/<ppid>/cmdline`, macOS `ps -o args= -p`, cached per session). A wrong guess only turns `hold` into `ask`, which Claude Code itself denies without a host: never an allow. |
 | 11 | Post events | "`PostToolUse`, `PostToolUseFailure`, `PermissionDenied`" | PostToolUseFailure "doesn't fire for tool calls rejected before execution … Permission denials fire `PreToolUse` but not this event". PermissionDenied "only fires in auto mode: it doesn't run when you manually deny a permission dialog, when a `PreToolUse` hook blocks a call, or when a `deny` rule matches." | Post events: `PostToolUse` (ok) and `PostToolUseFailure` (`error` first line "Exit code N"). `PermissionDenied` is not a post-tool event (nothing ran) and is not registered. Denied calls have only a `judge` line, as on Pi. |
-| 12 | Task capture | "`session.task` is captured once … from the first user prompt (UserPromptSubmit …) and re-sent on every event" | UserPromptSubmit input: "`prompt` field containing the text the user submitted"; no tool call; "block … erases it from context". | No pre/post phase fits. New agent-surface route `POST /v1/session` (`jevdict.session/1`) pins the task **before the model sees the prompt** (T11) and returns `{ task, killed }` so the hook can block prompts of a killed session (D-071). |
+| 12 | Task capture | "`session.task` is captured once … from the first user prompt (UserPromptSubmit …) and re-sent on every event" | UserPromptSubmit input: "`prompt` field containing the text the user submitted"; no tool call; "block … erases it from context". | No pre/post phase fits. New agent-surface route `POST /v1/session` (`jev-cops.session/1`) pins the task **before the model sees the prompt** (T11) and returns `{ task, killed }` so the hook can block prompts of a killed session (D-071). |
 | 13 | Subagents | "`SubagentStart` parent linking" | hooks#common-input-fields: "When running with `--agent` or inside a subagent, two additional fields are included: `agent_id` … `agent_type`". SubagentStart: "can't block subagent creation"; input has `agent_id`, `agent_type`, no prompt. sub-agents: "a `PreToolUse` hook in `settings.json` also runs before every tool a subagent uses". | Linking is per event: `sess_<session_id>.<agent_id>` with `parent_id = sess_<session_id>`, `actor.kind: "subagent"`. `SubagentStart` is not registered (one fewer spawn; nothing to send). The `Agent` tool's `prompt` is the spawn's task text for the future subagent-spawn policy. |
 | 14 | Tool names | `Task`, `MultiEdit`, `BashOutput/KillShell` | tools-reference table: `Agent` (fields `prompt`, `description`, `subagent_type`, `model`), `PowerShell`, `Monitor` (`command` or `ws`), `Glob`, `Grep`, `WebSearch`, `NotebookEdit`, `TaskStop`, `TaskCreate/Get/List/Update`, `TodoWrite` (off by default), `Skill`, `Workflow`, `Artifact`, `SendUserFile`, `PushNotification`, `RemoteTrigger`, `ShareOnboardingGuide`, `SendMessage`, `EnterWorktree`, `LSP`, … No `Task`, no `MultiEdit`, no `BashOutput`. MCP: "`mcp__<server>__<tool>`". | Core `TOOL_RULES` gains the current names (§4, D-074); `Task`/`MultiEdit` stay as aliases. |
 | 15 | File paths | — | hooks#pretooluse-input: "For the file tools `Write`, `Edit`, and `Read`, `tool_input.file_path` is always absolute: Claude Code expands `~` and relative paths before hooks run" | Nothing to pin for file tools; T9 rewrites concern Bash. Windows backslash paths are out of scope for M1 (printed gap). |
 | 16 | Hooks that never fire | — | hooks#pretooluse: "Files you reference with `@` in your prompt are added without any tool call … no PreToolUse hook fires"; "PreToolUse also doesn't fire for `EndConversation`". headless#bare-mode: `--bare` skips "auto-discovery of hooks". cli-reference `--safe-mode`: "hooks … do not load … Managed settings policy still applies, including policy-configured hooks". hooks#disable-or-remove-hooks: `--settings '{"disableAllHooks": true}'` "takes precedence over project and local settings"; "Only `disableAllHooks` set at the managed settings level can disable managed hooks". `--setting-sources`, `--restricted` ("loads only managed settings and `--settings`"). | Printed by `doctor` and the installer. A **managed** install (`--managed`) survives `--safe-mode`, `--restricted`, `disableAllHooks` outside managed, and `--settings`; `--bare` is unverified for managed hooks (gap). |
 | 17 | Workspace trust | — | hooks#workspace-trust: "**Interactive session**: Claude Code holds back hooks from every settings file, including your own `~/.claude/settings.json`, until you accept the workspace trust dialog"; "**`-p` or SDK session**: … treats the folder as trusted, so hooks committed in a repository's `.claude/settings.json` run". | Same shape as Pi's project trust. Doctor reads `projects["<path>"].hasTrustDialogAccepted` in `~/.claude.json` for the cwd and warns. |
 | 18 | `allowManagedHooksOnly` / HTTP allowlists | "managed settings for lockdown" | hooks#hook-locations: under `allowManagedHooksOnly` "Your user, project, local, and plugin hooks are blocked"; "`allowedHttpHookUrls`: when defined at any settings level, Claude Code runs an HTTP hook handler only if its URL matches the merged allowlist"; "`httpHookAllowedEnvVars` … interpolates only the environment variables on that list". Changelog 2.1.267: unreadable managed allowlists "admit nothing". | Installer refuses a user/project install under `allowManagedHooksOnly` (unless `--managed`); `--transport http` requires the daemon URL to match `allowedHttpHookUrls` when that key exists. |
-| 19 | Managed settings paths | "managed settings for lockdown" | managed-settings: "**macOS**: `/Library/Application Support/ClaudeCode/managed-settings.json` · **Linux and WSL**: `/etc/claude-code/managed-settings.json` · **Windows**: `C:\Program Files\ClaudeCode\managed-settings.json`", plus "an optional `managed-settings.d/` directory"; "Claude Code doesn't read the legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json`". Also `~/.claude.json` (global config: trust flags). | These directories join the `config-tamper` protected set; `--managed` writes `managed-settings.d/50-jevdict.json` when writable, else prints it. |
-| 20 | `ConfigChange` | "`ConfigChange` (kill on any change to the hook block)" | hooks#configchange: matchers `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills`; input `source`, `file_path`; "Use exit code 2 or a JSON `decision` to prevent the change. When blocked, the new settings are not applied to the running session"; "`policy_settings` changes can't be blocked"; "A blocked change surfaces no message to you or to Claude". Runs "for each settings-file change it detects, not for managed settings that arrive from MDM or the claude.ai console". | The hook blocks every settings change whose file no longer carries an intact jevdict block or sets `disableAllHooks`; blocks when the daemon is unreachable; reports to `/v1/session` and the daemon latches kill (D-077). `policy_settings`: report only. |
-| 21 | Hook environment | — | hooks#common-input-fields: "A hook process inherits the parent environment, apart from the `OTEL_*` exporter variables … and, when `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is set to `1`, the variables it strips"; hook JSON must be the only stdout: "If your shell profile prints text on startup, it can interfere with JSON parsing" (shell form only). env-vars: `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION=1` in hooks. No version variable. | Exec form (`args: [...]`) with the socket path as an argument, never `$JEVDICT_SOCKET`. `harness_version` comes from `claude --version` recorded by install/doctor (D-076). |
-| 22 | Duplicate handlers | — | hooks#hook-handler-fields: "All matching hooks run in parallel. If you define the same handler in more than one settings file, it runs once." hooks-guide: "When multiple `PreToolUse` hooks return `updatedInput` … the last one to finish takes effect." | User + project installs with identical entries do not double-judge; different socket args would. Doctor flags mismatched jevdict entries and any other rewriting PreToolUse hook. |
-| 23 | Precedence with other hooks | — | "When multiple PreToolUse hooks return different decisions, precedence is `deny` > `defer` > `ask` > `allow`." hooks#pretooluse-decision-control: "A hook's `"ask"` also forces a permission prompt in auto mode: the classifier can still deny the tool call, but it can't approve the call silently" (2.1.211+). | Another hook's `allow` cannot undo jevdict's `deny` or `ask`. `hold → ask` is valid in `auto` mode. |
+| 19 | Managed settings paths | "managed settings for lockdown" | managed-settings: "**macOS**: `/Library/Application Support/ClaudeCode/managed-settings.json` · **Linux and WSL**: `/etc/claude-code/managed-settings.json` · **Windows**: `C:\Program Files\ClaudeCode\managed-settings.json`", plus "an optional `managed-settings.d/` directory"; "Claude Code doesn't read the legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json`". Also `~/.claude.json` (global config: trust flags). | These directories join the `config-tamper` protected set; `--managed` writes `managed-settings.d/50-jev-cops.json` when writable, else prints it. |
+| 20 | `ConfigChange` | "`ConfigChange` (kill on any change to the hook block)" | hooks#configchange: matchers `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills`; input `source`, `file_path`; "Use exit code 2 or a JSON `decision` to prevent the change. When blocked, the new settings are not applied to the running session"; "`policy_settings` changes can't be blocked"; "A blocked change surfaces no message to you or to Claude". Runs "for each settings-file change it detects, not for managed settings that arrive from MDM or the claude.ai console". | The hook blocks every settings change whose file no longer carries an intact jev-cops block or sets `disableAllHooks`; blocks when the daemon is unreachable; reports to `/v1/session` and the daemon latches kill (D-077). `policy_settings`: report only. |
+| 21 | Hook environment | — | hooks#common-input-fields: "A hook process inherits the parent environment, apart from the `OTEL_*` exporter variables … and, when `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is set to `1`, the variables it strips"; hook JSON must be the only stdout: "If your shell profile prints text on startup, it can interfere with JSON parsing" (shell form only). env-vars: `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION=1` in hooks. No version variable. | Exec form (`args: [...]`) with the socket path as an argument, never `$JEV_COPS_SOCKET`. `harness_version` comes from `claude --version` recorded by install/doctor (D-076). |
+| 22 | Duplicate handlers | — | hooks#hook-handler-fields: "All matching hooks run in parallel. If you define the same handler in more than one settings file, it runs once." hooks-guide: "When multiple `PreToolUse` hooks return `updatedInput` … the last one to finish takes effect." | User + project installs with identical entries do not double-judge; different socket args would. Doctor flags mismatched jev-cops entries and any other rewriting PreToolUse hook. |
+| 23 | Precedence with other hooks | — | "When multiple PreToolUse hooks return different decisions, precedence is `deny` > `defer` > `ask` > `allow`." hooks#pretooluse-decision-control: "A hook's `"ask"` also forces a permission prompt in auto mode: the classifier can still deny the tool call, but it can't approve the call silently" (2.1.211+). | Another hook's `allow` cannot undo jev-cops's `deny` or `ask`. `hold → ask` is valid in `auto` mode. |
 | 24 | Reason visibility | "`reason` goes back to the agent"; `detail` "never shown to the agent" | `permissionDecisionReason`: "For `"ask"`, shown to the user but not Claude. For `"deny"`, shown to Claude. For `"allow"` and `"defer"`, written to the debug log only". `stopReason` "stays in the conversation, so Claude sees it". | ask → reason may carry `raw` + `detail` (human only, T8). deny/kill → `reason` only; `stopReason` = `reason`. |
-| 25 | Protected paths in Claude Code itself | T1 relies on jevdict | permission-modes#protected-paths: writes to `.git`, `.claude`, … "never auto-approved, except in `bypassPermissions` mode"; changelog 2.1.126: "`--dangerously-skip-permissions` now bypasses prompts for writes to `.claude/`". permission-modes#critical-paths: `rm` of critical paths "no allow rule or `PreToolUse` hook `"allow"` approves". | Claude Code prompts for config writes in normal modes; `config-tamper` is what stops them in `bypassPermissions` (where a hook deny still blocks). |
-| 26 | Auto mode is the default | — | permission-modes: "With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions"; `-p` starts in `default` "when nothing is configured". | Holds land in auto mode's prompt (row 23). `PostToolUse.classifierContext` (feed the classifier jevdict's risk) is noted for M3+. |
+| 25 | Protected paths in Claude Code itself | T1 relies on jev-cops | permission-modes#protected-paths: writes to `.git`, `.claude`, … "never auto-approved, except in `bypassPermissions` mode"; changelog 2.1.126: "`--dangerously-skip-permissions` now bypasses prompts for writes to `.claude/`". permission-modes#critical-paths: `rm` of critical paths "no allow rule or `PreToolUse` hook `"allow"` approves". | Claude Code prompts for config writes in normal modes; `config-tamper` is what stops them in `bypassPermissions` (where a hook deny still blocks). |
+| 26 | Auto mode is the default | — | permission-modes: "With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions"; `-p` starts in `default` "when nothing is configured". | Holds land in auto mode's prompt (row 23). `PostToolUse.classifierContext` (feed the classifier jev-cops's risk) is noted for M3+. |
 
 Issue states: #18312 closed 2026-01-19 (duplicate of #13214, closed 2025-12-10 as duplicate);
 #39344 closed 2026-04-18 fixed in v2.1.101; #41791 closed 2026-04-28 (docs fixed).
@@ -83,12 +83,12 @@ in `--print`; 2.1.285 sync hooks no longer hang on a backgrounded child.
 |---|---|---|---|
 | 1 | `packages/core` normalizer + context | Claude Code tool names and shapes in `TOOL_RULES`/`TOOL_ALIASES` (§4.1); inert tools; `run_in_background` verb; harness CLIs as `spawn`; Edit `new_string`, NotebookEdit `new_source` in the content-taint extractor; `ctx.config.home` + `ctx.config.protectedPaths` on `PolicyContext` | core tests; new rows in `tests/fixtures/commands/commands.json` |
 | 2 | `policies/config-tamper.ts` + fixtures | spec row "any write under the four harness config dirs or `policies/` → kill" with the precise set (§4.5) | `bun run gate` (6 policies) |
-| 3 | `packages/daemon` | `POST /v1/session` (`jevdict.session/1`), kill latch + `sessionKilled` mapping, `POST /v1/hooks/claude-code` (post events over HTTP, shares the adapter mapper) | daemon tests; T1/T11 daemon-side |
-| 4 | `adapters/claude-code` hook runtime | payload parser → canonical mapper → verdict → hook output; socket client with deadlines; fail-closed shell; mode detection; `dist/jevdict-hook` | unit + fake-runner e2e for every verdict and failure; compiled-binary latency test |
+| 3 | `packages/daemon` | `POST /v1/session` (`jev-cops.session/1`), kill latch + `sessionKilled` mapping, `POST /v1/hooks/claude-code` (post events over HTTP, shares the adapter mapper) | daemon tests; T1/T11 daemon-side |
+| 4 | `adapters/claude-code` hook runtime | payload parser → canonical mapper → verdict → hook output; socket client with deadlines; fail-closed shell; mode detection; `dist/cops-hook` | unit + fake-runner e2e for every verdict and failure; compiled-binary latency test |
 | 5 | adapter events | PostToolUse/PostToolUseFailure observe (bounded head, hash, awaited ≤ 2 s); UserPromptSubmit task once; ConfigChange block + report; SessionStart (model, mode cache) / SessionEnd (best-effort close) | fake-runner e2e: T10 taint through post, T11 first prompt, T1 ConfigChange |
 | — | *(session boundary suggested: stop and report)* | | |
-| 6 | settings writer + `jevdict install claude-code` / `install pi` | merge, backup, idempotent, refusals, `--managed`, `--uninstall`, `--dry-run`, gaps printed | install tests on temp `HOME`/cwd |
-| 7 | `jevdict doctor` + canary | checks (§4.4), offline canary through the registered binary, `--live` canary | doctor tests with `startTestDaemon` + temp settings |
+| 6 | settings writer + `cops install claude-code` / `install pi` | merge, backup, idempotent, refusals, `--managed`, `--uninstall`, `--dry-run`, gaps printed | install tests on temp `HOME`/cwd |
+| 7 | `cops doctor` + canary | checks (§4.4), offline canary through the registered binary, `--live` canary | doctor tests with `startTestDaemon` + temp settings |
 | 8 | `tests/tamper` | T1, T2, T3, T4 (installer), T8, T9 live on Claude Code | `bun test tests/tamper` |
 | 9 | docs | `adapters.md#claude-code` (table of §2 + gaps), adapter README, STATUS, DECISIONS D-065…, `docs/captures/claude-code-m1.md` from a real `claude` run (deny, rewrite, hold-ask) | captured run reviewed |
 
@@ -132,7 +132,7 @@ SendMessage | EnterWorktree | ExitWorktree | Skill | SendFeedback:
 Why `inert`: `other` is "scored like exec" (spec), so `TaskCreate` every few calls would
 annotate constantly. Bookkeeping tools have no side effect; classification stays in core (D-054).
 
-### 4.2 Adapter (`adapters/claude-code`, package `@jevdict/adapter-claude-code`)
+### 4.2 Adapter (`adapters/claude-code`, package `@jev-cops/adapter-claude-code`)
 
 ```text
 src/
@@ -142,11 +142,11 @@ src/
   client.ts     Unix-socket JSON client (Bun fetch({ unix })), deadlines 13 s judge / 2 s other
   mode.ts       headless detection from the parent claude argv; per-session cache (D-068)
   hook.ts       runHook(): fail-closed shell, event dispatch, local log            (≤ 150 lines with mapper+output)
-  settings.ts   settings files: read (strict JSON), merge/strip jevdict entries, effective view, paths per OS
+  settings.ts   settings files: read (strict JSON), merge/strip jev-cops entries, effective view, paths per OS
   install.ts    installClaudeCodeHooks(), uninstall, CLAUDE_CODE_GAPS
-  doctor.ts     checks for `jevdict doctor --harness claude-code`
+  doctor.ts     checks for `cops doctor --harness claude-code`
   canary.ts     offline + live canary
-  hook-main.ts  entry for `bun build --compile` → dist/jevdict-hook (imports nothing from @jevdict/core)
+  hook-main.ts  entry for `bun build --compile` → dist/cops-hook (imports nothing from @jev-cops/core)
 testing/fake-claude-code.ts   runner with the documented exit-code/JSON/timeout/precedence semantics
 README.md
 ```
@@ -184,8 +184,8 @@ function toHookOutput(v: Judged, i: PreToolUseInput, mode: SessionMode, t8: { ra
 //  hold     → interactive & mode ∉ {dontAsk,bypassPermissions}:
 //               { 0, {hookSpecificOutput:{…, permissionDecision:"ask", permissionDecisionReason: `${reason}\n\n${raw}\n\n${detail}`}}, null }
 //             else deny with reason (D-008 extended)
-//  deny     → { 2, {hookSpecificOutput:{…, permissionDecision:"deny", permissionDecisionReason: reason}}, `jevdict: ${reason}` }
-//  kill     → { 2, {continue:false, stopReason:`jevdict: ${reason}`, hookSpecificOutput:{…deny…}}, `jevdict: ${reason}` }
+//  deny     → { 2, {hookSpecificOutput:{…, permissionDecision:"deny", permissionDecisionReason: reason}}, `jev-cops: ${reason}` }
+//  kill     → { 2, {continue:false, stopReason:`jev-cops: ${reason}`, hookSpecificOutput:{…deny…}}, `jev-cops: ${reason}` }
 function unavailable(i: PreToolUseInput, cause: string): HookOutput;   // exec/write/delete/net/spawn/other → exit 2 "judge unreachable (…); blocking (fail closed)"; read/inert → exit 0 + stderr + local log
 
 // client.ts
@@ -204,11 +204,11 @@ function runHook(argv: readonly string[], stdin: string, env: Env, io: Io): Prom
 ### 4.3 CLI (`packages/cli/src/commands/{hook,install,doctor}.ts`)
 
 ```text
-jevdict hook --harness claude-code [--socket path]          stdin → stdout/exit (delegates to adapter runHook)
-jevdict install claude-code [--user|--project|--local|--managed] [--socket path] [--transport command|http]
+cops hook --harness claude-code [--socket path]          stdin → stdout/exit (delegates to adapter runHook)
+cops install claude-code [--user|--project|--local|--managed] [--socket path] [--transport command|http]
                             [--hook-binary path] [--force] [--dry-run] [--uninstall]
-jevdict install pi [--global] [--socket path]                wraps installPiExtension (M0)
-jevdict doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path] [--admin-socket path]
+cops install pi [--global] [--socket path]                wraps installPiExtension (M0)
+cops doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path] [--admin-socket path]
 ```
 
 ```ts
@@ -218,12 +218,12 @@ interface InstallOptions { scope: "user" | "project" | "local" | "managed"; proj
 interface InstallResult { path: string; backup: string | null; changed: boolean; refused: string[]; warnings: string[]; gaps: readonly string[] }
 function installClaudeCodeHooks(o: InstallOptions): InstallResult;     // throws only on unwritable target or invalid existing JSON
 function uninstallClaudeCodeHooks(o: Pick<InstallOptions, "scope" | "projectDir" | "home">): InstallResult;
-function jevdictHookEntries(hookBinary: string, socket: string, transport, httpUrl?: string): Record<HookEventName, HookGroup[]>;
+function jevCopsHookEntries(hookBinary: string, socket: string, transport, httpUrl?: string): Record<HookEventName, HookGroup[]>;
 //  PreToolUse:  [{ hooks: [{ type:"command", command: hookBinary, args:["--harness","claude-code","--socket",socket], timeout: 30 }] }]   (no matcher = all tools)
 //  PostToolUse / PostToolUseFailure: same, timeout 15  (or { type:"http", url: `${httpUrl}/v1/hooks/claude-code`, timeout: 15 } with --transport http)
 //  UserPromptSubmit / ConfigChange / SessionStart / SessionEnd: command, timeout 10 (SessionEnd shares the 1.5 s budget: best effort)
-function isJevdictHandler(h: unknown, hookBinary?: string): boolean;   // identity = command basename `jevdict-hook`|`jevdict` + args include "claude-code"
-function mergeHooks(existing: Settings, entries): Settings;            // append our groups, drop stale jevdict groups first; nothing else touched
+function isJevCopsHandler(h: unknown, hookBinary?: string): boolean;   // identity = command basename `cops-hook`|`jev-cops` + args include "claude-code"
+function mergeHooks(existing: Settings, entries): Settings;            // append our groups, drop stale jev-cops groups first; nothing else touched
 function refusals(effective: EffectiveSettings, o: InstallOptions): string[];
 //  bare `Bash`/`PowerShell` in permissions.allow at any scope (spec) · disableAllHooks true in the effective non-managed view when scope ≠ managed
 //  · allowManagedHooksOnly true when scope ≠ managed · --transport http without a matching allowedHttpHookUrls entry or without daemon.http
@@ -241,17 +241,17 @@ interface Check { name: string; status: "ok" | "warn" | "fail" | "gap"; detail: 
 function claudeCodeChecks(o: { paths: SettingsPaths; state: AdapterState | null; claudeVersion: string | null; daemonHealth: Health | null }): Check[];
 ```
 
-### 4.4 `jevdict doctor` checks
+### 4.4 `cops doctor` checks
 
 Daemon: `/v1/health` on the agent socket and on the admin socket (version, policies + degraded
 flags, judge name, enforcement; `warn` when `observe`: "no verdict is enforced"); audit chain
 verifies (`readAudit` + the daemon's chain verifier, L6 caveat printed). Claude Code: `claude`
 on PATH and its version vs the recorded one (docs verified at 2.1.285; `warn` on drift, `fail`
-below 2.1.101); effective settings: jevdict entries present on every event above, in exec form,
-binary path exists and is executable, `jevdict-hook --version` matches, socket arg matches the
+below 2.1.101); effective settings: jev-cops entries present on every event above, in exec form,
+binary path exists and is executable, `cops-hook --version` matches, socket arg matches the
 daemon's socket, no mismatched duplicates, no other `PreToolUse` hook that could rewrite input;
 `disableAllHooks`, `allowManagedHooksOnly`, bare `Bash`/`PowerShell` allow, `defaultMode`,
-`allowedHttpHookUrls`, workspace trust for the cwd; state file `~/.jevdict/claude-code.json`
+`allowedHttpHookUrls`, workspace trust for the cwd; state file `~/.jev-cops/claude-code.json`
 readable; local hook log size. Then every string of `CLAUDE_CODE_GAPS` and `PI_GAPS`.
 
 **Canary.** A live model is not deterministic, so the default canary is offline and exercises
@@ -261,9 +261,9 @@ session id: (a) `Write` to `~/.claude/settings.json` → expects exit 2, stdout 
 `permissionDecision: "deny"` and `continue: false` (proves: binary runs, daemon reached,
 `config-tamper` loaded, kill mapped; in `observe` mode this yields exit 0 and doctor reports
 "enforcement observe: the hook cannot block, by design"); (b) `Bash` `true` → expects exit 0
-and empty stdout. `--live` (needs `claude` on PATH and `JEVDICT_LIVE_CANARY=1`; never in CI)
+and empty stdout. `--live` (needs `claude` on PATH and `JEV_COPS_LIVE_CANARY=1`; never in CI)
 runs `claude -p --permission-mode dontAsk --max-turns 2 --output-format json --allowedTools
-"Bash(printf *)" "Run exactly this shell command and nothing else: printf jevdict-canary-<nonce>"`,
+"Bash(printf *)" "Run exactly this shell command and nothing else: printf jev-cops-canary-<nonce>"`,
 then looks for a `judge` line with the nonce under the run's `session_id`, and with
 `--allowedTools Bash` also proves the allow-list case (§2 row 7).
 
@@ -275,7 +275,7 @@ Claude Code: ~/.claude/, ~/.claude.json, <repo|cwd>/.claude/, /Library/Applicati
 Codex:       ~/.codex/, <repo|cwd>/.codex/
 OpenCode:    ~/.config/opencode/, <repo|cwd>/.opencode/, <repo|cwd>/opencode.json, opencode.jsonc
 Pi:          ~/.pi/agent/, <repo|cwd>/.pi/
-Jevdict:     policies dir, ~/.config/jevdict/, <repo|cwd>/.jevdict.toml, ~/.jevdict/ (sockets, audit, store, state), the hook and daemon binaries (`protected_paths` from `jevdict install`'s printed line)
+jev-cops:     policies dir, ~/.config/jev-cops/, <repo|cwd>/.cops.toml, ~/.jev-cops/ (sockets, audit, store, state), the hook and daemon binaries (`protected_paths` from `cops install`'s printed line)
 when:   some path in e.fs.access with access ≠ "read" is under the set (write, delete, exec, unknown: mv/cp/ln/chmod/git checkout -- … count)
         || an opaque span or interpreter payload mentions a protected path (string match on e.raw after ~ expansion)
         || a harness CLI mutates config: claude config|mcp|plugin|auto-mode reset, codex …, opencode …, pi … (argv)
@@ -290,14 +290,14 @@ Fixtures (≥ 12): Write to `<repo>/.claude/settings.json` → kill; Edit `~/.cl
 `git checkout -- .claude/settings.json` → kill; `python -c "open('~/.claude/settings.json','w')"`
 → hold; `claude config set …` → hold; `cat ~/.claude/settings.json` → no match; Read of
 `.claude/settings.json` → no match; write to `<repo>/src/config.ts` → no match; write under
-`~/.jevdict/` → kill; write to `policies/x.ts` → kill.
+`~/.jev-cops/` → kill; write to `policies/x.ts` → kill.
 
 ### 4.6 Daemon changes (`packages/daemon`)
 
 ```ts
 // routes.ts (agent surface): POST /v1/session, POST /v1/hooks/claude-code
-// schema jevdict.session/1 (D-071)
-interface SessionReport { schema: "jevdict.session/1"; harness: Harness; harness_version?: string;
+// schema jev-cops.session/1 (D-071)
+interface SessionReport { schema: "jev-cops.session/1"; harness: Harness; harness_version?: string;
   session: { id: string; parent_id: string | null; mode?: SessionMode; started_at?: string };
   kind: "start" | "prompt" | "end" | "config-change";
   prompt?: string;                       // kind prompt: task, set once (T11), truncated at 16 KB
@@ -305,7 +305,7 @@ interface SessionReport { schema: "jevdict.session/1"; harness: Harness; harness
   file_path?: string; intact?: boolean; config_source?: string }   // kind config-change
 // reply { ok: true, task: string | null, killed: boolean }; audit line kind "session"
 // sessions.ts: markKilled(root) / isKilled(root); killed on any `kill` verdict and on config-change { intact:false } (D-072)
-// service.ts handleJudge: if sessions.isKilled(root) → verdict kill, reason "session terminated by jevdict", mapping ["sessionKilled"], no engine run
+// service.ts handleJudge: if sessions.isKilled(root) → verdict kill, reason "session terminated by jev-cops", mapping ["sessionKilled"], no engine run
 // /v1/hooks/claude-code: body = raw Claude Code payload (PostToolUse | PostToolUseFailure only) → adapter mapper → handleObserve → 200 {}   (D-066)
 //   PreToolUse over HTTP is refused with 400 "PreToolUse must use the command hook (fails open over HTTP)"
 // config.ts: [policy] protected_paths = [] (extra), passed to ctx.config with daemon.home
@@ -318,10 +318,10 @@ interface SessionReport { schema: "jevdict.session/1"; harness: Harness; harness
 | 1 | Hook binary missing, not executable, path mistyped → "non-blocking … the action proceeds" | Installer verifies the path and runs the offline canary; doctor re-verifies and prints "gate silently disabled" | Cannot be closed from the hook. `SessionStart` on the same binary shows an error to the user in interactive sessions only. **Gap printed.** |
 | 2 | Hook exits 0/1/other without a decision (crash, unhandled rejection, JSON write failure) | `process.exitCode = 2` before any work; `uncaughtException`/`unhandledRejection` handlers write the reason and exit 2; stdout is written before the code is lowered to 0 | SIGKILL/OOM of the hook → proceeds. Printed; OpenShell backstop (M2). |
 | 3 | Claude Code cancels the hook at `timeout` → proceeds | Internal deadline 13 s < settings `timeout: 30`; deadline exits 2 "judge timeout" (T3) | A machine that cannot start the binary within 30 s. Printed. |
-| 4 | Daemon down, socket refused, non-200, 504, invalid reply, wrong `event_id` | exit 2 "judge unreachable (…); blocking (fail closed)" for exec/write/delete/net/spawn/other; read/inert tools exit 0 with a stderr warning and a line in `~/.jevdict/claude-code-hook.log` (T2 observe class, D-055 parity) | — |
+| 4 | Daemon down, socket refused, non-200, 504, invalid reply, wrong `event_id` | exit 2 "judge unreachable (…); blocking (fail closed)" for exec/write/delete/net/spawn/other; read/inert tools exit 0 with a stderr warning and a line in `~/.jev-cops/claude-code-hook.log` (T2 observe class, D-055 parity) | — |
 | 5 | Malformed stdin / unknown event / missing `tool_name` | Tool events: exit 2 "unreadable hook payload"; ConfigChange: exit 2; UserPromptSubmit/SessionStart/End: exit 0 with a warning (nothing to protect; task stays unknown) | — |
 | 6 | HTTP transport: connection failure, non-2xx, timeout → proceeds | HTTP is post-only (observe class); the daemon refuses PreToolUse over HTTP | — |
-| 7 | Settings edited mid-session to remove the hook or set `disableAllHooks` | ConfigChange hook blocks unless the jevdict block is intact; blocks when the daemon is unreachable; daemon latches kill | `policy_settings` cannot be blocked (root-owned files). Printed. |
+| 7 | Settings edited mid-session to remove the hook or set `disableAllHooks` | ConfigChange hook blocks unless the jev-cops block is intact; blocks when the daemon is unreachable; daemon latches kill | `policy_settings` cannot be blocked (root-owned files). Printed. |
 | 8 | Another PreToolUse hook returns `allow`; another hook's `updatedInput` | Precedence deny > ask > allow; our deny is exit 2 | A second rewriting hook races ours ("last one to finish"). Doctor flags it. |
 | 9 | Bare `Bash`/`PowerShell` in `permissions.allow` | Docs: exit-2 deny "applies even when an allow rule would otherwise let the call proceed"; installer refuses unless `--force`; live canary checks | Hook `ask` vs allow rule undocumented. Printed. |
 | 10 | `dontAsk` / `bypassPermissions` | deny still blocks (docs); `hold` mapped to `deny` in these modes | — |
@@ -366,10 +366,10 @@ kill exit 2 with JSON; `stopReason` never contains `detail`; ask reason contains
 open for read/inert · `mode.ts`: `-p` → headless, `-p --permission-prompt-tool x` →
 interactive, no `-p` → interactive; cache hit/miss · settings: `settingsPaths` per platform ·
 `readSettingsFile` rejects comments/trailing commas · `mergeHooks` appends, is idempotent,
-replaces stale jevdict groups, leaves foreign hooks byte-identical · `refusals` for each rule ·
-`writeSettingsFile` backs up and writes atomically · `uninstall` removes only jevdict entries.
+replaces stale jev-cops groups, leaves foreign hooks byte-identical · `refusals` for each rule ·
+`writeSettingsFile` backs up and writes atomically · `uninstall` removes only jev-cops entries.
 
-**adapter e2e (fake Claude Code runner + real `jevdictd` on a temp socket)** — the runner
+**adapter e2e (fake Claude Code runner + real `copsd` on a temp socket)** — the runner
 implements the docs exactly: exit 2 blocks (reason = JSON `permissionDecisionReason` if
 present else stderr) and still parses JSON; exit 0 + JSON decides; other exit + valid JSON
 decides; other exit + invalid/none proceeds and records a hook error; `timeout` cancels and
@@ -391,10 +391,10 @@ with an intact block → allowed; hook block removed → blocked + latched (T1) 
 → reported, not blocked · HTTP transport: post events recorded; PreToolUse refused · observe
 mode: kill becomes allow with the "would have" note.
 
-**compiled binary** — `bun run build` then `dist/jevdict-hook` on a synthetic PreToolUse with
+**compiled binary** — `bun run build` then `dist/cops-hook` on a synthetic PreToolUse with
 the daemon answering allow: exit 0, empty stdout, p50 wall time under 150 ms over 20 runs;
-`dist/jevdict hook --harness claude-code` gives the same output; `dist/jevdict install
-claude-code --dry-run` and `dist/jevdict doctor` run from the binary (D-053 rule).
+`dist/cops hook --harness claude-code` gives the same output; `dist/cops install
+claude-code --dry-run` and `dist/cops doctor` run from the binary (D-053 rule).
 
 **install/doctor** — temp `HOME` and project: user install creates `~/.claude/settings.json`
 when absent; merges into an existing file with foreign hooks; second run is a no-op and
@@ -406,14 +406,14 @@ byte-identical; `install pi` delegates; gaps printed. Doctor: every check green 
 setup; each broken condition yields its named `fail`/`warn`/`gap`; offline canary passes
 through a real compiled binary and fails when the binary is replaced by `/bin/true`
 ("gate silently disabled") or the daemon is stopped; `--live` is skipped without
-`JEVDICT_LIVE_CANARY=1` and reported as skipped.
+`JEV_COPS_LIVE_CANARY=1` and reported as skipped.
 
 **tamper** — T01, T02, T03, T04 (installer half), T08, T09 gain `Claude Code: …` tests named
 with the spec's required outcome; their `test.todo` bodies are replaced, never deleted.
 
 **live (never in CI)** — `docs/captures/claude-code-m1.md`: a real `claude` (2.1.285) run in
 `enforce` mode showing a deny (`git push --force origin main` headless), a rewrite (`rm -rf
-./build` pinned), an interactive hold prompt with the jevdict reason, and a `config-tamper`
+./build` pinned), an interactive hold prompt with the jev-cops reason, and a `config-tamper`
 kill; and the verification of §2 row 5 (rewrite without a decision) and row 10 (VS Code /
 SDK argv).
 
@@ -439,14 +439,14 @@ SDK argv).
 - **D-069** No precedents from Claude Code holds in M1: the hook discards `hold_token` and the
   hold expires unresolved. Why: the hook runs inside the sandbox as the agent, so nothing it
   persists is hidden from the agent, and the human answers Claude Code's own prompt, invisible
-  to jevdict. Cost: the repeat-hold surcharge (D-023/D-034) applies to re-asked actions; reset
+  to jev-cops. Cost: the repeat-hold surcharge (D-023/D-034) applies to re-asked actions; reset
   through the admin socket. Alternative for M2: resolve-on-execution when OpenShell keeps tool
   processes off the socket.
 - **D-070** Session ids: root `sess_<session_id>`; a call carrying `agent_id` is
   `sess_<session_id>.<agent_id>` with `parent_id` = root and `actor.kind: "subagent"`;
   `SubagentStart` is not registered; `actor.model` comes from the `SessionStart` payload via
   the per-session state file (informational, best effort).
-- **D-071** New agent-surface route `POST /v1/session` (`jevdict.session/1`, kinds `start`,
+- **D-071** New agent-surface route `POST /v1/session` (`jev-cops.session/1`, kinds `start`,
   `prompt`, `end`, `config-change`) sets the task once from the first `UserPromptSubmit`
   before the model runs (T11; 16 KB cap) and answers `{ task, killed }`; the hook blocks the
   prompt of a killed session. Why: the canonical schema has no phase for a prompt; a state
@@ -464,18 +464,18 @@ SDK argv).
   identity (binary basename + `claude-code` arg); refuses on bare `Bash`/`PowerShell` allow,
   `disableAllHooks`, `allowManagedHooksOnly` (non-managed scope), unmatched HTTP allowlist;
   `--force` proceeds and prints the gap; `--dangerously-skip-permissions` printed as out of
-  scope (OpenShell); `--managed` writes `managed-settings.d/50-jevdict.json` or prints it.
+  scope (OpenShell); `--managed` writes `managed-settings.d/50-jev-cops.json` or prints it.
 - **D-076** `harness_version` is `claude --version` recorded by install/doctor in
-  `~/.jevdict/claude-code.json`; the hook sends it, omits it when unknown; doctor warns on
+  `~/.jev-cops/claude-code.json`; the hook sends it, omits it when unknown; doctor warns on
   drift from the verified 2.1.285 and fails below 2.1.101 (#39344).
 - **D-077** ConfigChange hook: blocks (exit 2) unless the changed file still carries the intact
-  jevdict block and does not set `disableAllHooks`; blocks when the daemon is unreachable;
+  jev-cops block and does not set `disableAllHooks`; blocks when the daemon is unreachable;
   reports every change to `/v1/session`; `policy_settings` is report-only (cannot be blocked).
 - **D-078** Doctor canary: offline through the registered binary with the documented payloads
   (config write → exit 2 + `continue:false`; `Bash true` → exit 0); `--live` only with `claude`
-  on PATH and `JEVDICT_LIVE_CANARY=1`, never in CI.
-- **D-079** `dist/jevdict-hook` is a separate lean binary (no `@jevdict/core`, no WASM) and
-  `jevdict hook` shares its module; the hook's p50 overhead on the compiled binary is a test.
+  on PATH and `JEV_COPS_LIVE_CANARY=1`, never in CI.
+- **D-079** `dist/cops-hook` is a separate lean binary (no `@jev-cops/core`, no WASM) and
+  `cops hook` shares its module; the hook's p50 overhead on the compiled binary is a test.
 
 ## 8. Open question for the owner
 
@@ -501,8 +501,8 @@ Everything else in this plan is a proposed DECISIONS row (§7), chosen as the sa
    - **kill** — files that control hooks, permissions or extensions: `settings.json`,
      `settings.local.json`, `~/.claude.json`, managed-settings dirs, `hooks/`, `plugins/`;
      `~/.codex/{config.toml,hooks.json}` and `.codex/`; OpenCode `plugin/` dirs and
-     `opencode.json[c]`; Pi `extensions/` dirs and `settings.json`; jevdict config,
-     `.jevdict.toml`, the policies dir, `~/.jevdict/`, the hook/daemon binaries.
+     `opencode.json[c]`; Pi `extensions/` dirs and `settings.json`; jev-cops config,
+     `.cops.toml`, the policies dir, `~/.jev-cops/`, the hook/daemon binaries.
    - **hold** — instruction persistence: `CLAUDE.md`/`AGENTS.md` under harness config dirs
      (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`), `skills/`, `agents/`, `commands/`,
      `output-styles/`, and any other path under a protected harness directory not listed in

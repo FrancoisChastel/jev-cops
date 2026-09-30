@@ -21,7 +21,7 @@ function spread(over: Partial<DaemonConfig["daemon"]> = {}): DaemonConfig {
       ...base.daemon,
       socket: "/run/jv/d.sock",
       adminSocket: "/run/jv-admin/a.sock",
-      hookBinary: "/opt/jv/bin/jevdict-hook",
+      hookBinary: "/opt/jv/bin/cops-hook",
       ...over,
     },
     policies: { dir: "/srv/jv/policies" },
@@ -34,14 +34,14 @@ function spread(over: Partial<DaemonConfig["daemon"]> = {}): DaemonConfig {
 }
 
 const INPUTS: JudgeInputs = {
-  configFiles: ["/srv/jv-etc/jevdict.toml"],
-  selfBinary: "/opt/jv/bin/jevdictd",
+  configFiles: ["/srv/jv-etc/cops.toml"],
+  selfBinary: "/opt/jv/bin/copsd",
   osHome: "/home/dev",
   cwd: "/work/repo",
 };
 
 describe("judgeInputPaths: everything the judge reads or writes", () => {
-  test("policies dir, audit, store, both sockets, config, ~/.jevdict/ and both binaries", () => {
+  test("policies dir, audit, store, both sockets, config, ~/.jev-cops/ and both binaries", () => {
     const paths = judgeInputPaths(spread(), INPUTS);
     expect(paths).toEqual(
       expect.arrayContaining([
@@ -56,10 +56,10 @@ describe("judgeInputPaths: everything the judge reads or writes", () => {
         "/run/jv-admin",
         "/run/jv-admin/a.sock",
         "/srv/jv-etc",
-        "/srv/jv-etc/jevdict.toml",
-        "/home/dev/.jevdict",
-        "/opt/jv/bin/jevdictd",
-        "/opt/jv/bin/jevdict-hook",
+        "/srv/jv-etc/cops.toml",
+        "/home/dev/.jev-cops",
+        "/opt/jv/bin/copsd",
+        "/opt/jv/bin/cops-hook",
       ]),
     );
   });
@@ -74,10 +74,10 @@ describe("judgeInputPaths: everything the judge reads or writes", () => {
     expect(paths.some((p) => p.includes("/opt/jv/bin"))).toBe(false);
   });
 
-  test("~/.jevdict/ under the OS home and under [daemon] home when they differ", () => {
+  test("~/.jev-cops/ under the OS home and under [daemon] home when they differ", () => {
     const paths = judgeInputPaths(spread({ home: "/home/judged" }), INPUTS);
-    expect(paths).toContain("/home/dev/.jevdict");
-    expect(paths).toContain("/home/judged/.jevdict");
+    expect(paths).toContain("/home/dev/.jev-cops");
+    expect(paths).toContain("/home/judged/.jev-cops");
   });
 
   test("every entry is absolute and listed once", () => {
@@ -89,8 +89,8 @@ describe("judgeInputPaths: everything the judge reads or writes", () => {
 
 describe("shared directories are never protected whole (only the file in them)", () => {
   test("a socket in /tmp protects the socket, not /tmp", () => {
-    const paths = judgeInputPaths(spread({ socket: "/tmp/jevdictd.sock" }), INPUTS);
-    expect(paths).toContain("/tmp/jevdictd.sock");
+    const paths = judgeInputPaths(spread({ socket: "/tmp/copsd.sock" }), INPUTS);
+    expect(paths).toContain("/tmp/copsd.sock");
     expect(paths).not.toContain("/tmp");
   });
 
@@ -105,7 +105,7 @@ describe("shared directories are never protected whole (only the file in them)",
   });
 
   test("a store in the system temp dir also protects its SQLite side files", () => {
-    const store = join(tmpdir(), "jevdict.sqlite");
+    const store = join(tmpdir(), "cops.sqlite");
     const paths = judgeInputPaths({ ...spread(), store: { path: store } }, INPUTS);
     expect(paths).toEqual(
       expect.arrayContaining([store, `${store}-wal`, `${store}-shm`, `${store}-journal`]),
@@ -162,18 +162,16 @@ describe("protectJudgeInputs: appends, never replaces", () => {
 
 describe("the running binary and the defaults", () => {
   test("process.execPath counts only inside a compiled binary", () => {
-    expect(compiledBinary("/$bunfs/root/jevdictd", "/usr/local/bin/jevdictd")).toBe(
-      "/usr/local/bin/jevdictd",
+    expect(compiledBinary("/$bunfs/root/copsd", "/usr/local/bin/copsd")).toBe(
+      "/usr/local/bin/copsd",
     );
-    expect(compiledBinary("B:/~BUN/root/jevdictd.exe", "C:\\jv\\jevdictd.exe")).toBe(
-      "C:\\jv\\jevdictd.exe",
-    );
+    expect(compiledBinary("B:/~BUN/root/copsd.exe", "C:\\jv\\copsd.exe")).toBe("C:\\jv\\copsd.exe");
     expect(compiledBinary("/work/packages/daemon/src/main.ts", "/opt/bun/bin/bun")).toBeNull();
   });
 
   test("defaults: the user config file, the OS home, the cwd; not compiled under bun test", () => {
     expect(defaultJudgeInputs()).toEqual({
-      configFiles: [join(homedir(), ".config", "jevdict", "jevdict.toml")],
+      configFiles: [join(homedir(), ".config", "jev-cops", "cops.toml")],
       selfBinary: null,
       osHome: homedir(),
       cwd: process.cwd(),

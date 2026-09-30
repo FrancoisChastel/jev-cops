@@ -44,7 +44,7 @@ function all(rule: ToolRule, tools: ReadonlyArray<string>): Record<string, ToolR
 
 /**
  * Claude Code bookkeeping tools (tools-reference, v2.1.285): task lists, plan mode,
- * questions, tool search, messages, skills, LSP. They change nothing jevdict judges, so
+ * questions, tool search, messages, skills, LSP. They change nothing jev-cops judges, so
  * they are `inert` rather than `other` (which is scored like exec). `EnterWorktree` and
  * `ExitWorktree` are deliberately absent: they create and remove git worktrees on disk,
  * so they stay `other` and fail closed when the judge is unreachable (D-081).

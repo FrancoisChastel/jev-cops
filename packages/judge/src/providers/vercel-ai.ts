@@ -1,4 +1,4 @@
-import type { Judge, JudgeResult, Question } from "@jevdict/core";
+import type { Judge, JudgeResult, Question } from "@jev-cops/core";
 import { generateText, type LanguageModel, NoObjectGeneratedError, Output } from "ai";
 import { z } from "zod";
 import { ANSWER_SCHEMA_NAME, buildPrompt, parseLlmAnswers } from "../prompt.ts";

@@ -1,17 +1,17 @@
 /**
- * The hook's local log, `~/.jevdict/claude-code-hook.log`: one line per failure the hook
+ * The hook's local log, `~/.jev-cops/claude-code-hook.log`: one line per failure the hook
  * handled on its own (a read that failed open, a call blocked because the daemon was
  * unreachable, a report that could not be sent). Spec T2: "observe-only events log locally
- * and continue". `jevdict doctor` reports its size. Never contains tool input or output.
+ * and continue". `cops doctor` reports its size. Never contains tool input or output.
  */
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-/** The log's file name under `~/.jevdict/`. */
+/** The log's file name under `~/.jev-cops/`. */
 export const HOOK_LOG_FILE = "claude-code-hook.log";
 const MAX_MESSAGE_CHARS = 1_000;
 
-/** One log entry: the hook event, jevdict's session id when known, and what happened. */
+/** One log entry: the hook event, jev-cops's session id when known, and what happened. */
 export interface HookLogLine {
   readonly event: string;
   readonly session: string | null;
@@ -20,7 +20,7 @@ export interface HookLogLine {
 
 /** Where the hook logs, under `home`. */
 export function hookLogPath(home: string): string {
-  return join(home, ".jevdict", HOOK_LOG_FILE);
+  return join(home, ".jev-cops", HOOK_LOG_FILE);
 }
 
 /**

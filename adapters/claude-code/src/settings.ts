@@ -1,7 +1,7 @@
 /**
  * Claude Code settings files the hook reads: where they are (settings#settings-files,
  * managed-settings; PLAN-M1 §2 row 19) and a strict reader. Used by the ConfigChange check
- * (intact.ts); `jevdict install`/`doctor` (M1 steps 6–7) extend it.
+ * (intact.ts); `cops install`/`doctor` (M1 steps 6–7) extend it.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

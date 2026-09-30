@@ -9,7 +9,7 @@ import {
   ok,
   type PolicyConfigInput,
   type Result,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { z } from "zod";
 import {
   coreShapeProblems,
@@ -40,7 +40,7 @@ export interface AuditForward {
   readonly target: string;
 }
 
-/** The resolved `jevdict.toml`: absolute paths, camelCase, defaults filled in. */
+/** The resolved `cops.toml`: absolute paths, camelCase, defaults filled in. */
 export interface DaemonConfig {
   readonly daemon: {
     /** The agent-facing socket, the one a sandbox mounts. */
@@ -57,7 +57,7 @@ export interface DaemonConfig {
     readonly holdTokenTtlMs: number;
     /** Budget for deriving `env.git` from an event's cwd, all git calls included (D-058). */
     readonly gitProbeTimeoutMs: number;
-    /** The harness hook binary (`jevdict install` sets it); protected like the daemon's own. */
+    /** The harness hook binary (`cops install` sets it); protected like the daemon's own. */
     readonly hookBinary: string | null;
   };
   readonly policies: { readonly dir: string };
@@ -99,7 +99,7 @@ export function parseHttpBind(text: string): Result<HttpBind, string> {
 const text = z.string().min(1);
 const table = z.custom<Table>(isTable, { error: "expected a table" });
 
-/** One `jevdict.toml` file. Strict: an unknown key is an error, never ignored. */
+/** One `cops.toml` file. Strict: an unknown key is an error, never ignored. */
 const fileSchema = z.strictObject({
   daemon: z
     .strictObject({
@@ -137,8 +137,8 @@ const fileSchema = z.strictObject({
 /** The spec defaults as a file-shaped table (paths still `~`-relative). */
 const DEFAULT_TABLE: Table = deepFreeze({
   daemon: {
-    socket: "~/.jevdict/jevdictd.sock",
-    admin_socket: "~/.jevdict/jevdictd-admin.sock",
+    socket: "~/.jev-cops/copsd.sock",
+    admin_socket: "~/.jev-cops/copsd-admin.sock",
     http: false,
     judge_deadline_ms: 12_000,
     hold_token_ttl_ms: DEFAULT_HOLD_TOKEN_TTL_MS,
@@ -148,8 +148,8 @@ const DEFAULT_TABLE: Table = deepFreeze({
   judge: { provider: "off", timeout_ms: 10_000, cache_ttl_ms: 600_000 },
   context: {},
   policy: {},
-  audit: { path: "~/.jevdict/audit.jsonl" },
-  store: { path: "~/.jevdict/jevdict.sqlite" },
+  audit: { path: "~/.jev-cops/audit.jsonl" },
+  store: { path: "~/.jev-cops/cops.sqlite" },
   enforcement: { mode: "observe" },
 });
 
@@ -247,8 +247,8 @@ export interface LoadedConfig {
   rejected: string[];
   /**
    * The files the daemon's own settings come from, absolute, whether or not they exist
-   * yet: the user file, `$JEVDICT_CONFIG`, `--config`. The repo override is not one (it
-   * may only tighten, and `config-tamper` guards every `.jevdict.toml`). The daemon
+   * yet: the user file, `$JEV_COPS_CONFIG`, `--config`. The repo override is not one (it
+   * may only tighten, and `config-tamper` guards every `.cops.toml`). The daemon
    * protects these: a file created later is loaded at the next start.
    */
   inputs: string[];
@@ -289,9 +289,9 @@ function existing(path: string | undefined): string | null {
 }
 
 /**
- * Loads `jevdict.toml` layered lowest to highest: defaults, the user file
- * (`~/.config/jevdict/jevdict.toml`), the repo override (`./.jevdict.toml`, which may
- * only tighten: its other keys are dropped and reported), `$JEVDICT_CONFIG`, then
+ * Loads `cops.toml` layered lowest to highest: defaults, the user file
+ * (`~/.config/jev-cops/cops.toml`), the repo override (`./.cops.toml`, which may
+ * only tighten: its other keys are dropped and reported), `$JEV_COPS_CONFIG`, then
  * `--config`. Objects merge, scalars replace. API keys are refused (env only, D-044).
  * Throws {@link ConfigError} on unreadable, invalid TOML or unknown keys.
  */
@@ -302,10 +302,10 @@ export function loadConfig(opts: LoadConfigOptions = {}): LoadedConfig {
   if (opts.configPath !== undefined && !existsSync(opts.configPath)) {
     throw new ConfigError(`${opts.configPath}: config file not found`);
   }
-  const userPath = join(home, ".config", "jevdict", "jevdict.toml");
+  const userPath = join(home, ".config", "jev-cops", "cops.toml");
   const user = existing(userPath);
-  const repo = existing(join(cwd, ".jevdict.toml"));
-  const envFile = existing(env.JEVDICT_CONFIG);
+  const repo = existing(join(cwd, ".cops.toml"));
+  const envFile = existing(env.JEV_COPS_CONFIG);
   let merged = resolvePaths(DEFAULT_TABLE, cwd, home);
   const sources: string[] = [];
   const rejected: string[] = [];
@@ -321,7 +321,7 @@ export function loadConfig(opts: LoadConfigOptions = {}): LoadedConfig {
   apply(repo, true);
   apply(envFile, false);
   apply(opts.configPath ?? null, false);
-  const named = [env.JEVDICT_CONFIG, opts.configPath].filter(
+  const named = [env.JEV_COPS_CONFIG, opts.configPath].filter(
     (p): p is string => p !== undefined && p !== "",
   );
   // Resolved like the reads above: against the process's cwd.

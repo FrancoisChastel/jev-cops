@@ -18,9 +18,9 @@ import {
   resolveContextConfig,
   resolvePolicyConfig,
   type Verdict,
-} from "@jevdict/core";
-import { type AuditLine, type Precedent, PrecedentStore, withDerivedGit } from "@jevdict/daemon";
-import { FIXTURE_WHEN_BUDGET_MS } from "@jevdict/sdk";
+} from "@jev-cops/core";
+import { type AuditLine, type Precedent, PrecedentStore, withDerivedGit } from "@jev-cops/daemon";
+import { FIXTURE_WHEN_BUDGET_MS } from "@jev-cops/sdk";
 import { isLatchedLine, latchedView, sessionPromptTask } from "./audit-session.ts";
 import {
   derivedGitOf,

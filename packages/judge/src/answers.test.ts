@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ChoiceQuestion, ScoreQuestion } from "@jevdict/core";
+import type { ChoiceQuestion, ScoreQuestion } from "@jev-cops/core";
 import {
   collectAnswers,
   normalizeProbabilities,

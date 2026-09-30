@@ -6,15 +6,15 @@
  *
  * Status: live for the hash chain: a real daemon's log verifies, and an edit, a deleted
  * line or a cut line breaks the chain at that seq. Live at the hook: the daemon appends its
- * audit log (and its directory) to `protectedPaths`, so through a real jevdictd running the
+ * audit log (and its directory) to `protectedPaths`, so through a real copsd running the
  * starter set an agent that writes, appends to, truncates or deletes the log is killed by
  * `config-tamper` before the command runs; reading it is not. Shipping off-box (the
- * syslog/S3 forwarder) and `jevdict doctor` verifying the chain are M2.
+ * syslog/S3 forwarder) and `cops doctor` verifying the chain are M2.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { VerdictResponse } from "@jevdict/core";
+import type { VerdictResponse } from "@jev-cops/core";
 import { verifyChain } from "../../packages/daemon/src/audit.ts";
 import {
   startTestDaemon,
@@ -75,8 +75,8 @@ describe("T12 log tampering", () => {
   });
 
   test.todo(
-    "the log is shipped off-box and jevdict doctor alerts on a chain break (catches tail truncation)",
-    pending("M2 (forwarder, jevdict doctor)"),
+    "the log is shipped off-box and cops doctor alerts on a chain break (catches tail truncation)",
+    pending("M2 (forwarder, cops doctor)"),
   );
 });
 

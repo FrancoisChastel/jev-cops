@@ -1,11 +1,11 @@
-import { type Event, type Harness, mintEventId, type SessionEventKind } from "@jevdict/core";
+import { type Event, type Harness, mintEventId, type SessionEventKind } from "@jev-cops/core";
 
 /** The root session id the session-route tests use unless they pass another. */
 export const TEST_SESSION = "sess_01M3PP6ZQ4A7X9V2K3JH8N5B6C";
 
 type Json = Record<string, unknown>;
 
-/** What a test may set on a `jevdict.session/1` report besides its kind-specific fields. */
+/** What a test may set on a `jev-cops.session/1` report besides its kind-specific fields. */
 export interface ReportShape {
   sessionId?: string;
   parentId?: string | null;
@@ -15,7 +15,7 @@ export interface ReportShape {
 }
 
 /**
- * A `jevdict.session/1` report with a fresh id. `fields` are the kind-specific ones
+ * A `jev-cops.session/1` report with a fresh id. `fields` are the kind-specific ones
  * (`prompt`, `model`, `source`, `intact`, …); `start` gets a cwd and an interactive mode
  * unless the shape or fields say otherwise.
  */
@@ -27,7 +27,7 @@ export function sessionReport(kind: SessionEventKind, fields: Json = {}, shape: 
     ...(mode === undefined ? {} : { mode }),
   };
   return {
-    schema: "jevdict.session/1",
+    schema: "jev-cops.session/1",
     id: mintEventId(),
     harness: shape.harness ?? "claude-code",
     session,

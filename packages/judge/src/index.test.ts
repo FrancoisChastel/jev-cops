@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_JUDGE_CONFIG, type Question } from "@jevdict/core";
+import { DEFAULT_JUDGE_CONFIG, type Question } from "@jev-cops/core";
 import { createJudge } from "./index.ts";
 import { fakeFetch, json } from "./testing/fetch.ts";
 import { MOCK_ANSWERS, NOUL, QUESTIONS, STATE } from "./testing/fixtures.ts";

@@ -1,6 +1,6 @@
 /**
  * The Claude Code hook's rewrite and failure paths end to end (fake Claude Code, real hook
- * subprocess, real `jevdictd`): T9 `updatedInput`, T2 daemon down, T3 judge timeout,
+ * subprocess, real `copsd`): T9 `updatedInput`, T2 daemon down, T3 judge timeout,
  * malformed stdin, precedence against another hook, and the gap no hook can close (a
  * registered binary that cannot start).
  */
@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createMockJudge } from "@jevdict/core";
+import { createMockJudge } from "@jev-cops/core";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { FakeClaudeCode, type FakeClaudeOptions } from "./testing/fake-claude.ts";
@@ -92,7 +92,7 @@ describe("T2: daemon unreachable", () => {
       expect(call.ran).not.toBeNull();
     }
     expect(c.userSees.join("\n")).toContain("read-only Read allowed (fail open)");
-    const log = readFileSync(join(home, ".jevdict", "claude-code-hook.log"), "utf8");
+    const log = readFileSync(join(home, ".jev-cops", "claude-code-hook.log"), "utf8");
     expect(log).toContain(`PreToolUse sess_${c.sessionId} Read: judge unreachable`);
     expect(log).toContain(`PreToolUse sess_${c.sessionId} Bash: judge unreachable`);
   });
@@ -110,12 +110,12 @@ describe("T3: the judge sleeps past the hook's deadline", () => {
       deadlineMs: 20_000,
       policy: { ask: { min: 0 } },
     });
-    const c = claude(td.config.daemon.socket, { env: env({ JEVDICT_HOOK_DEADLINE_MS: "400" }) });
+    const c = claude(td.config.daemon.socket, { env: env({ JEV_COPS_HOOK_DEADLINE_MS: "400" }) });
     const started = performance.now();
     const call = await c.tool("Bash", { command: "ls" });
     expect(performance.now() - started).toBeLessThan(3_000);
     expect(call.decision.outcome).toBe("deny");
-    expect(call.result).toBe("jevdict: judge timeout; blocking (fail closed)");
+    expect(call.result).toBe("jev-cops: judge timeout; blocking (fail closed)");
     expect(call.decision.hookErrors).toEqual([]);
   });
 });
@@ -127,7 +127,7 @@ describe("malformed input and other handlers", () => {
       "a PreToolUse without a tool",
       JSON.stringify({ hook_event_name: "PreToolUse", session_id: "s", cwd: "/" }),
     ],
-    ["an event jevdict does not register", JSON.stringify({ hook_event_name: "Stop" })],
+    ["an event jev-cops does not register", JSON.stringify({ hook_event_name: "Stop" })],
   ])("%s on stdin: exit 2, the call is blocked", async (_name, payload) => {
     const run = await spawnHook(hookCommand(join(work, "none.sock")), payload, {
       env: env(),
@@ -139,7 +139,7 @@ describe("malformed input and other handlers", () => {
     expect(run.stderr).toContain("unreadable hook payload");
   });
 
-  test("another PreToolUse hook's allow cannot undo jevdict's deny (deny > ask > allow)", async () => {
+  test("another PreToolUse hook's allow cannot undo jev-cops's deny (deny > ask > allow)", async () => {
     td = await startTestDaemon({ policies: { "deny.ts": policyModule("deny", 1, "deny") } });
     const allow = join(work, "allow-hook.ts");
     writeFileSync(

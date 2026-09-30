@@ -1,4 +1,4 @@
-import { mintEventId, parseEvent } from "@jevdict/core";
+import { mintEventId, parseEvent } from "@jev-cops/core";
 import type { Runtime } from "../daemon.ts";
 import { observeEvent, type Reply } from "../service.ts";
 import {
@@ -36,7 +36,7 @@ function mapped(rt: Runtime, input: ClaudeCodePostInput) {
  * `POST /v1/hooks/claude-code` (agent surface: Unix socket and loopback HTTP; D-066
  * proposal): the raw Claude Code `PostToolUse` / `PostToolUseFailure` payload, as an HTTP
  * hook sends it. Mapped to a canonical post event (session facts from `/v1/session` fill
- * version, mode and model), validated as `jevdict.event/1` and recorded like
+ * version, mode and model), validated as `jev-cops.event/1` and recorded like
  * `/v1/observe`; answers 200 `{}` (a hook output with no decision). `PreToolUse` is
  * refused with 400 and an `anomaly` line: an HTTP hook fails open on every error, so the
  * pre-tool gate is only ever the command hook (plan §5 row 6). Anything else is 400.

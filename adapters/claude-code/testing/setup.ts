@@ -1,5 +1,5 @@
 /**
- * How the tests register the hook: the source entry run by this Bun (as `jevdict install`
+ * How the tests register the hook: the source entry run by this Bun (as `cops install`
  * would register the compiled binary), and the settings block for every event.
  */
 import { join } from "node:path";
@@ -27,7 +27,7 @@ const TIMEOUTS_S: Readonly<Record<string, number>> = {
 };
 
 /** A settings object registering the hook on every event, in exec form (PLAN-M1 §4.3). */
-export function jevdictSettings(socket: string, binary?: string): Record<string, unknown> {
+export function jevCopsSettings(socket: string, binary?: string): Record<string, unknown> {
   const hook = hookCommand(socket, binary);
   const entry = (event: string) => [
     {

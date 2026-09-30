@@ -9,7 +9,7 @@ import {
   type PreEvent,
   type RepoHints,
   type Verdict,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import type { EnforcementMode } from "./config.ts";
 import type { KillRecord } from "./kill-latch.ts";
 

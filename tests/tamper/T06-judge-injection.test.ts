@@ -29,7 +29,7 @@ import {
   type Question,
   resolveContextConfig,
   resolvePolicyConfig,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { startTestDaemon, withFreshId } from "../../packages/daemon/src/testing/daemon.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import {

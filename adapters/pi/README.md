@@ -1,7 +1,7 @@
-# @jevdict/adapter-pi
+# @jev-cops/adapter-pi
 
-The Jevdict extension for [Pi](https://pi.dev). It forwards every Pi tool call to `jevdictd`
-as a canonical `jevdict.event/1` event, maps the verdict back onto Pi's `tool_call`
+The jev-cops extension for [Pi](https://pi.dev). It forwards every Pi tool call to `copsd`
+as a canonical `jev-cops.event/1` event, maps the verdict back onto Pi's `tool_call`
 contract, and reports every tool result as a post event. It contains no policy. Verified
 against Pi v0.87.1; captured on a real Pi 0.83.0 run in
 [`docs/captures/pi-m0.md`](../../docs/captures/pi-m0.md). The full contract and every
@@ -9,37 +9,37 @@ difference from the spec are in [`docs/adapters.md`](../../docs/adapters.md#pi).
 
 | File | What it is |
 |---|---|
-| `jevdict.ts` | The extension. Node built-ins only; this one file is what gets installed. |
+| `jev-cops.ts` | The extension. Node built-ins only; this one file is what gets installed. |
 | `pi-types.ts` | The subset of Pi's extension types it uses (type-only import, erased at load). |
 | `install.ts` | `installPiExtension()`: copies the extension into place and prints the known gaps. |
 | `testing/fake-pi.ts` | A fake Pi runner with v0.87.1 semantics, used by the tests. |
 
 ## Install
 
-Start the daemon first (`jevdictd --enforce`, or leave it in the default `observe` mode to
+Start the daemon first (`copsd --enforce`, or leave it in the default `observe` mode to
 log only). Then install the extension using one of these options:
 
 ```sh
 # Global: every project (Pi's agent dir, or $PI_CODING_AGENT_DIR)
 mkdir -p ~/.pi/agent/extensions
-cp adapters/pi/jevdict.ts ~/.pi/agent/extensions/jevdict.ts
+cp adapters/pi/jev-cops.ts ~/.pi/agent/extensions/jev-cops.ts
 
 # Project: loads only after you trust the project in Pi
-mkdir -p .pi/extensions && cp adapters/pi/jevdict.ts .pi/extensions/jevdict.ts
+mkdir -p .pi/extensions && cp adapters/pi/jev-cops.ts .pi/extensions/jev-cops.ts
 
 # One run only
-pi -e adapters/pi/jevdict.ts
+pi -e adapters/pi/jev-cops.ts
 ```
 
-The socket is resolved in this order: a path baked in by the installer, `$JEVDICT_SOCKET`,
-then `~/.jevdict/jevdictd.sock` (the daemon's default). That is the agent socket. The
-daemon's admin socket (`~/.jevdict/jevdictd-admin.sock`, budget resets) is for a human's
+The socket is resolved in this order: a path baked in by the installer, `$JEV_COPS_SOCKET`,
+then `~/.jev-cops/copsd.sock` (the daemon's default). That is the agent socket. The
+daemon's admin socket (`~/.jev-cops/copsd-admin.sock`, budget resets) is for a human's
 shell only: never point the extension at it or mount it into a sandbox. The installer does the copy and the
-baking from code (the `jevdict install pi` command lands in M1):
+baking from code (the `cops install pi` command lands in M1):
 
 ```ts
-import { installPiExtension } from "@jevdict/adapter-pi/install";
-installPiExtension({ global: true, socket: "/run/jevdict/jevdictd.sock" });
+import { installPiExtension } from "@jev-cops/adapter-pi/install";
+installPiExtension({ global: true, socket: "/run/jev-cops/copsd.sock" });
 ```
 
 When you run `pi -p` from a script whose stdin is a pipe, close stdin (`< /dev/null`).
@@ -50,10 +50,10 @@ Otherwise print mode waits on it.
 | Verdict | In Pi |
 |---|---|
 | `allow` | Nothing returned; the tool runs. |
-| `annotate` | The tool runs; `context_note` is appended to its result as a `[jevdict] …` text block (Pi's `tool_call` has no additional-context field). |
+| `annotate` | The tool runs; `context_note` is appended to its result as a `[jev-cops] …` text block (Pi's `tool_call` has no additional-context field). |
 | `rewrite` | `event.input` is replaced in place by `updated_input` (Pi has no `updatedInput` return); the tool runs the pinned input. |
 | `hold` | Interactive (`ctx.hasUI`: tui, rpc): `ctx.ui.confirm` shows the daemon's normalized raw command and its `detail` (the confirm view from `/v1/explain`, which the daemon serves on the agent socket only with the verdict's `hold_token` as a Bearer header), never the agent's text. A hold without a token, or whose view cannot be loaded, is blocked without asking. Yes runs the tool and records a precedent through `/v1/resolve` (`by: "pi-user"`), presenting the verdict's single-use `hold_token`, which the model never sees. No blocks it. Headless (print, json): blocked (D-008; the daemon already sends `deny`). |
-| `deny` | `{ block: true, reason: "jevdict: <reason>" }`. The reason is the tool result the model sees. |
+| `deny` | `{ block: true, reason: "jev-cops: <reason>" }`. The reason is the tool result the model sees. |
 | `kill` | Blocked with `terminate: true`, then `ctx.abort()` and `ctx.shutdown()`. |
 
 Failures fail closed. A connection error, a non-200 reply, a 504 or client timeout (the
@@ -65,7 +65,7 @@ observe-only events). Post events never block: the extension waits at most 2 s f
 
 ## Known gaps
 
-`installPiExtension` prints these gaps, and `jevdict doctor` will print them from M1 on
+`installPiExtension` prints these gaps, and `cops doctor` will print them from M1 on
 (`PI_GAPS` in `install.ts`):
 
 - **No OpenShell.** The agent can edit or delete the extension file, so every deny is
@@ -75,7 +75,7 @@ observe-only events). Post events never block: the extension waits at most 2 s f
 - **No post event for denied calls.** A call blocked in `tool_call` produces no `tool_result`.
 - **`kill` cannot shut down a headless run.** In print and json modes `shutdown` is a
   no-op, so `abort` is what ends the run.
-- **No `env.git` is sent; the daemon derives it.** jevdictd reads repo, branch, default
+- **No `env.git` is sent; the daemon derives it.** copsd reads repo, branch, default
   branch (`origin/HEAD`) and dirty from the call's cwd with hardened read-only git. The
   repository is the agent's to write, so it can steer those values (for example move
   `origin/HEAD` so `main` stops counting as the default branch); what cannot be derived is

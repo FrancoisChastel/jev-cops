@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadPolicies } from "@jevdict/core";
-import { parseFixtures, VERDICTS, type Verdict } from "@jevdict/sdk";
-import { describeFixtures, fixturePathFor } from "@jevdict/sdk/test";
+import { loadPolicies } from "@jev-cops/core";
+import { parseFixtures, VERDICTS, type Verdict } from "@jev-cops/sdk";
+import { describeFixtures, fixturePathFor } from "@jev-cops/sdk/test";
 
 /**
- * The M0 gate until `jevdict test` exists (spec: "every policy ships with a
- * `*.fixtures.json`; `jevdict test` fails the build on any mismatch"). Every policy is
+ * The M0 gate until `cops test` exists (spec: "every policy ships with a
+ * `*.fixtures.json`; `cops test` fails the build on any mismatch"). Every policy is
  * loaded the way the daemon loads it, then each fixture file runs twice: against its own
  * policy alone, and against the whole starter set, so no other policy may change the
  * outcome a fixture pins.
@@ -58,11 +58,11 @@ describe("starter policy set", () => {
     }
   });
 
-  test("policies import nothing but @jevdict/sdk", () => {
+  test("policies import nothing but @jev-cops/sdk", () => {
     for (const file of files) {
       const source = readFileSync(join(DIR, file), "utf8");
       const imports = [...source.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
-      expect({ file, imports: imports.filter((i) => i !== "@jevdict/sdk") }).toEqual({
+      expect({ file, imports: imports.filter((i) => i !== "@jev-cops/sdk") }).toEqual({
         file,
         imports: [],
       });

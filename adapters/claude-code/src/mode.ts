@@ -10,7 +10,7 @@
  */
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import type { SessionMode } from "@jevdict/core";
+import type { SessionMode } from "@jev-cops/core";
 
 /** A process's parent pid and argv. */
 export interface ProcInfo {

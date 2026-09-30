@@ -10,7 +10,7 @@ labels: bug
 
 **What the spec says should happen** (section of `docs/SPEC.md`):
 
-**Canonical event JSON** (from the audit log or `jevdict explain <event-id>`; redact secrets):
+**Canonical event JSON** (from the audit log or `cops explain <event-id>`; redact secrets):
 
 ```json
 ```

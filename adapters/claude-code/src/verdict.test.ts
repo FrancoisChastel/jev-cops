@@ -6,7 +6,7 @@ const ID = "evt_01M3PP723DWGXKY6ZN6TC6ZMXZ";
 describe("parseJudged: the daemon's verdict, or null (the caller fails closed)", () => {
   test("keeps what the hook acts on", () => {
     const body = {
-      schema: "jevdict.verdict/1",
+      schema: "jev-cops.verdict/1",
       event_id: ID,
       verdict: "annotate",
       reason: "r",

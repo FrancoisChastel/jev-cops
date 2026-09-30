@@ -1,12 +1,12 @@
 {
-  "name": "jevdict-monorepo",
+  "name": "jev-cops-monorepo",
   "private": true,
   "version": "0.0.0",
   "description": "Harness-side judge that scores agent tool calls in context and returns graduated verdicts",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/FrancoisChastel/jevdict.git"
+    "url": "git+https://github.com/FrancoisChastel/jev-cops.git"
   },
   "packageManager": "bun@1.3.13",
   "workspaces": [
@@ -21,9 +21,9 @@
     "lint:fix": "bun x biome check --write .",
     "check": "bun run lint && bun run typecheck && bun test",
     "gate": "bun packages/cli/src/main.ts test policies",
-    "build:daemon": "bun build --compile packages/daemon/src/main.ts --outfile dist/jevdictd",
-    "build:cli": "bun build --compile packages/cli/src/main.ts --outfile dist/jevdict",
-    "build:hook": "bun build --compile adapters/claude-code/src/hook-main.ts --outfile dist/jevdict-hook",
+    "build:daemon": "bun build --compile packages/daemon/src/main.ts --outfile dist/copsd",
+    "build:cli": "bun build --compile packages/cli/src/main.ts --outfile dist/cops",
+    "build:hook": "bun build --compile adapters/claude-code/src/hook-main.ts --outfile dist/cops-hook",
     "build": "bun run build:daemon && bun run build:cli && bun run build:hook"
   },
   "devDependencies": {

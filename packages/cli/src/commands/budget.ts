@@ -22,7 +22,7 @@ interface BudgetArgs {
 }
 
 /**
- * `jevdict budget <session-id> [--socket path] [--reset --admin-socket path]`: shows a
+ * `cops budget <session-id> [--socket path] [--reset --admin-socket path]`: shows a
  * session's risk budget through the daemon's agent socket, or, with `--reset`, resets it
  * through the admin socket, which only a human's shell reaches (spec: "until a human
  * resets the budget"; H1). Exit 1 when the daemon is unreachable or the session unknown.
@@ -41,12 +41,12 @@ export async function runBudgetCommand(argv: readonly string[], io: Io): Promise
       strict: true,
     });
   } catch (cause) {
-    io.err(`jevdict budget: ${(cause as Error).message}`);
+    io.err(`cops budget: ${(cause as Error).message}`);
     return EXIT.usage;
   }
   const [sessionId, ...extra] = parsed.positionals;
   if (sessionId === undefined || extra.length > 0) {
-    io.err("jevdict budget: expected exactly one session id");
+    io.err("cops budget: expected exactly one session id");
     return EXIT.usage;
   }
   const reset = parsed.values.reset === true;
@@ -58,14 +58,14 @@ export async function runBudgetCommand(argv: readonly string[], io: Io): Promise
       ? await request(socket, "/v1/budget/reset", { session_id: sessionId })
       : await request(socket, `/v1/budget/${encodeURIComponent(sessionId)}`);
     if (res.status !== 200) {
-      io.err(`jevdict budget: ${String(res.body.error ?? `HTTP ${res.status}`)}`);
+      io.err(`cops budget: ${String(res.body.error ?? `HTTP ${res.status}`)}`);
       return EXIT.failed;
     }
     const verb = reset ? "reset; now" : "spent";
     io.out(`${sessionId}: ${verb} ${String(res.body.spent)}/${String(res.body.limit)}`);
     return EXIT.ok;
   } catch (cause) {
-    io.err(`jevdict budget: daemon unreachable on ${socket}: ${(cause as Error).message}`);
+    io.err(`cops budget: daemon unreachable on ${socket}: ${(cause as Error).message}`);
     return EXIT.failed;
   }
 }

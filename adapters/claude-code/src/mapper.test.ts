@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseEvent, parseSessionEvent } from "@jevdict/core";
+import { parseEvent, parseSessionEvent } from "@jev-cops/core";
 import { claudeCodePayloadText } from "../../../tests/fixtures/claude-code/index.ts";
 import { type MapContext, sessionReportOf, toPostEvent, toPreEvent } from "./mapper.ts";
 import { type HookInput, parseHookInput } from "./payload.ts";
@@ -24,7 +24,7 @@ describe("toPreEvent", () => {
     const i = pre("pre-tool-use.bash");
     const e = toPreEvent(i, CTX);
     expect(e).toEqual({
-      schema: "jevdict.event/1",
+      schema: "jev-cops.event/1",
       id: expect.stringMatching(EVENT_ID),
       phase: "pre",
       harness: "claude-code",
@@ -91,7 +91,7 @@ describe("sessionReportOf", () => {
     if (i.hook_event_name !== "SessionStart") throw new Error("fixture");
     const r = sessionReportOf(i, { ...CTX, mode: "headless" });
     expect(r).toEqual({
-      schema: "jevdict.session/1",
+      schema: "jev-cops.session/1",
       id: expect.stringMatching(EVENT_ID),
       harness: "claude-code",
       harness_version: "2.1.285",

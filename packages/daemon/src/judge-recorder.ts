@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Answer, Judge } from "@jevdict/core";
+import type { Answer, Judge } from "@jev-cops/core";
 
 interface Slot {
   answers: Readonly<Record<string, Answer>> | null;
@@ -7,7 +7,7 @@ interface Slot {
 
 /**
  * Captures the judge's full typed answers for the request being judged, so the audit
- * line can carry them and `jevdict replay` can feed them back through the mock judge.
+ * line can carry them and `cops replay` can feed them back through the mock judge.
  * Scoped with `AsyncLocalStorage`: concurrent requests never see each other's answers.
  */
 export class JudgeRecorder {

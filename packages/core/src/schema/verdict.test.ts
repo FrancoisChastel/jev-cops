@@ -15,7 +15,7 @@ type Json = Record<string, unknown>;
 /** The spec's verdict response example, with its placeholders filled in. */
 function specExample(): Json {
   return {
-    schema: "jevdict.verdict/1",
+    schema: "jev-cops.verdict/1",
     event_id: "evt_01M3PP723DWGXKY6ZN6TC6ZMXZ",
     verdict: "hold",
     risk: 0.62,
@@ -135,7 +135,7 @@ describe("parseVerdict", () => {
     ["risk", { risk: -0.1 }],
     ["verdict", { verdict: "block" }],
     ["event_id", { event_id: "evt_01J9…" }],
-    ["schema", { schema: "jevdict.verdict/2" }],
+    ["schema", { schema: "jev-cops.verdict/2" }],
     ["jev.0.type", { jev: [{ question: "q", type: "yesno", p: 0.5, confidence: 0.5 }] }],
     ["jev.0.p", { jev: [{ question: "q", type: "score", p: 2, confidence: 0.5 }] }],
     ["features.taint", { features: { taint: "high" } }],

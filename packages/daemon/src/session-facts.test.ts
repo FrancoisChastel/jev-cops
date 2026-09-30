@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { parseSessionEvent, type SessionEvent } from "@jevdict/core";
+import { parseSessionEvent, type SessionEvent } from "@jev-cops/core";
 import { noHumanOf, SessionFactsStore } from "./session-facts.ts";
 import { sessionReport } from "./testing/session.ts";
 

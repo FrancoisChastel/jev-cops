@@ -77,7 +77,7 @@ export interface Decision {
 }
 
 /**
- * The `jevdict.verdict/1` response for `decision`. It always passes `parseVerdict`:
+ * The `jev-cops.verdict/1` response for `decision`. It always passes `parseVerdict`:
  * risk and jev numbers are clamped to [0, 1] and `updated_input` is non-null exactly on
  * `rewrite` (combine guarantees a rewrite carries a payload). `detail` is included; the
  * daemon strips it before the response reaches a harness.

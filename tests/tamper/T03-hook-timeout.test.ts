@@ -9,11 +9,11 @@
  * with reason "judge timeout". Live (Claude Code hook, M1): the hook owns its deadline
  * (13 s, below the 30 s settings timeout, because Claude Code lets a timed-out hook's call
  * proceed); past it the hook exits 2 with "judge timeout" (shortened here with
- * `JEVDICT_HOOK_DEADLINE_MS`).
+ * `JEV_COPS_HOOK_DEADLINE_MS`).
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import { createMockJudge } from "@jevdict/core";
-import { register } from "../../adapters/pi/jevdict.ts";
+import { createMockJudge } from "@jev-cops/core";
+import { register } from "../../adapters/pi/jev-cops.ts";
 import { FakePi, fakeContext } from "../../adapters/pi/testing/fake-pi.ts";
 import {
   startTestDaemon,
@@ -94,13 +94,13 @@ describe("T3 hook timeout", () => {
     });
     const ws = claudeWorkspace();
     try {
-      const deadline = { JEVDICT_HOOK_DEADLINE_MS: "300" };
+      const deadline = { JEV_COPS_HOOK_DEADLINE_MS: "300" };
       const c = claudeCode(td.config.daemon.socket, ws, {}, deadline);
       const started = performance.now();
       const call = await c.tool("Bash", { command: "ls" });
       expect(performance.now() - started).toBeLessThan(3_000);
       expect(call.decision.outcome).toBe("deny");
-      expect(call.result).toBe("jevdict: judge timeout; blocking (fail closed)");
+      expect(call.result).toBe("jev-cops: judge timeout; blocking (fail closed)");
       expect(call.ran).toBeNull();
     } finally {
       ws.dispose();

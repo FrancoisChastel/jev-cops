@@ -61,7 +61,7 @@ describe("detectMode: the parent claude's argv", () => {
 
   test("shell form: shells are unwrapped, nested ones and Windows ones included", () => {
     const read = table({
-      10: { ppid: 9, args: ["/bin/sh", "-c", "jevdict-hook --harness claude-code"] },
+      10: { ppid: 9, args: ["/bin/sh", "-c", "cops-hook --harness claude-code"] },
       9: { ppid: 1, args: ["claude"] },
     });
     expect(detectMode(10, read)).toBe("interactive");

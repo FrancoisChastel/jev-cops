@@ -1,8 +1,8 @@
 /**
- * @jevdict/sdk — the published API for policy authors: `definePolicy`, the `jev`
+ * @jev-cops/sdk — the published API for policy authors: `definePolicy`, the `jev`
  * question builders, the `*.fixtures.json` format and its runner, and the core types a
- * policy needs. Policies import from here only, never from `@jevdict/core` internals.
- * The `bun:test` adapter lives at `@jevdict/sdk/test` so loading a policy never pulls in
+ * policy needs. Policies import from here only, never from `@jev-cops/core` internals.
+ * The `bun:test` adapter lives at `@jev-cops/sdk/test` so loading a policy never pulls in
  * the test runner.
  */
 export type {
@@ -21,8 +21,8 @@ export type {
   ScoreAnswer,
   ScoreQuestion,
   Verdict,
-} from "@jevdict/core";
-export { VERDICTS } from "@jevdict/core";
+} from "@jev-cops/core";
+export { VERDICTS } from "@jev-cops/core";
 export { definePolicy } from "./define.ts";
 export {
   defineFixtures,

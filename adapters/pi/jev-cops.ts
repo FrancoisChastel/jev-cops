@@ -1,9 +1,9 @@
 /**
- * Jevdict extension for Pi (verified against Pi v0.87.1). Install into
+ * jev-cops extension for Pi (verified against Pi v0.87.1). Install into
  * `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`; Pi loads it with jiti.
  *
- * Translation only, no policy: every tool call goes to `jevdictd` as a canonical
- * `jevdict.event/1` pre event and the verdict is mapped back onto Pi's `tool_call`
+ * Translation only, no policy: every tool call goes to `copsd` as a canonical
+ * `jev-cops.event/1` pre event and the verdict is mapped back onto Pi's `tool_call`
  * contract; every tool result goes back as a post event. Runtime imports are Node
  * built-ins only, so this one file is the whole installed extension. See docs/adapters.md.
  */
@@ -13,7 +13,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { text as readText } from "node:stream/consumers";
 import type {
-  JevdictOptions,
+  JevCopsOptions,
   Judged,
   PiApi,
   PiCallKind,
@@ -94,18 +94,18 @@ function parseVerdict(body: unknown, id: string): Judged | null {
 const warn = (ctx: PiContext, m: string) =>
   ctx.hasUI ? ctx.ui.notify(m, "warning") : process.stderr.write(`${m}\n`);
 
-/** Registers the jevdict handlers on `pi`, talking to `jevdictd` at `opts.socket`. */
-export function register(pi: PiApi, opts: JevdictOptions): void {
+/** Registers the jev-cops handlers on `pi`, talking to `copsd` at `opts.socket`. */
+export function register(pi: PiApi, opts: JevCopsOptions): void {
   const judgeMs = opts.judgeTimeoutMs ?? 13_000;
   const shortMs = opts.observeTimeoutMs ?? 2_000;
   let session = { task: null as string | null, startedAt: new Date().toISOString() };
   const notes = new Map<string, string>();
   const call = (method: string, path: string, body: unknown, ms: number, token?: string) =>
     send(opts.socket, method, path, body, ms, token);
-  const blocked = (r: string): PiToolCallResult => ({ block: true, reason: `jevdict: ${r}` });
+  const blocked = (r: string): PiToolCallResult => ({ block: true, reason: `jev-cops: ${r}` });
 
   const base = (e: PiToolCallEvent | PiToolResultEvent, ctx: PiContext, phase: string) => ({
-    schema: "jevdict.event/1",
+    schema: "jev-cops.event/1",
     id: mintEventId(),
     phase,
     harness: "pi",
@@ -130,7 +130,7 @@ export function register(pi: PiApi, opts: JevdictOptions): void {
   /** T2/T3: fail closed unless the call is read-only (observe-only: log and continue). */
   const unavailable = (e: PiToolCallEvent, ctx: PiContext, cause: string) => {
     if (kindOf(e) !== "fs.read") return blocked(`${cause}; blocking (fail closed)`);
-    warn(ctx, `jevdict: ${cause}; read-only ${e.toolName} allowed (observe-only, fail open)`);
+    warn(ctx, `jev-cops: ${cause}; read-only ${e.toolName} allowed (observe-only, fail open)`);
     return undefined;
   };
 
@@ -147,11 +147,11 @@ export function register(pi: PiApi, opts: JevdictOptions): void {
     if (typeof raw !== "string") return blocked(v.reason);
     const detail = pick(view, "detail");
     const message = typeof detail === "string" ? `${raw}\n\n${detail}` : raw;
-    const yes = await ctx.ui.confirm(`Jevdict hold: ${v.reason}`, message);
+    const yes = await ctx.ui.confirm(`jev-cops hold: ${v.reason}`, message);
     const decision = yes ? "allow" : "deny";
     const answer = { event_id: id, decision, by: "pi-user", hold_token: v.token };
     await call("POST", "/v1/resolve", answer, shortMs).catch((err: unknown) =>
-      warn(ctx, `jevdict: resolve not recorded: ${why(err)}`),
+      warn(ctx, `jev-cops: resolve not recorded: ${why(err)}`),
     );
     return yes ? undefined : blocked(`${v.reason} (declined by the user)`);
   };
@@ -195,21 +195,21 @@ export function register(pi: PiApi, opts: JevdictOptions): void {
       bytes_out: Buffer.byteLength(text),
     };
     await call("POST", "/v1/observe", { ...base(e, ctx, "post"), result }, shortMs).catch(
-      (err: unknown) => warn(ctx, `jevdict: observe not recorded (${why(err)}); continuing`),
+      (err: unknown) => warn(ctx, `jev-cops: observe not recorded (${why(err)}); continuing`),
     );
     const note = notes.get(e.toolCallId);
     notes.delete(e.toolCallId);
     if (note === undefined) return undefined;
-    return { content: [...e.content, { type: "text", text: `[jevdict] ${note}` }] };
+    return { content: [...e.content, { type: "text", text: `[jev-cops] ${note}` }] };
   });
 }
 
-/** The socket: the installed path, else `$JEVDICT_SOCKET`, else `~/.jevdict/jevdictd.sock`. */
+/** The socket: the installed path, else `$JEV_COPS_SOCKET`, else `~/.jev-cops/copsd.sock`. */
 export function socketPath(env: Readonly<Record<string, string | undefined>> = process.env) {
-  return INSTALLED_SOCKET ?? (env.JEVDICT_SOCKET || join(homedir(), ".jevdict", "jevdictd.sock"));
+  return INSTALLED_SOCKET ?? (env.JEV_COPS_SOCKET || join(homedir(), ".jev-cops", "copsd.sock"));
 }
 
 /** Pi's extension entry point. */
-export default function jevdict(pi: PiApi): void {
+export default function jevCops(pi: PiApi): void {
   register(pi, { socket: socketPath() });
 }

@@ -9,7 +9,7 @@ import {
   type JudgeState,
   type Question,
   resolveContextConfig,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { CTX_HOME, CTX_SESSION, toolEvent } from "../../../../tests/fixtures/context/index.ts";
 import { CHOICE, NOUL, SCORE, STATE } from "../testing/fixtures.ts";
 

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-/** Names of the canonical `jevdict.event/1` fixtures shared across packages. */
+/** Names of the canonical `jev-cops.event/1` fixtures shared across packages. */
 export const EVENT_FIXTURES = ["pre-bash", "post-bash", "pre-edit", "pre-webfetch"] as const;
 
 export type EventFixtureName = (typeof EVENT_FIXTURES)[number];

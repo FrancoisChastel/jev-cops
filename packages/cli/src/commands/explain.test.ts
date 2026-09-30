@@ -45,7 +45,7 @@ beforeAll(async () => {
     hold_token,
   });
   await td.daemon.stop();
-  keep = mkdtempSync(join(tmpdir(), "jevdict-explain-"));
+  keep = mkdtempSync(join(tmpdir(), "jev-cops-explain-"));
   audit = join(keep, "audit.jsonl");
   await Bun.write(audit, Bun.file(td.config.audit.path));
   rmSync(td.dir, { recursive: true, force: true });
@@ -55,7 +55,7 @@ beforeAll(async () => {
 
 afterAll(() => rmSync(keep, { recursive: true, force: true }));
 
-describe("jevdict explain", () => {
+describe("cops explain", () => {
   test("prints verdict, risk, floor, features with why, trace, budget, raw and detail", async () => {
     const io = captureIo();
     expect(await runExplainCommand([held, "--audit", audit], io)).toBe(0);

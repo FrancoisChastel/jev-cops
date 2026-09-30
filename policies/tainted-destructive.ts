@@ -1,4 +1,4 @@
-import { definePolicy, type PolicyContext, type PolicyEvent } from "@jevdict/sdk";
+import { definePolicy, type PolicyContext, type PolicyEvent } from "@jev-cops/sdk";
 
 /**
  * tainted-destructive (spec §Starter policy set): an `fs.delete` or an irreversible exec

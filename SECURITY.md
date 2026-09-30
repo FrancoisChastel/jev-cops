@@ -1,7 +1,7 @@
 # Security policy
 
-Jevdict is a detection-and-response layer for coding agents. A bypass of its judge is
-a security issue, even though Jevdict is explicitly **not** the last line of defence
+jev-cops is a detection-and-response layer for coding agents. A bypass of its judge is
+a security issue, even though jev-cops is explicitly **not** the last line of defence
 (see "What it is not" in `docs/SPEC.md`): hard guarantees belong to a kernel-enforced
 sandbox such as OpenShell.
 
@@ -22,7 +22,7 @@ acknowledgement within 72 hours.
 
 ## Out of scope
 
-- Gaps in the harnesses themselves that `jevdict doctor` already prints as known
+- Gaps in the harnesses themselves that `cops doctor` already prints as known
   (listed in `docs/adapters.md`). Please still tell us if you find a new one.
 - Anything that requires `--dangerously-skip-permissions` or equivalent; that is
   OpenShell's territory.

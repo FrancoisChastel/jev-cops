@@ -17,7 +17,7 @@ describe("parseHookInput: the documented payloads", () => {
     expect(parsed.input.session_id).toBe("abc123");
   });
 
-  test("a PreToolUse keeps tool_input verbatim and drops keys jevdict does not read", () => {
+  test("a PreToolUse keeps tool_input verbatim and drops keys jev-cops does not read", () => {
     const parsed = parseHookInput(claudeCodePayloadText("pre-tool-use.bash"));
     if (!parsed.ok || parsed.input.hook_event_name !== "PreToolUse") throw new Error("parse");
     expect(parsed.input).toEqual({
@@ -76,7 +76,7 @@ describe("parseHookInput: refusals (the caller fails closed)", () => {
     ["not JSON", "{", null],
     ["a JSON array", "[]", null],
     ["no hook_event_name", text({ session_id: "s", cwd: "/w" }), null],
-    ["an event jevdict does not register", text({ hook_event_name: "SubagentStart" }), null],
+    ["an event jev-cops does not register", text({ hook_event_name: "SubagentStart" }), null],
     ["a non-string event name", text({ hook_event_name: 7 }), null],
   ] as const)("%s: no event", (_name, payload, event) => {
     const parsed = parseHookInput(payload);

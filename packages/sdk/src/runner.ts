@@ -19,7 +19,7 @@ import {
   resolvePolicyConfig,
   SCOPE_QUESTION,
   type Verdict,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   type FixtureCase,
   type FixtureConfig,

@@ -1,5 +1,5 @@
 {
-  "schema": "jevdict.event/1",
+  "schema": "jev-cops.event/1",
   "id": "evt_01M3PP723E16BZVCZH2ZDB0N36",
   "phase": "pre",
   "harness": "claude-code",

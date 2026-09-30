@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mintEventId, parseEvent } from "@jevdict/core";
+import { mintEventId, parseEvent } from "@jev-cops/core";
 import { CLAUDE_SESSION, claudeFailure, claudePost, claudePre } from "../testing/claude-code.ts";
 import {
   type ClaudeCodePostInput,
@@ -164,7 +164,7 @@ describe("resultOf", () => {
 });
 
 describe("toPostEvent", () => {
-  test("a valid jevdict.event/1 post event, ids and input as sent", () => {
+  test("a valid jev-cops.event/1 post event, ids and input as sent", () => {
     const body = claudePost("Bash", { command: "ls" }, BASH_RESPONSE, { toolUseId: "toolu_9" });
     const input = parsed(body);
     const id = mintEventId();

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { registerSdkModule } from "@jevdict/sdk/register";
+import { registerSdkModule } from "@jev-cops/sdk/register";
 import { runBudgetCommand } from "./commands/budget.ts";
 import { runExplainCommand } from "./commands/explain.ts";
 import { runHookCommand } from "./commands/hook.ts";
@@ -10,9 +10,9 @@ import { EXIT, type Io, PROCESS_IO } from "./io.ts";
 /** CLI version; follows the workspace. */
 export const CLI_VERSION = "0.0.0";
 
-export const CLI_USAGE = `jevdict ${CLI_VERSION} — the Jevdict command line
+export const CLI_USAGE = `cops ${CLI_VERSION} — the jev-cops command line
 
-Usage: jevdict <command> [options]
+Usage: cops <command> [options]
 
 Commands:
   test [dir] [--json]                      run every *.fixtures.json in dir (default ./policies)
@@ -43,7 +43,7 @@ type Command = (argv: readonly string[], io: Io) => Promise<number>;
 const notYet =
   (name: string): Command =>
   async (_argv, io) => {
-    io.err(`jevdict ${name}: not yet available (M1)`);
+    io.err(`jev-cops ${name}: not yet available (M1)`);
     return EXIT.usage;
   };
 
@@ -58,7 +58,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   doctor: notYet("doctor"),
 };
 
-/** Runs `jevdict` with `argv` (without the binary name); resolves with the exit code. */
+/** Runs `jev-cops` with `argv` (without the binary name); resolves with the exit code. */
 export async function main(argv: readonly string[], io: Io = PROCESS_IO): Promise<number> {
   const [name, ...rest] = argv;
   if (name === undefined || name === "help" || name === "--help" || name === "-h") {
@@ -71,7 +71,7 @@ export async function main(argv: readonly string[], io: Io = PROCESS_IO): Promis
   }
   const command = COMMANDS[name];
   if (command === undefined) {
-    io.err(`jevdict: unknown command "${name}"\n\n${CLI_USAGE}`);
+    io.err(`jev-cops: unknown command "${name}"\n\n${CLI_USAGE}`);
     return EXIT.usage;
   }
   return command(rest, io);

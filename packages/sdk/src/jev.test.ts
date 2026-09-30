@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { ChoiceQuestion, NoulQuestion, ScoreQuestion } from "@jevdict/core";
-import { validateQuestions } from "@jevdict/core";
+import type { ChoiceQuestion, NoulQuestion, ScoreQuestion } from "@jev-cops/core";
+import { validateQuestions } from "@jev-cops/core";
 import { choice, jev, noul, score } from "./jev.ts";
 
 describe("jev question builders", () => {

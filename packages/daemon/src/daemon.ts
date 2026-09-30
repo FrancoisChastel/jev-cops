@@ -10,8 +10,8 @@ import {
   type PolicyTrace,
   resolveContextConfig,
   resolvePolicyConfig,
-} from "@jevdict/core";
-import { createJudge, type ProviderConfig } from "@jevdict/judge";
+} from "@jev-cops/core";
+import { createJudge, type ProviderConfig } from "@jev-cops/judge";
 import { AuditLog } from "./audit.ts";
 import type { DaemonConfig } from "./config.ts";
 import { ConfirmViews } from "./confirm-view.ts";
@@ -285,7 +285,7 @@ function openStores(
 
 /**
  * Opens the stores, audit log and policy set and wires the engine from config: judge
- * from `@jevdict/judge` (keys from env only), precedents and case files from SQLite,
+ * from `@jev-cops/judge` (keys from env only), precedents and case files from SQLite,
  * policies hot-reloaded. The judge's own paths are appended to `[policy] protectedPaths`
  * first, so every engine built from this runtime (after any policy reload too) and the
  * boot line carry them. Throws on unreadable stores or a policy set with problems.

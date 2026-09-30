@@ -10,7 +10,7 @@ import {
   type PostEvent,
   type PreEvent,
   parseEvent,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { loadEventFixture } from "../../../tests/fixtures/events/index.ts";
 import { AuditLog } from "./audit.ts";
 import { judgePayload, observePayload, PROMPT_LIKE_FLAG } from "./audit-payload.ts";
@@ -48,7 +48,7 @@ async function judged(command: string) {
 
 let dir: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "jevdict-payload-"));
+  dir = mkdtempSync(join(tmpdir(), "jev-cops-payload-"));
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });

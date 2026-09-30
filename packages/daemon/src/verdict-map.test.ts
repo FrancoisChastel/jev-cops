@@ -10,7 +10,7 @@ import {
   parseVerdict,
   resolvePolicyConfig,
   type Verdict,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import { loadEventFixture } from "../../../tests/fixtures/events/index.ts";
 import {
   HARNESS_RISK_STEP,
@@ -112,7 +112,7 @@ describe("harnessVerdict", () => {
     const d = await decide("deny");
     const { response, mapping } = harnessVerdict(d, EVENT.id, "observe", null);
     expect(response.verdict).toBe("allow");
-    expect(response.context_note).toBe(`jevdict would have: deny — ${d.reason}`);
+    expect(response.context_note).toBe(`jev-cops would have: deny — ${d.reason}`);
     expect(mapping).toEqual([OBSERVE_ONLY]);
   });
 
@@ -126,7 +126,7 @@ describe("harnessVerdict", () => {
     const d = await decide("hold");
     const { response, mapping } = harnessVerdict(d, EVENT.id, "observe", "headless");
     expect(response.verdict).toBe("allow");
-    expect(response.context_note).toStartWith("jevdict would have: deny");
+    expect(response.context_note).toStartWith("jev-cops would have: deny");
     expect(mapping).toEqual([HEADLESS_HOLD_DENIED, OBSERVE_ONLY]);
   });
 

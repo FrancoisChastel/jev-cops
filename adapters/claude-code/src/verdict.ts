@@ -1,11 +1,11 @@
 /**
  * The daemon's replies, reduced to what the hook acts on. Deliberately narrower than the
- * strict `jevdict.verdict/1` schema (like the Pi adapter): a field the daemon adds later
+ * strict `jev-cops.verdict/1` schema (like the Pi adapter): a field the daemon adds later
  * must not block every call, while anything the hook relies on is checked, and a reply
  * that fails a check is null, which the caller maps to "fail closed" (D-055 parity).
  */
-import type { Verdict } from "@jevdict/core";
-import { VERDICTS } from "@jevdict/core/schema";
+import type { Verdict } from "@jev-cops/core";
+import { VERDICTS } from "@jev-cops/core/schema";
 import type { ConfirmView, Judged } from "./output.ts";
 
 const KNOWN: ReadonlySet<string> = new Set(VERDICTS);

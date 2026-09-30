@@ -12,7 +12,7 @@ import { combine, decisionOf, type PreDecision } from "./pre-decision.ts";
 
 type Json = Record<string, unknown>;
 
-/** Hook timeouts in seconds, as `jevdict install` registers them (PLAN-M1 §4.3). */
+/** Hook timeouts in seconds, as `cops install` registers them (PLAN-M1 §4.3). */
 export const INSTALLED_TIMEOUTS_S: Readonly<Record<string, number>> = {
   PreToolUse: 30,
   PostToolUse: 15,

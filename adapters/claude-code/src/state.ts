@@ -1,5 +1,5 @@
 /**
- * What `jevdict install`/`doctor` recorded about Claude Code in `~/.jevdict/claude-code.json`
+ * What `cops install`/`doctor` recorded about Claude Code in `~/.jev-cops/claude-code.json`
  * (PLAN-M1 D-076 proposal): the `claude --version` the hook reports as `harness_version`.
  * Claude Code exposes no version to hooks (env-vars reference), so without the file the
  * version is omitted. Informational only; nothing is decided on it.
@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** The state file's name under `~/.jevdict/`. */
+/** The state file's name under `~/.jev-cops/`. */
 export const CLAUDE_CODE_STATE_FILE = "claude-code.json";
 
 /** A version as `claude --version` prints it: `2.1.285`, possibly with a suffix; ≤ 64 chars. */
@@ -18,7 +18,7 @@ const MAX_VERSION_CHARS = 64;
 export function readHarnessVersion(home: string): string | null {
   let state: unknown;
   try {
-    state = JSON.parse(readFileSync(join(home, ".jevdict", CLAUDE_CODE_STATE_FILE), "utf8"));
+    state = JSON.parse(readFileSync(join(home, ".jev-cops", CLAUDE_CODE_STATE_FILE), "utf8"));
   } catch {
     return null; // no state recorded yet: the version is simply omitted
   }

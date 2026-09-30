@@ -1,7 +1,7 @@
 {
-  "name": "@jevdict/judge",
+  "name": "@jev-cops/judge",
   "version": "0.0.0",
-  "description": "Jevdict semantic judge providers: TypeSafe Jev, OpenRouter, Vercel AI SDK",
+  "description": "jev-cops semantic judge providers: TypeSafe Jev, OpenRouter, Vercel AI SDK",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -14,7 +14,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@jevdict/core": "workspace:*",
+    "@jev-cops/core": "workspace:*",
     "@typesafe-ai/sdk": "0.6.0",
     "ai": "^7.0.122",
     "zod": "^4.6.5"

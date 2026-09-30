@@ -3,7 +3,7 @@
  * The exit code is 2 before any work, so a crash, an unhandled rejection or an early exit
  * blocks (Claude Code treats every code but 2 as "proceed"); stdin is read under the
  * deadline; stdout and stderr are written synchronously, then the process exits with the
- * outcome's code. Shared by `dist/jevdict-hook` and `jevdict hook`.
+ * outcome's code. Shared by `dist/cops-hook` and `cops hook`.
  */
 import { writeSync } from "node:fs";
 import { homedir } from "node:os";
@@ -95,7 +95,7 @@ export function processPort(): HookPort {
 /**
  * The identity of this hook process: from source, `bun` plus the entry script; compiled,
  * the binary alone (`Bun.main` is then under `/$bunfs/`). `subcommand` is what precedes the
- * flags (`["hook"]` for `jevdict hook`).
+ * flags (`["hook"]` for `cops hook`).
  */
 export function selfOf(
   subcommand: readonly string[],
@@ -140,7 +140,7 @@ function depsFor(socket: string, self: HookSelf, port: HookPort): HookDeps {
     try {
       appendHookLog(logPath, line, new Date());
     } catch (cause) {
-      port.write(2, `jevdict: local log not written (${message(cause)})\n`);
+      port.write(2, `jev-cops: local log not written (${message(cause)})\n`);
     }
   };
   return {
@@ -162,7 +162,7 @@ function emit(out: HookOutput, port: HookPort): 0 | 2 {
 
 async function outcome(argv: readonly string[], self: HookSelf, port: HookPort) {
   const args = parseHookArgs(argv, port.home);
-  if (!args.ok) return failClosed(`jevdict hook: ${args.error}; blocking (fail closed)`);
+  if (!args.ok) return failClosed(`cops hook: ${args.error}; blocking (fail closed)`);
   const deps = depsFor(args.socket, self, port);
   const started = performance.now();
   const read = port.readStdin();
@@ -178,7 +178,7 @@ async function outcome(argv: readonly string[], self: HookSelf, port: HookPort) 
 /**
  * Runs the hook as this process: exit code 2 first, fatal handlers, arguments, stdin, the
  * run, the output, the exit. `subcommand` precedes the hook's flags in its argv (`["hook"]` for
- * `jevdict hook`), for the ConfigChange identity check (see {@link selfOf}).
+ * `cops hook`), for the ConfigChange identity check (see {@link selfOf}).
  * Resolves with the exit code (the real port has exited by then).
  */
 export async function runHookProcess(
@@ -188,7 +188,7 @@ export async function runHookProcess(
 ): Promise<0 | 2> {
   port.setExitCode(2);
   port.onFatal((why) => {
-    port.write(2, `jevdict: ${why}; blocking (fail closed)\n`);
+    port.write(2, `jev-cops: ${why}; blocking (fail closed)\n`);
     port.exit(2);
   });
   try {

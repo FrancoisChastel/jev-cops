@@ -10,8 +10,8 @@ afterEach(() => rmSync(home, { recursive: true, force: true }));
 function withState(content: string | null): string {
   home = mkdtempSync(join(tmpdir(), "jvcc-state-"));
   if (content === null) return home;
-  mkdirSync(join(home, ".jevdict"));
-  writeFileSync(join(home, ".jevdict", CLAUDE_CODE_STATE_FILE), content);
+  mkdirSync(join(home, ".jev-cops"));
+  writeFileSync(join(home, ".jev-cops", CLAUDE_CODE_STATE_FILE), content);
   return home;
 }
 

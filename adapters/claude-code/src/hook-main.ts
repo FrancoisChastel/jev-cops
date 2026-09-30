@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 /**
- * `jevdict-hook`: the Claude Code command hook (compiled by `bun run build:hook` into
- * `dist/jevdict-hook`, D-079 proposal). Registered in exec form:
- * `{ "type": "command", "command": "/path/to/jevdict-hook", "args": ["--harness", "claude-code", "--socket", "…"] }`.
+ * `cops-hook`: the Claude Code command hook (compiled by `bun run build:hook` into
+ * `dist/cops-hook`, D-079 proposal). Registered in exec form:
+ * `{ "type": "command", "command": "/path/to/cops-hook", "args": ["--harness", "claude-code", "--socket", "…"] }`.
  *
  * The first statement sets exit code 2 and the runtime is imported dynamically, so even a
  * module that fails to load exits 2 (a block) instead of Bun's 1 (which Claude Code treats
@@ -14,7 +14,7 @@ try {
   await runHookProcess(process.argv.slice(2), []);
 } catch (cause) {
   const why = cause instanceof Error ? cause.message : String(cause);
-  process.stderr.write(`jevdict: hook failed to start (${why}); blocking (fail closed)\n`);
+  process.stderr.write(`jev-cops: hook failed to start (${why}); blocking (fail closed)\n`);
   process.exit(2);
 }
 

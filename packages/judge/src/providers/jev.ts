@@ -7,7 +7,7 @@ import {
   type JudgeState,
   type Question,
   type Result,
-} from "@jevdict/core";
+} from "@jev-cops/core";
 import {
   APIConnectionError,
   APIError,

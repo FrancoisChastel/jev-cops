@@ -1,4 +1,4 @@
-import type { Event, GitInfo } from "@jevdict/core";
+import type { Event, GitInfo } from "@jev-cops/core";
 import { type DerivedGit, deriveGit } from "./git-derive.ts";
 import type { GitRunner } from "./git-run.ts";
 import { type Logger, SILENT_LOGGER } from "./log.ts";

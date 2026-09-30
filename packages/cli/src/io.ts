@@ -30,5 +30,5 @@ export function captureIo(): Io & { stdout: string[]; stderr: string[] } {
   };
 }
 
-/** Exit codes shared by every command (documented in `jevdict --help`). */
+/** Exit codes shared by every command (documented in `cops --help`). */
 export const EXIT = Object.freeze({ ok: 0, failed: 1, usage: 2 });

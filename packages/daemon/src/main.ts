@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { err, ok, type Result } from "@jevdict/core";
-import { registerSdkModule } from "@jevdict/sdk/register";
+import { err, ok, type Result } from "@jev-cops/core";
+import { registerSdkModule } from "@jev-cops/sdk/register";
 import {
   type DaemonConfig,
   type EnforcementMode,
@@ -15,24 +15,24 @@ import { stderrLogger } from "./log.ts";
 import { protectedPathCount } from "./protected-paths.ts";
 import { type RunningDaemon, startDaemon } from "./server.ts";
 
-export const DAEMON_USAGE = `jevdictd ${DAEMON_VERSION} — the Jevdict judging daemon
+export const DAEMON_USAGE = `copsd ${DAEMON_VERSION} — the jev-cops judging daemon
 
-Usage: jevdictd [--config path] [--socket path] [--admin-socket path] [--http host:port]
+Usage: copsd [--config path] [--socket path] [--admin-socket path] [--http host:port]
                 [--observe|--enforce]
 
-  --config <path>        jevdict.toml to load on top of ~/.config/jevdict/jevdict.toml,
-                         ./.jevdict.toml (tighten-only) and $JEVDICT_CONFIG
+  --config <path>        cops.toml to load on top of ~/.config/jev-cops/cops.toml,
+                         ./.cops.toml (tighten-only) and $JEV_COPS_CONFIG
   --socket <path>        agent-facing Unix socket, the one a sandbox mounts
-                         (default ~/.jevdict/jevdictd.sock)
+                         (default ~/.jev-cops/copsd.sock)
   --admin-socket <path>  human-only Unix socket for budget resets; never mount it into
-                         a sandbox (default ~/.jevdict/jevdictd-admin.sock)
+                         a sandbox (default ~/.jev-cops/copsd-admin.sock)
   --http <h:p>           also serve the agent routes on loopback HTTP (127.0.0.1, ::1 or
                          localhost only)
   --observe              log every verdict, return allow (the default)
   --enforce              return verdicts as judged
   -h, --help             this text
 
-Environment: JEVDICT_DEBUG=1 also logs debug lines to stderr (e.g. why env.git was not
+Environment: JEV_COPS_DEBUG=1 also logs debug lines to stderr (e.g. why env.git was not
 derived from an event's cwd).
 
 Exit codes: 0 clean shutdown (SIGTERM/SIGINT) · 1 boot failure · 2 usage error`;
@@ -58,7 +58,7 @@ function modeOf(values: {
   return ok(values.enforce === true ? "enforce" : null);
 }
 
-/** Parses `jevdictd` arguments; never throws. */
+/** Parses `copsd` arguments; never throws. */
 export function parseDaemonArgs(argv: readonly string[]): Result<DaemonArgs, string> {
   let values: Record<string, string | boolean | undefined>;
   try {
@@ -112,7 +112,7 @@ function bootLine(d: RunningDaemon): string {
   const judge = d.runtime.judgeName === "disabled" ? "off" : d.runtime.judgeName;
   const http = d.listening.httpUrl === null ? "" : ` and ${d.listening.httpUrl}`;
   return [
-    `jevdictd listening on ${d.listening.socket}${http}`,
+    `copsd listening on ${d.listening.socket}${http}`,
     `admin ${d.listening.adminSocket}`,
     `${count} ${count === 1 ? "policy" : "policies"}`,
     `${protectedPathCount(d.runtime.config)} protected paths`,
@@ -124,7 +124,7 @@ function bootLine(d: RunningDaemon): string {
 async function boot(argv: readonly string[]): Promise<RunningDaemon | number> {
   const args = parseDaemonArgs(argv);
   if (!args.ok) {
-    process.stderr.write(`jevdictd: ${args.error}\n\n${DAEMON_USAGE}\n`);
+    process.stderr.write(`copsd: ${args.error}\n\n${DAEMON_USAGE}\n`);
     return 2;
   }
   if (args.value.help) {
@@ -136,14 +136,14 @@ async function boot(argv: readonly string[]): Promise<RunningDaemon | number> {
       args.value.configPath === undefined ? {} : { configPath: args.value.configPath },
     );
     for (const r of loaded.rejected) process.stderr.write(`WARNING: ${r}\n`);
-    const log = stderrLogger(Date.now, { debug: process.env.JEVDICT_DEBUG === "1" });
+    const log = stderrLogger(Date.now, { debug: process.env.JEV_COPS_DEBUG === "1" });
     const inputs = { configFiles: loaded.inputs };
     const daemon = await startDaemon(applyArgs(loaded.config, args.value), { log, inputs });
     process.stderr.write(`${bootLine(daemon)}\n`);
     for (const w of daemon.runtime.warnings) process.stderr.write(`WARNING: ${w}\n`);
     return daemon;
   } catch (cause) {
-    process.stderr.write(`jevdictd: ${cause instanceof Error ? cause.message : String(cause)}\n`);
+    process.stderr.write(`copsd: ${cause instanceof Error ? cause.message : String(cause)}\n`);
     return 1;
   }
 }
@@ -162,7 +162,7 @@ export function stopSignal(): Promise<void> {
 }
 
 /**
- * Boots `jevdictd` and resolves with its exit code once `stopped` resolves (SIGTERM or
+ * Boots `copsd` and resolves with its exit code once `stopped` resolves (SIGTERM or
  * SIGINT by default): 0 after a clean shutdown, 1 when boot or shutdown fails, 2 on a
  * usage error.
  */
@@ -177,7 +177,7 @@ export async function main(
     await booted.stop();
     return 0;
   } catch (cause) {
-    process.stderr.write(`jevdictd: shutdown failed: ${String(cause)}\n`);
+    process.stderr.write(`copsd: shutdown failed: ${String(cause)}\n`);
     return 1;
   }
 }

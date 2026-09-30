@@ -1,7 +1,7 @@
 /**
  * The subset of Pi's extension API (`@earendil-works/pi-coding-agent`, verified at
- * v0.87.1, `src/core/extensions/types.ts`) the jevdict extension uses, declared locally
- * so the extension has no dependency on Pi's package. Type-only: `jevdict.ts` imports it
+ * v0.87.1, `src/core/extensions/types.ts`) the jev-cops extension uses, declared locally
+ * so the extension has no dependency on Pi's package. Type-only: `jev-cops.ts` imports it
  * with `import type`, which every TypeScript loader (Pi's jiti included) erases, so the
  * installed extension is still one self-contained file.
  */
@@ -68,8 +68,8 @@ export interface PiApi {
   on(event: "tool_result", h: PiHandler<PiToolResultEvent>): unknown;
 }
 
-/** Where `jevdictd` listens, and the client-side time limits. */
-export interface JevdictOptions {
+/** Where `copsd` listens, and the client-side time limits. */
+export interface JevCopsOptions {
   socket: string;
   /** Judge request limit; default 13 s = the daemon's 12 s deadline + 1 s. */
   judgeTimeoutMs?: number;
@@ -80,7 +80,7 @@ export interface JevdictOptions {
 /** The adapter's best-effort `call.kind` for a Pi tool. */
 export type PiCallKind = "exec" | "fs.read" | "fs.write" | "other";
 
-/** A `jevdict.verdict/1` reply reduced to what the extension acts on. */
+/** A `jev-cops.verdict/1` reply reduced to what the extension acts on. */
 export interface Judged {
   verdict: "allow" | "annotate" | "rewrite" | "hold" | "deny" | "kill";
   reason: string;

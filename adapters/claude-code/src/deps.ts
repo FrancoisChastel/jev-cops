@@ -3,7 +3,7 @@
  * failures) is testable in-process: the daemon client, the deadlines, the session mode and
  * Claude Code version (read lazily), and the local log.
  */
-import type { SessionMode } from "@jevdict/core";
+import type { SessionMode } from "@jev-cops/core";
 import type { DaemonClient } from "./client.ts";
 import type { IntactCheck } from "./intact.ts";
 import type { HookLogLine } from "./log.ts";
@@ -30,10 +30,10 @@ export const DEFAULT_DEADLINES: Deadlines = Object.freeze({
  * Lowers every deadline to at most this many milliseconds (tests, slow-daemon drills). It
  * can only shorten them, so it can only turn more calls into "judge timeout" blocks.
  */
-export const DEADLINE_ENV = "JEVDICT_HOOK_DEADLINE_MS";
+export const DEADLINE_ENV = "JEV_COPS_HOOK_DEADLINE_MS";
 const MIN_DEADLINE_MS = 50;
 
-/** {@link DEFAULT_DEADLINES}, each capped by `$JEVDICT_HOOK_DEADLINE_MS` when it is a number. */
+/** {@link DEFAULT_DEADLINES}, each capped by `$JEV_COPS_HOOK_DEADLINE_MS` when it is a number. */
 export function deadlinesFrom(env: Readonly<Record<string, string | undefined>>): Deadlines {
   const raw = Number(env[DEADLINE_ENV]);
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_DEADLINES;
@@ -64,6 +64,6 @@ export interface HookDeps {
   readonly harnessVersion: () => string | null;
   /** Appends to the local log; never throws. */
   readonly log: (line: HookLogLine) => void;
-  /** Whether the jevdict hook is still in force after a settings change (intact.ts). */
+  /** Whether the cops hook is still in force after a settings change (intact.ts). */
   readonly configCheck: (i: ConfigChangeInput) => IntactCheck;
 }

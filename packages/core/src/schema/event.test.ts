@@ -38,7 +38,7 @@ function paths(error: SchemaError): string[] {
 }
 
 const MINIMAL_PRE: Json = {
-  schema: "jevdict.event/1",
+  schema: "jev-cops.event/1",
   id: "evt_01M3PP723DWGXKY6ZN6TC6ZMXZ",
   phase: "pre",
   harness: "pi",
@@ -119,7 +119,7 @@ describe("parseEvent: rejects missing required fields with their dotted path", (
 
 describe("parseEvent: rejects malformed values", () => {
   test("an unknown schema version", () => {
-    const error = expectInvalid({ ...fixture("pre-bash"), schema: "jevdict.event/2" });
+    const error = expectInvalid({ ...fixture("pre-bash"), schema: "jev-cops.event/2" });
     expect(paths(error)).toEqual(["schema"]);
   });
 
@@ -197,7 +197,7 @@ describe("parseEvent: never throws", () => {
   test.each([
     ["null", null],
     ["undefined", undefined],
-    ["a string", "jevdict.event/1"],
+    ["a string", "jev-cops.event/1"],
     ["an array", [fixture("pre-bash")]],
     ["a number", 7],
   ])("on %s and reports a root issue", (_label, input) => {

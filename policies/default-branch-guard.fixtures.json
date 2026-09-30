@@ -4,7 +4,7 @@
     {
       "name": "git push --force on the default branch, interactive, is held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB01010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -51,7 +51,7 @@
     {
       "name": "git push --force on the default branch, headless, is denied",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB02010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -99,7 +99,7 @@
       "name": "git push --force on a feature branch the user asked to force-push is not matched, allowed",
       "task": "Rebase feat/auth-flake onto main, then git push --force the feature branch",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB03010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -146,7 +146,7 @@
     {
       "name": "git reset --hard on master with no default_branch reported (main/master fallback) is held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB04010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -192,7 +192,7 @@
     {
       "name": "force push that names the default branch as its target from a feature branch is held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB05010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -239,7 +239,7 @@
     {
       "name": "a plain git push on the default branch is not irreversible, allowed",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB06010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -286,7 +286,7 @@
     {
       "name": "D-068: git reset --hard on main while the reported default is trunk is still held (main always counts)",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB07010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -333,7 +333,7 @@
     {
       "name": "D-068: git push --force on trunk when trunk is the reported default is held",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB08010000000000000",
         "phase": "pre",
         "harness": "claude-code",
@@ -380,7 +380,7 @@
     {
       "name": "D-068: force push naming master from a feature branch, reported default trunk, headless, is denied",
       "event": {
-        "schema": "jevdict.event/1",
+        "schema": "jev-cops.event/1",
         "id": "evt_01M3PP8DB09010000000000000",
         "phase": "pre",
         "harness": "claude-code",

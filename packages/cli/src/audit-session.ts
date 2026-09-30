@@ -1,5 +1,5 @@
-import { verdictSchema } from "@jevdict/core";
-import { type AuditLine, SESSION_KILLED } from "@jevdict/daemon";
+import { verdictSchema } from "@jev-cops/core";
+import { type AuditLine, SESSION_KILLED } from "@jev-cops/daemon";
 import { z } from "zod";
 
 /**
