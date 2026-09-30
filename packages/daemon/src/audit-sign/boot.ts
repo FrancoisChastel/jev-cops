@@ -18,14 +18,10 @@ export interface SigningSetup {
   readonly warnings: readonly string[];
 }
 
-/** Thrown when `require_signing = true` and there is no usable key: copsd does not start. */
-export class SigningRequiredError extends Error {
-  override readonly name = "SigningRequiredError";
-}
-
 /**
  * Loads the signing key. A pending key with no current one is simply promoted (there is
- * no old key to announce it). Throws {@link SigningRequiredError} under `require_signing`.
+ * no old key to announce it). Throws under `require_signing` without a usable key: copsd
+ * does not start.
  */
 export function loadSigning(cfg: AuditConfig): SigningSetup {
   const pendingPath = pendingKeyPath(cfg.key);
@@ -36,7 +32,7 @@ export function loadSigning(cfg: AuditConfig): SigningSetup {
   if (!current.ok) {
     const why = current.missing ? `${current.error}: run \`cops keygen\`` : current.error;
     if (cfg.requireSigning) {
-      throw new SigningRequiredError(`[audit] require_signing = true and ${why}`);
+      throw new Error(`[audit] require_signing = true and ${why}`);
     }
     warnings.push(
       `audit checkpoints unsigned (${why}); tail truncation and a full recompute go undetected locally`,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { type AddressInfo, createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuditLog, readAudit } from "../audit.ts";
@@ -170,6 +171,22 @@ describe("syslog forwarder over TLS", () => {
       expect(got).toEqual(readAudit(logPath).lines);
     } finally {
       await strict.close();
+    }
+  });
+
+  test("a peer that never completes the TLS handshake times out", async () => {
+    const silent = createNetServer(() => {});
+    await new Promise<void>((r) => silent.listen(0, "127.0.0.1", () => r()));
+    const port = (silent.address() as AddressInfo).port;
+    try {
+      const t = new SyslogTransport(settings(dir, port, receiver.cert.cert), {
+        timeouts: { connectMs: 50 },
+      });
+      await expect(t.connect()).rejects.toThrow(/timed out/);
+      expect(await t.close()).toBe(false);
+      await expect(t.write([])).rejects.toThrow(/not connected/);
+    } finally {
+      silent.close();
     }
   });
 

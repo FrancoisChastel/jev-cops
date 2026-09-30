@@ -54,7 +54,7 @@ function forwardWarning(fwd: AuditForward | null): string[] {
 /**
  * Opens the audit log with its signing key and forwarder (D-103, D-104). A pending key
  * rotation is applied here; a signing key that is not the one the log put in force is an
- * `anomaly` line and a warning. Throws `SigningRequiredError` under `require_signing`
+ * `anomaly` line and a warning. Throws under `require_signing`
  * without a usable key, before anything is opened.
  */
 export function openAudit(config: DaemonConfig, deps: ForwardDeps): AuditRuntime {

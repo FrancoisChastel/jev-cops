@@ -133,6 +133,22 @@ describe("key rotation", () => {
     expect(verifyAuditLines(auditTexts(d.config.audit.path), { keys: [key.pub] }).ok).toBe(true);
   });
 
+  test("the rotate route refuses an unusable pending key (400) and an unsigned copsd (409)", async () => {
+    const d = await startTestDaemon({ policies: POLICIES, signingKey: key.privatePem });
+    td = d;
+    writeFileSync(`${d.config.audit.key}.next`, "garbage", { mode: 0o600 });
+    expect((await d.callAdmin("POST", "/v1/audit/rotate", {})).status).toBe(400);
+    await d.stop();
+    const unsigned = await startTestDaemon({ policies: POLICIES });
+    td = unsigned;
+    writeFileSync(`${unsigned.config.audit.key}.next`, testKey().privatePem, { mode: 0o600 });
+    const reply = await unsigned.callAdmin("POST", "/v1/audit/rotate", {});
+    expect(reply).toMatchObject({
+      status: 409,
+      body: { error: expect.stringContaining("restart") },
+    });
+  });
+
   test("a crash between the rotation line and the key swap does not rotate twice", async () => {
     const next = testKey();
     const d = await startTestDaemon({ policies: POLICIES, signingKey: key.privatePem });
