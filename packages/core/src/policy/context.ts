@@ -34,6 +34,8 @@ export interface PolicyContextInputs {
   home?: string;
   /** `[policy] protectedPaths` as configured; default none. */
   protectedPaths?: readonly string[];
+  /** `[policy] privatePaths` as configured (`!` exemptions included); default none. */
+  privatePaths?: readonly string[];
 }
 
 function isUnder(path: string, root: string): boolean {
@@ -114,9 +116,22 @@ function protectedPathsOf(paths: readonly string[], home: string): string[] {
     });
 }
 
+/** Absolute private paths and `!` exemptions, `~` expanded; relative and empty ones dropped. */
+function privatePathsOf(paths: readonly string[], home: string): string[] {
+  return paths.flatMap((p) => {
+    const exempt = p.trim().startsWith("!");
+    const [path] = protectedPathsOf([p.trim().slice(exempt ? 1 : 0)], home);
+    return path?.startsWith("/") === true ? [exempt ? `!${path}` : path] : [];
+  });
+}
+
 function configView(inputs: PolicyContextInputs): PolicyConfigView {
   const home = inputs.home ?? inputs.contextConfig.home;
-  return { home, protectedPaths: protectedPathsOf(inputs.protectedPaths ?? [], home) };
+  return {
+    home,
+    protectedPaths: protectedPathsOf(inputs.protectedPaths ?? [], home),
+    privatePaths: privatePathsOf(inputs.privatePaths ?? [], home),
+  };
 }
 
 function budgetView(cf: CaseFile, cfg: ContextConfig): BudgetView {
@@ -131,7 +146,7 @@ function budgetView(cf: CaseFile, cfg: ContextConfig): BudgetView {
  * it: the case-file view exposes queries only, `session.task` is the case file's task
  * (T11), and the budget is a snapshot before this event is charged. Sequence matches
  * are computed on first use. `env` answers the default-branch question (D-068) and
- * `config` carries the daemon's home and protected paths.
+ * `config` carries the daemon's home, protected paths and private paths.
  */
 export function buildPolicyContext(inputs: PolicyContextInputs): PolicyContext {
   const { n, cf } = inputs;

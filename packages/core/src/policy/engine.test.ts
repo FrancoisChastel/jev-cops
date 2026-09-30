@@ -284,7 +284,7 @@ describe("createPolicyEngine: end to end over fixtures", () => {
     expect(decision.flags.precedent).toBe("none");
   });
 
-  test("ctx.config carries the call's home and the policy config's protected paths", async () => {
+  test("ctx.config carries the call's home and the policy config's protected and private paths", async () => {
     // Arrange
     const seen: unknown[] = [];
     const probe: PolicyDefinition = {
@@ -301,6 +301,7 @@ describe("createPolicyEngine: end to end over fixtures", () => {
     const policyConfig = resolvePolicyConfig({
       when: { budgetMs: 1_000 },
       protectedPaths: ["~/bin/cops-hook"],
+      privatePaths: ["~/.jev-cops", "!~/.jev-cops/copsd.sock"],
     });
     const engine = createPolicyEngine({
       policies: [probe],
@@ -313,7 +314,13 @@ describe("createPolicyEngine: end to end over fixtures", () => {
     await engine.judge(pre("ls"), session(testClock()), { home: "/home/other" });
 
     // Assert
-    expect(seen).toEqual([{ home: "/home/other", protectedPaths: ["/home/other/bin/cops-hook"] }]);
+    expect(seen).toEqual([
+      {
+        home: "/home/other",
+        protectedPaths: ["/home/other/bin/cops-hook"],
+        privatePaths: ["/home/other/.jev-cops", "!/home/other/.jev-cops/copsd.sock"],
+      },
+    ]);
   });
 
   test("holdKey groups calls by kind and verbs, not by arguments (T7)", async () => {

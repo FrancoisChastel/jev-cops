@@ -34,7 +34,11 @@ engine's scored detail, for `cops explain`, already has features, taint and risk
 `scope.hostAllowed(h)`; `sequence.secretReadWithin("2m")`, `sequence.matched(pattern)`;
 `casefile.recentCalls("5m")`, `hostsSeen()`, `filesWritten()`; `features`, `floor`, `budget`;
 `env.defaultBranches` (`main`, `master` and the reported default, D-068), `env.onDefaultBranch`;
-`config.home` (the daemon's `~`) and `config.protectedPaths` (`[policy] protectedPaths`).
+`config.home` (the daemon's `~`), `config.protectedPaths` (`[policy] protectedPaths` plus the
+judge's own inputs) and `config.privatePaths` (`[policy] privatePaths` plus the judge's own
+records: audit log, store, `~/.jev-cops/`; absolute, and a `!` entry exempts a path such as a
+socket or the policies dir; the longest matching entry decides). A read of a private path is
+what `config-tamper` holds: those files carry the scores agent channels never do (T6).
 
 **Fixtures.** `{ "policy": "<name>", "cases": [{ "name", "event": <pre event>, "history"?:
 [pre|post events], "task"?, "answers"?: { "<question>": Answer }, "config"?: { "context"?,

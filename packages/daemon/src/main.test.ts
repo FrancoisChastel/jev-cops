@@ -111,8 +111,12 @@ describe("copsd process", () => {
     expect(stderr).toContain("WARNING: judge = off");
     const lines = readAudit(join(dir, "audit.jsonl")).lines;
     expect(lines.map((l) => l.payload.event)).toEqual(["boot", "shutdown"]);
-    const config = lines[0]?.payload.config as { policy: { protectedPaths: string[] } } | undefined;
+    const config = lines[0]?.payload.config as
+      | { policy: { protectedPaths: string[]; privatePaths: string[] } }
+      | undefined;
     expect(config?.policy.protectedPaths).toContain(join(dir, "j.toml"));
+    expect(config?.policy.privatePaths).toContain(join(dir, "audit.jsonl"));
+    expect(config?.policy.privatePaths).toContain(`!${join(dir, "j.toml")}`);
     expect(existsSync(socket)).toBe(false);
     expect(existsSync(join(dir, "a.sock"))).toBe(false);
   });

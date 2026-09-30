@@ -188,17 +188,19 @@ describe("repo override can only tighten", () => {
     expect(load().rejected).toEqual([]);
   });
 
-  test("protectedPaths and the hook binary cannot be changed from the repo", () => {
-    write(userFile(), '[policy]\nprotectedPaths = ["~/bin/tool"]\n');
+  test("protectedPaths, privatePaths and the hook binary cannot be changed from the repo", () => {
+    write(userFile(), '[policy]\nprotectedPaths = ["~/bin/tool"]\nprivatePaths = ["~/notes"]\n');
     write(
       join(cwd, ".cops.toml"),
-      '[daemon]\nhook_binary = "/tmp/fake-hook"\n[policy]\nprotectedPaths = []\n',
+      '[daemon]\nhook_binary = "/tmp/fake-hook"\n[policy]\nprotectedPaths = []\nprivatePaths = ["!~/.jev-cops"]\n',
     );
     const { config, rejected } = load();
     expect(config.policy.protectedPaths).toEqual(["~/bin/tool"]);
+    expect(config.policy.privatePaths).toEqual(["~/notes"]);
     expect(config.daemon.hookBinary).toBeNull();
     expect(rejected.map((r) => r.split(":")[0]).sort()).toEqual([
       "daemon.hook_binary",
+      "policy.privatePaths",
       "policy.protectedPaths",
     ]);
   });

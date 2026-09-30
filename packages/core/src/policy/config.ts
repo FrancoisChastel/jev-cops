@@ -66,6 +66,15 @@ export interface PolicyConfig {
    * entries are project-relative. Reach policies as `ctx.config.protectedPaths`.
    */
   protectedPaths: string[];
+  /**
+   * The judge's own records (`[policy] privatePaths`: audit log, store, `~/.jev-cops/`),
+   * whose scored decisions must not reach the agent (T6); the daemon appends its own. A path
+   * equal to or under an entry is private; an entry starting with `!` exempts one (the
+   * sockets, the policies dir); the longest matching entry decides. Absolute after
+   * `~`/`$HOME` expansion; relative entries are ignored. Reach policies as
+   * `ctx.config.privatePaths`.
+   */
+  privatePaths: string[];
   texts: PolicyTexts;
   judge: JudgeConfig;
 }
@@ -84,6 +93,7 @@ export const DEFAULT_POLICY_CONFIG: Readonly<PolicyConfig> = deepFreeze({
   when: { budgetMs: 2, degradeAfter: 3, trackedSessions: 1_000 },
   trivialKinds: ["fs.read"],
   protectedPaths: [],
+  privatePaths: [],
   texts: {
     reasons: {
       allow: "No policy concern with this action.",

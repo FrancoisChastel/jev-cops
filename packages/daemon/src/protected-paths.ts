@@ -113,19 +113,55 @@ export function judgeInputPaths(config: DaemonConfig, inputs: JudgeInputs): stri
   return [...new Set(paths.flatMap((p) => [p, realPath(p)]))];
 }
 
+/**
+ * Records the Claude Code adapter keeps in `~/.jev-cops/` (its hook log and install state),
+ * named so they stay private even if an exemption covered the directory.
+ */
+const ADAPTER_RECORDS = ["claude-code-hook.log", "claude-code.json"];
+
+/**
+ * The judge's own records, as `[policy] privatePaths` entries (M1 gate review, finding M2):
+ * the audit log and its forward copy, the store (SQLite side files included) with their
+ * directories unless shared, `~/.jev-cops/` under the OS home and `[daemon] home` with the
+ * adapters' records in it. Exempt (`!`), because agents read them legitimately or they
+ * hold no record: both sockets, the policies directory and the config files. Each also
+ * under its real path. Their scored decisions are the oracle agent channels never carry
+ * (T6, D-066, D-096); `config-tamper` holds a read of any of them.
+ */
+export function judgePrivatePaths(config: DaemonConfig, inputs: JudgeInputs): string[] {
+  const shared = sharedDirs(config, inputs);
+  const forward = config.audit.forward?.kind === "file" ? [config.audit.forward.target] : [];
+  const homes = [inputs.osHome, config.daemon.home].map((h) => join(h, ".jev-cops"));
+  const records = [
+    ...fileAndDir(config.audit.path, shared, []),
+    ...forward,
+    ...fileAndDir(config.store.path, shared, SQLITE_SIDE_FILES),
+    ...homes.flatMap((dir) => [dir, ...ADAPTER_RECORDS.map((f) => join(dir, f))]),
+  ];
+  const open = [config.daemon.socket, config.daemon.adminSocket, config.policies.dir];
+  const exempt = [...open, ...inputs.configFiles].map((p) => `!${p}`);
+  const withReal = (p: string) =>
+    p.startsWith("!") ? [p, `!${realPath(p.slice(1))}`] : [p, realPath(p)];
+  return [...new Set([...records, ...exempt].flatMap(withReal))];
+}
+
 /** How many paths `config`'s `[policy] protectedPaths` holds (`/v1/health`, the boot line). */
 export function protectedPathCount(config: DaemonConfig): number {
   return config.policy.protectedPaths?.length ?? 0;
 }
 
 /**
- * `config` with {@link judgeInputPaths} appended to `[policy] protectedPaths`: the
- * configured entries stay first and are never dropped, so neither the user config nor a
- * repo override (which may not change the list at all) can remove the judge's own paths.
- * Returns a new config; `config` is untouched.
+ * `config` with {@link judgeInputPaths} appended to `[policy] protectedPaths` and
+ * {@link judgePrivatePaths} to `[policy] privatePaths`: the configured entries stay first
+ * and are never dropped, so neither the user config nor a repo override (which may not
+ * change either list at all) can remove the judge's own paths. Returns a new config;
+ * `config` is untouched.
  */
 export function protectJudgeInputs(config: DaemonConfig, inputs: JudgeInputs): DaemonConfig {
-  const configured = config.policy.protectedPaths ?? [];
-  const protectedPaths = [...new Set([...configured, ...judgeInputPaths(config, inputs)])];
-  return { ...config, policy: { ...config.policy, protectedPaths } };
+  const append = (configured: readonly string[] | undefined, own: readonly string[]) => [
+    ...new Set([...(configured ?? []), ...own]),
+  ];
+  const protectedPaths = append(config.policy.protectedPaths, judgeInputPaths(config, inputs));
+  const privatePaths = append(config.policy.privatePaths, judgePrivatePaths(config, inputs));
+  return { ...config, policy: { ...config.policy, protectedPaths, privatePaths } };
 }

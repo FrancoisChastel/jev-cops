@@ -70,7 +70,8 @@ async function readEvent(rt: Runtime, event: PreEvent, cf: CaseFile, o: JudgeCal
   const floor = floorRisk(features.features, rt.config).risk;
   const { contextConfig, config } = rt;
   const inputs = { n, cf, features, floor, contextConfig, ...hintsOf(o), home: o.home };
-  const ctx = buildPolicyContext({ ...inputs, protectedPaths: config.protectedPaths });
+  const { protectedPaths, privatePaths } = config;
+  const ctx = buildPolicyContext({ ...inputs, protectedPaths, privatePaths });
   return { n, features, floor, e: buildPolicyEvent(n, cf.task), ctx };
 }
 

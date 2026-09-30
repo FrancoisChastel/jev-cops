@@ -26,7 +26,12 @@ function session(clock: TestClock = testClock()): CaseFile {
   return cf;
 }
 
-function contextFor(n: NormalizedEvent, cf: CaseFile, protectedPaths: string[] = []) {
+function contextFor(
+  n: NormalizedEvent,
+  cf: CaseFile,
+  protectedPaths: string[] = [],
+  privatePaths: string[] = [],
+) {
   const features = computeFeatures(n, cf, CFG);
   return buildPolicyContext({
     n,
@@ -36,6 +41,7 @@ function contextFor(n: NormalizedEvent, cf: CaseFile, protectedPaths: string[] =
     contextConfig: CFG,
     home: CTX_HOME,
     protectedPaths,
+    privatePaths,
   });
 }
 
@@ -176,8 +182,28 @@ describe("buildPolicyContext", () => {
         "/opt/j",
         "policies",
       ],
+      privatePaths: [],
     });
     expect(Object.isFrozen(ctx.config.protectedPaths)).toBe(true);
+  });
+
+  test("config: private paths absolute after ~ expansion, `!` exemptions kept, relative dropped", async () => {
+    const paths = [
+      "~/.jev-cops/",
+      "!~/.jev-cops/copsd.sock",
+      "!$HOME/p/",
+      "/var/log/j",
+      "rel",
+      "!",
+    ];
+    const ctx = contextFor(await bashPre("ls"), session(), [], paths);
+    expect(ctx.config.privatePaths).toEqual([
+      `${CTX_HOME}/.jev-cops`,
+      `!${CTX_HOME}/.jev-cops/copsd.sock`,
+      `!${CTX_HOME}/p`,
+      "/var/log/j",
+    ]);
+    expect(Object.isFrozen(ctx.config.privatePaths)).toBe(true);
   });
 
   test("config defaults: home from the context config, no protected paths", async () => {
@@ -185,7 +211,7 @@ describe("buildPolicyContext", () => {
     const cf = session();
     const features = computeFeatures(n, cf, CFG);
     const ctx = buildPolicyContext({ n, cf, features, floor: 0, contextConfig: CFG });
-    expect(ctx.config).toEqual({ home: CTX_HOME, protectedPaths: [] });
+    expect(ctx.config).toEqual({ home: CTX_HOME, protectedPaths: [], privatePaths: [] });
   });
 
   test("casefile is a read-only view and budget a snapshot", async () => {

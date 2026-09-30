@@ -8,6 +8,7 @@ import {
   defaultJudgeInputs,
   type JudgeInputs,
   judgeInputPaths,
+  judgePrivatePaths,
   protectJudgeInputs,
 } from "./protected-paths.ts";
 import { testConfig } from "./testing/daemon.ts";
@@ -157,6 +158,81 @@ describe("protectJudgeInputs: appends, never replaces", () => {
     const given = { ...spread(), policy: { protectedPaths: [] } };
     const paths = protectJudgeInputs(given, INPUTS).policy.protectedPaths ?? [];
     expect(paths).toEqual(judgeInputPaths(given, INPUTS));
+  });
+});
+
+describe("judgePrivatePaths: the judge's own records, never its policies or config", () => {
+  test("audit (file, dir, forward copy), store, ~/.jev-cops/ and the adapters' records", () => {
+    const paths = judgePrivatePaths(spread(), INPUTS);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "/srv/jv-log",
+        "/srv/jv-log/audit.jsonl",
+        "/mnt/copy.jsonl",
+        "/srv/jv-db",
+        "/srv/jv-db/store.sqlite",
+        "/home/dev/.jev-cops",
+        "/home/dev/.jev-cops/claude-code-hook.log",
+        "/home/dev/.jev-cops/claude-code.json",
+      ]),
+    );
+  });
+
+  test("sockets, the policies dir and the config files are exempt (`!`), never private", () => {
+    const paths = judgePrivatePaths(spread(), INPUTS);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "!/run/jv/d.sock",
+        "!/run/jv-admin/a.sock",
+        "!/srv/jv/policies",
+        "!/srv/jv-etc/cops.toml",
+      ]),
+    );
+    for (const open of ["/run/jv/d.sock", "/srv/jv/policies", "/srv/jv-etc/cops.toml", "/run/jv"]) {
+      expect(paths).not.toContain(open);
+    }
+    expect(paths.some((p) => p.includes("/opt/jv/bin"))).toBe(false);
+  });
+
+  test("the default layout: ~/.jev-cops/ is private, its sockets are exempt", () => {
+    const base = spread({
+      socket: "/home/dev/.jev-cops/copsd.sock",
+      adminSocket: "/home/dev/.jev-cops/copsd-admin.sock",
+    });
+    const config = {
+      ...base,
+      audit: { path: "/home/dev/.jev-cops/audit.jsonl", forward: null },
+      store: { path: "/home/dev/.jev-cops/cops.sqlite" },
+    };
+    const paths = judgePrivatePaths(config, INPUTS);
+    expect(paths).toContain("/home/dev/.jev-cops");
+    expect(paths).toContain("/home/dev/.jev-cops/audit.jsonl");
+    expect(paths).toContain("!/home/dev/.jev-cops/copsd.sock");
+    expect(paths).toContain("!/home/dev/.jev-cops/copsd-admin.sock");
+  });
+
+  test("a store in a shared dir makes its SQLite side files private, not the dir", () => {
+    const store = join(tmpdir(), "cops.sqlite");
+    const paths = judgePrivatePaths({ ...spread(), store: { path: store } }, INPUTS);
+    expect(paths).toEqual(
+      expect.arrayContaining([store, `${store}-wal`, `${store}-shm`, `${store}-journal`]),
+    );
+    expect(paths).not.toContain(tmpdir());
+  });
+
+  test("~/.jev-cops/ under [daemon] home too, and every entry once", () => {
+    const paths = judgePrivatePaths(spread({ home: "/home/judged" }), INPUTS);
+    expect(paths).toContain("/home/judged/.jev-cops");
+    expect(paths).toContain("/home/judged/.jev-cops/claude-code-hook.log");
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  test("protectJudgeInputs appends them to [policy] privatePaths after the configured ones", () => {
+    const given = { ...spread(), policy: { privatePaths: ["~/notes"] } };
+    const paths = protectJudgeInputs(given, INPUTS).policy.privatePaths ?? [];
+    expect(paths[0]).toBe("~/notes");
+    expect(paths.slice(1)).toEqual(judgePrivatePaths(given, INPUTS));
+    expect(given.policy.privatePaths).toEqual(["~/notes"]);
   });
 });
 

@@ -164,6 +164,13 @@ export interface PolicyConfigView {
    * as written; trailing slashes dropped. Empty by default.
    */
   readonly protectedPaths: readonly string[];
+  /**
+   * `[policy] privatePaths` plus the daemon's own records: absolute after `~`/`$HOME`
+   * expansion, trailing slashes dropped; an entry starting with `!` exempts that path. A
+   * path is private when the longest entry it is equal to or under is not an exemption.
+   * Empty by default.
+   */
+  readonly privatePaths: readonly string[];
 }
 
 /** The helper API a policy receives as `ctx` (spec §Policy-as-code example). Frozen. */
