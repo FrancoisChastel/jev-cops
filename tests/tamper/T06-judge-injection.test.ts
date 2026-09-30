@@ -17,6 +17,9 @@
  * can read (M1 capture): the Claude Code ask and the Pi confirm show the reason, the
  * normalized command and the policies' plain-language lines, never a feature value, its
  * evidence (taint included), the floor, the risk or the budget; `cops explain` has them.
+ * Nor are the judge's own records (the audit log, the store, `~/.jev-cops/`) an oracle:
+ * the daemon lists them in `[policy] privatePaths` and `config-tamper` holds an agent's
+ * read of them, and its running `cops explain`/`replay` (M1 gate review, finding M2).
  */
 import { describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
@@ -174,6 +177,27 @@ describe("T6 judge injection: no score oracle for whoever calls the socket", () 
         "taint",
       ]);
       expect(payload.returned).toMatchObject({ features: {}, jev: [], risk: body.risk });
+    } finally {
+      await td.stop();
+    }
+  });
+
+  test("nor the audit log: an agent reading it or the store (or running cops explain) is held", async () => {
+    const td = await startTestDaemon({ policies: {}, policiesDir: REPO_POLICIES });
+    try {
+      const reads = [`cat ${td.config.audit.path}`, `sqlite3 ${td.config.store.path} .dump`];
+      for (const command of [...reads, "cops explain evt_01M3PP8CT01010000000000000"]) {
+        const session = { sessionId: `sess_t6_${crypto.randomUUID()}` };
+        const e = withFreshId(
+          buildEvent({ tool: "Bash", kind: "exec", input: { command } }, session),
+        );
+        const body = (await td.call("POST", "/v1/judge", e)).body as {
+          verdict: string;
+          reason: string;
+        };
+        expect([command, body.verdict]).toEqual([command, "hold"]);
+        expect(body.reason).toContain("would expose the judge's internal record");
+      }
     } finally {
       await td.stop();
     }

@@ -14,7 +14,8 @@
  * cops hook and the session is latched. Live for the `config-tamper` policy through a real
  * copsd running the repo's starter set: edits of the harness settings, hook, plugin and
  * extension files and writes to the daemon's own `policies/` are killed (the daemon appends
- * its policies dir to `protectedPaths` itself). Todo: OpenShell read-only mounts (M2).
+ * its policies dir to `protectedPaths` itself), including through `dd of=`, `install`,
+ * `rsync`, `tar -x -C` and `unzip -d`. Todo: OpenShell read-only mounts (M2).
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -145,6 +146,16 @@ describe("T1 the config-tamper policy through copsd (starter set)", () => {
       "Write",
       { file_path: "/home/dev/.pi/agent/extensions/jev-cops.ts" },
     ],
+    // Writers the normalizer learnt from the M1 gate review (finding M1).
+    [
+      "dd of= over settings.json",
+      "Bash",
+      { command: "dd if=/dev/zero of=~/.claude/settings.json" },
+    ],
+    ["install over settings.json", "Bash", { command: "install -m 644 x ~/.claude/settings.json" }],
+    ["rsync of a .claude dir into ~/", "Bash", { command: "rsync -a /tmp/e/.claude ~/" }],
+    ["tar -x into ~/.claude", "Bash", { command: "tar -xf /tmp/a.tar -C ~/.claude" }],
+    ["unzip -d ~/.codex", "Bash", { command: "unzip -o /tmp/a.zip -d ~/.codex" }],
   ];
 
   for (const [name, tool, input] of edits) {

@@ -10,7 +10,9 @@
  * write and unknown tools are blocked; read-only tools continue and warn locally. Live
  * (Claude Code hook, M1): the command hook, run as a subprocess by the fake Claude Code,
  * exits 2 for exec, write and MCP calls; reads proceed with a warning and a line in
- * `~/.jev-cops/claude-code-hook.log`.
+ * `~/.jev-cops/claude-code-hook.log`. Before that, with the starter set, an agent stopping
+ * `copsd` or `cops-hook` by name (`pkill`, `killall`, `kill $(pgrep …)`, a service stop) is
+ * held by `config-tamper` (M1 gate review, L1); a `kill <pid>` is not recognized (printed gap).
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -105,5 +107,26 @@ describe("T2 daemon killed or unreachable", () => {
     } finally {
       ws.dispose();
     }
+  });
+});
+
+describe("T2 stopping the judge by name is held before it runs (starter set)", () => {
+  test.each([
+    "pkill -f copsd",
+    "killall cops-hook",
+    "kill -TERM $(pgrep -f cops-hook)",
+    "systemctl --user stop copsd.service",
+  ])("%s → hold", async (command) => {
+    const policiesDir = join(import.meta.dir, "..", "..", "policies");
+    td = await startTestDaemon({ policies: {}, policiesDir });
+    const e = withFreshId(buildEvent({ tool: "Bash", kind: "exec", input: { command } }));
+    const body = (await td.call("POST", "/v1/judge", e)).body as {
+      verdict: string;
+      reason: string;
+    };
+    expect(body).toMatchObject({
+      verdict: "hold",
+      reason: "Stopping the judge would block every later call.",
+    });
   });
 });

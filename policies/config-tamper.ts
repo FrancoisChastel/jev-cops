@@ -25,8 +25,14 @@ import { definePolicy, type PolicyContext, type PolicyEvent } from "@jev-cops/sd
  * unknown (a command whose effect on the file is not known: `jq … file`, `vim file`) are
  * capped at hold. An opaque call (interpreter, eval, a tool the normalizer cannot read)
  * whose text names a kill-tier path, and a harness CLI changing config (the
- * `harness-config` verb), are held. Reads never match. Precedents never lower a kill
- * (D-035, enforced by the engine).
+ * `harness-config` verb), are held. Precedents never lower a kill (D-035, the engine).
+ *
+ * The judge itself (M1 gate review, findings M2 and L1), held: any non-write access to
+ * `ctx.config.privatePaths` (audit log, store, `~/.jev-cops/`: the scored decisions agent
+ * channels never carry, T6), the agent running `cops explain|replay` (which print them),
+ * `cops install` or `cops budget --reset`, and stopping `copsd` or `cops-hook` by name
+ * (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/`systemctl` stop; a bare
+ * pid is not recognized). Other reads never match.
  */
 
 type Tier = "annotate" | "hold" | "kill";
@@ -121,7 +127,7 @@ const HARNESS_CLIS: readonly string[] = ["claude", "codex", "opencode", "pi"];
 interface Finding {
   readonly tier: Tier;
   readonly target: string;
-  readonly how: "write" | "delete" | "exec" | "unknown" | "mention" | "cli";
+  readonly how: "write" | "delete" | "exec" | "unknown" | "mention" | "cli" | "private" | "stop";
 }
 
 /** A tree placed at one concrete base directory, lower-cased, with its rules split. */
@@ -253,11 +259,95 @@ function cliFindings(e: PolicyEvent): Finding[] {
     .map((c) => ({ tier: "hold", target: cliWords(c.argv), how: "cli" }));
 }
 
+/** The judge's processes, and what stops a process or service by name. */
+const JUDGE = ["copsd", "cops-hook"];
+const BY_NAME = ["pkill", "killall"];
+const LOOKUPS = ["pgrep", "pidof"];
+const SERVICE_STOPS: Readonly<Record<string, readonly string[]>> = {
+  launchctl: ["stop", "kill", "unload", "bootout", "remove", "disable"],
+  systemctl: ["stop", "kill", "disable", "mask"],
+};
+
+function baseName(word: string): string {
+  return word.slice(word.lastIndexOf("/") + 1);
+}
+
+/** argv from its first word named in `names` (past `sudo`, `xargs`, …), or null. */
+function from(argv: readonly string[], names: readonly string[]): readonly string[] | null {
+  const at = argv.findIndex((a) => names.includes(baseName(a)));
+  return at < 0 ? null : argv.slice(at);
+}
+
+/** A pkill/pgrep pattern or killall name that would select the judge (bad regex: as text). */
+function selectsJudge(pattern: string): boolean {
+  const re = (() => {
+    try {
+      return new RegExp(pattern);
+    } catch {
+      return null;
+    }
+  })();
+  return JUDGE.some((j) => pattern.includes(j) || re?.test(j) === true || re?.test(`/${j}`));
+}
+
+function operands(argv: readonly string[]): string[] {
+  return argv.slice(1).filter((a) => !a.startsWith("-"));
+}
+
+function stopsByName(argv: readonly string[]): boolean {
+  const signal = from(argv, BY_NAME);
+  if (signal !== null) return operands(signal).some(selectsJudge);
+  const service = from(argv, Object.keys(SERVICE_STOPS)) ?? [];
+  const stops = SERVICE_STOPS[baseName(service[0] ?? "")] ?? [];
+  const names = (w: string) => JUDGE.some((j) => w.includes(j));
+  return service.some((w) => stops.includes(w)) && service.some(names);
+}
+
+/** Stopping `copsd` or `cops-hook` by name: DoS only, the hook fails closed without copsd. */
+function stopFindings(e: PolicyEvent): Finding[] {
+  const kills = e.commands.some((c) => from(c.argv, ["kill"]) !== null);
+  const looked = (c: PolicyEvent["commands"][number]) => {
+    const lookup = kills ? from(c.argv, LOOKUPS) : null;
+    return lookup !== null && operands(lookup).some(selectsJudge);
+  };
+  return e.commands
+    .filter((c) => stopsByName(c.argv) || looked(c))
+    .map((c) => ({ tier: "hold", target: c.argv.join(" "), how: "stop" }));
+}
+
+/** `ctx.config.privatePaths`: the longest entry a path is equal to or under decides; `!` exempts. */
+function isPrivate(path: string, ctx: PolicyContext): boolean {
+  const p = canon(path);
+  const best = ctx.config.privatePaths
+    .map((raw) => ({ exempt: raw.startsWith("!"), root: canon(raw.replace(/^!/, "")) }))
+    .filter((x) => p === x.root || p.startsWith(`${x.root}/`))
+    .toSorted((a, b) => b.root.length - a.root.length || Number(a.exempt) - Number(b.exempt))[0];
+  return best !== undefined && !best.exempt;
+}
+
+/** The judge's records read (or run, or touched unknowably), and its CLI printing or changing them. */
+function privateFindings(e: PolicyEvent, ctx: PolicyContext): Finding[] {
+  const reads = Object.entries(e.fs.access)
+    .filter(([path, how]) => how !== "write" && how !== "delete" && isPrivate(path, ctx))
+    .map(([path]): Finding => ({ tier: "hold", target: path, how: "private" }));
+  const cli = e.commands.flatMap((c): Finding[] => {
+    const words = from(c.argv, ["cops"]) ?? [];
+    const sub = operands(words)[0] ?? "";
+    const target = `cops ${sub}`;
+    if (sub === "explain" || sub === "replay") return [{ tier: "hold", target, how: "private" }];
+    const changes = sub === "install" || (sub === "budget" && words.includes("--reset"));
+    return changes ? [{ tier: "hold", target, how: "cli" }] : [];
+  });
+  return [...reads, ...cli];
+}
+
 function findings(e: PolicyEvent, ctx: PolicyContext): Finding[] {
   const all = [
+    ...privateFindings(e, ctx),
     ...accessFindings(e, placedTrees(e, ctx)),
     ...mentionFindings(e, ctx),
     ...cliFindings(e),
+    ...stopFindings(e),
   ];
   return all.toSorted((a, b) => RANK[b.tier] - RANK[a.tier]);
 }
@@ -271,8 +361,14 @@ function reasonFor(f: Finding): string {
     return `Writing to ${f.target} changes data the harness manages; jev-cops logged it.`;
   }
   switch (f.how) {
+    case "private":
+      return f.target.startsWith("/")
+        ? `Reading ${f.target} would expose the judge's internal record.`
+        : `Running "${f.target}" would expose the judge's internal record.`;
+    case "stop":
+      return "Stopping the judge would block every later call.";
     case "cli":
-      return `Running "${f.target}" would change the harness configuration.`;
+      return `Running "${f.target}" would change the harness or judge configuration.`;
     case "mention":
       return `Code that names ${f.target} could change the harness or judge configuration.`;
     case "exec":
@@ -287,7 +383,7 @@ function reasonFor(f: Finding): string {
 
 export default definePolicy({
   name: "config-tamper",
-  version: 1,
+  version: 2,
   owner: "cyber-team",
   when: (e, ctx) => findings(e, ctx).length > 0,
   decide: (e, ctx) => top(e, ctx).tier,

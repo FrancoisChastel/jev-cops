@@ -23,8 +23,8 @@ import configTamper from "./config-tamper.ts";
  * What the fixtures cannot express: a human-granted precedent never lowers a
  * config-tamper kill (spec §Precedents, D-035), checked through the real engine, alone
  * and with the whole starter set; and, through a real copsd, observe mode turning the
- * kill into an allow with the "would have" note, and `[policy] protectedPaths` reaching
- * the policy.
+ * kill into an allow with the "would have" note, `[policy] protectedPaths` and the
+ * daemon's own private paths reaching the policy, and the agent-safe reasons of a hold.
  */
 
 const HOME = "/home/dev";
@@ -122,5 +122,34 @@ describe("config-tamper through copsd", () => {
   test("[policy] protectedPaths from the daemon config reaches the policy", async () => {
     const body = await judge("enforce", "/home/dev/bin/cops-hook", ["~/bin/cops-hook"]);
     expect(body.verdict).toBe("kill");
+  });
+
+  async function bash(command: string) {
+    td ??= await startTestDaemon({ policies: {}, policiesDir: import.meta.dir });
+    const session = { sessionId: `sess_ct_${crypto.randomUUID()}` };
+    const event = withFreshId(
+      buildEvent({ tool: "Bash", kind: "exec", input: { command } }, session),
+    );
+    const res = await td.call("POST", "/v1/judge", event);
+    return res.body as { verdict: string; reason: string };
+  }
+
+  test("the daemon's own private paths reach the policy: reading its store is held", async () => {
+    td = await startTestDaemon({ policies: {}, policiesDir: import.meta.dir });
+    const body = await bash(`head -c 100 ${td.config.store.path}`);
+    expect(body).toMatchObject({
+      verdict: "hold",
+      reason: `Reading ${td.config.store.path} would expose the judge's internal record.`,
+    });
+  });
+
+  test.each([
+    ["cops explain evt_01M3PP8CT01010000000000000", 'Running "cops explain" would expose'],
+    ["pkill -f copsd", "Stopping the judge would block every later call."],
+    ["cops install claude-code --uninstall", 'Running "cops install" would change the harness'],
+  ])("%s is held with an agent-safe reason", async (command, reason) => {
+    const body = await bash(command);
+    expect(body.verdict).toBe("hold");
+    expect(body.reason).toStartWith(reason);
   });
 });

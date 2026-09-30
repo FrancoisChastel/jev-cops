@@ -10,6 +10,8 @@ import { policyModule } from "./testing/policies.ts";
  * copsd running the repo's starter policies, `config-tamper` kills a write to the
  * policies dir, the audit log, the config file or the hook binary, because the daemon
  * appended them to `[policy] protectedPaths` at startup, not because a test configured them.
+ * It holds a read of its records (the audit log), listed in `[policy] privatePaths` the
+ * same way, and leaves reads of its policies and config alone.
  */
 
 const POLICIES = join(import.meta.dir, "..", "..", "..", "policies");
@@ -63,10 +65,23 @@ describe("the daemon's own paths are killed by config-tamper", () => {
     expect((await bash(`cp /tmp/evil ${HOOK}`)).body.verdict).toBe("kill");
   });
 
-  test("`cat <audit file>` is a read: config-tamper does not match", async () => {
+  test("`cat <audit file>` reads the judge's record: held, never killed (T6, private paths)", async () => {
     const { body, event } = await bash(`cat ${td.config.audit.path}`);
-    expect(body.verdict).not.toBe("kill");
-    expect(configTamperTrace(event.id)?.matched).toBe(false);
+    expect(body.verdict).toBe("hold");
+    expect(body.reason).toBe(
+      `Reading ${td.config.audit.path} would expose the judge's internal record.`,
+    );
+    expect(configTamperTrace(event.id)?.matched).toBe(true);
+  });
+
+  test("reading a policy file or the config file does not match (agents read those)", async () => {
+    for (const file of [
+      join(td.config.policies.dir, "config-tamper.ts"),
+      join(td.dir, "cops.toml"),
+    ]) {
+      const { event } = await bash(`cat ${file}`);
+      expect(configTamperTrace(event.id)?.matched).toBe(false);
+    }
   });
 
   test("still killed after a policy reload", async () => {

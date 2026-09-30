@@ -8,7 +8,9 @@
  * line or a cut line breaks the chain at that seq. Live at the hook: the daemon appends its
  * audit log (and its directory) to `protectedPaths`, so through a real copsd running the
  * starter set an agent that writes, appends to, truncates or deletes the log is killed by
- * `config-tamper` before the command runs; reading it is not. Live in `cops doctor` (M1
+ * `config-tamper` before the command runs; reading it is held, not killed (the daemon also
+ * lists it in `privatePaths`: its scored decisions are the T6 oracle), on the Claude Code
+ * hook an ask with a human and a deny without one. Live in `cops doctor` (M1
  * step 7): it verifies the chain and fails on a break. Shipping off-box (the syslog/S3
  * forwarder), which alone catches tail truncation or a full recompute (L6), is M2.
  */
@@ -27,6 +29,7 @@ import {
 } from "../../packages/daemon/src/testing/daemon.ts";
 import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { buildEvent } from "../fixtures/context/index.ts";
+import { claudeCode, claudeWorkspace } from "./claude-code.ts";
 import { pending } from "./pending.ts";
 
 describe("T12 log tampering", () => {
@@ -154,7 +157,37 @@ describe("T12 an agent that edits or truncates the audit log is killed at the ho
     expect(await verdict("Write", { file_path: audit, content: "" })).toBe("kill");
   });
 
-  test("reading the log is not tampering", async () => {
-    expect(await verdict("Bash", { command: `tail -n 5 ${audit}` })).not.toBe("kill");
+  test("reading the log is not tampering: held (it holds the scored decisions, T6), never killed", async () => {
+    expect(await verdict("Bash", { command: `tail -n 5 ${audit}` })).toBe("hold");
+    expect(await verdict("Read", { file_path: audit })).toBe("hold");
+  });
+});
+
+describe("T12/T6 Claude Code hook: the agent's `cat` of the audit log never runs unasked", () => {
+  let td: TestDaemon;
+  beforeAll(async () => {
+    td = await startTestDaemon({
+      policies: {},
+      policiesDir: join(import.meta.dir, "..", "..", "policies"),
+    });
+  });
+  afterAll(async () => {
+    await td.stop();
+  });
+
+  test.each([
+    [false, "ask"],
+    [true, "deny"],
+  ] as const)("headless %p: the hold becomes %s", async (headless, outcome) => {
+    const ws = claudeWorkspace();
+    try {
+      const c = claudeCode(td.config.daemon.socket, ws, { headless });
+      const call = await c.tool("Bash", { command: `cat ${td.config.audit.path}` });
+      expect(call.decision.outcome).toBe(outcome);
+      expect(call.decision.reason).toContain("would expose the judge's internal record");
+      expect(call.decision.reason).not.toContain("risk");
+    } finally {
+      ws.dispose();
+    }
   });
 });
