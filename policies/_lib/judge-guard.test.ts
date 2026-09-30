@@ -74,8 +74,25 @@ describe("judgeCliFindings", () => {
     ["./dist/cops replay ~/.jev-cops/audit.jsonl --json", "cops replay", "private"],
     ["cops install claude-code --uninstall", "cops install", "cli"],
     ["cops budget sess_x --reset", "cops budget", "cli"],
+    ['bash -c "cops explain evt"', "cops explain", "private"],
+    ["sudo cops budget --reset x", "cops budget", "cli"],
+    ["env JEV=1 cops replay a.jsonl", "cops replay", "private"],
+    ["command cops install claude-code", "cops install", "cli"],
+    ["find . -maxdepth 0 -exec cops explain evt \\;", "cops explain", "private"],
   ] as const)("%s → %s (%s)", async (command, target, how) => {
     expect(judgeCliFindings(await bash(command))).toEqual([{ tier: "hold", target, how }]);
+  });
+
+  test.each([
+    "echo cops explain",
+    "echo cops replay a.jsonl",
+    "grep cops README.md",
+    'git commit -m "cops budget --reset"',
+    'bash -c "echo cops explain"',
+    "git cops explain",
+    "find . -name cops -exec cat {} +",
+  ])("%s does not run cops: no finding", async (command) => {
+    expect(judgeCliFindings(await bash(command))).toEqual([]);
   });
 
   test.each(["cops test policies", "cops budget sess_x", "cops doctor"])(

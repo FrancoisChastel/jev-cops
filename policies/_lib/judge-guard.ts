@@ -1,21 +1,23 @@
 import type { PolicyEvent } from "@jev-cops/sdk";
 import type { Finding } from "./config-findings.ts";
 import { canon } from "./config-trees.ts";
+import { programsOf } from "./program.ts";
 
 /**
  * The judge guarding itself (M1 gate review, findings M2 and L1; D-099, D-100), as
  * `config-tamper` findings, all held: a non-write access to one of the judge's private
  * records (`ctx.config.privatePaths`: audit log, store, `~/.jev-cops/`, the scored
  * decisions agent channels never carry, T6); the agent running `cops explain|replay`
- * (which print them), `cops install` or `cops budget --reset`; stopping `copsd` or
- * `cops-hook` by name (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/
- * `systemctl` stop). A bare pid, or the judge running under another name, is not
- * recognized (a printed gap).
+ * (which print them), `cops install` or `cops budget --reset` (`cops` as the program, not
+ * as a word: `echo cops explain` is not); stopping `copsd` or `cops-hook` by name
+ * (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/`systemctl` stop). A bare
+ * pid, or the judge running under another name, is not recognized (a printed gap).
  */
 
 type Command = PolicyEvent["commands"][number];
 
-/** The judge's processes, and what stops a process or service by name. */
+/** The judge's CLI and processes, and what stops a process or service by name. */
+const JUDGE_CLI = "cops";
 const JUDGE = ["copsd", "cops-hook"];
 const BY_NAME = ["pkill", "killall"];
 const LOOKUPS = ["pgrep", "pidof"];
@@ -88,10 +90,17 @@ export function privateReadFindings(e: PolicyEvent, privatePaths: readonly strin
     .map(([path]): Finding => ({ tier: "hold", target: path, how: "private" }));
 }
 
-/** The agent running the judge's CLI to print its record or change its configuration. */
+/**
+ * The agent running the judge's CLI to print its record or change its configuration: a
+ * command that runs `cops` as a program (past `sudo`, `env`, `command`, …, or through
+ * `find -exec`; inside `bash -c` too, whose string the normalizer parses into commands of
+ * its own). A `cops` word elsewhere (`echo cops explain`, `grep cops`) is not. `copsd` and
+ * `cops-hook` take no subcommands.
+ */
 export function judgeCliFindings(e: PolicyEvent): Finding[] {
   return e.commands.flatMap((c): Finding[] => {
-    const words = from(c.argv, ["cops"]) ?? [];
+    if (!programsOf(c).includes(JUDGE_CLI)) return [];
+    const words = from(c.argv, [JUDGE_CLI]) ?? [];
     const sub = operands(words)[0] ?? "";
     const target = `cops ${sub}`;
     if (sub === "explain" || sub === "replay") return [{ tier: "hold", target, how: "private" }];

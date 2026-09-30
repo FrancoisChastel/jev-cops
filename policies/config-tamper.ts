@@ -23,16 +23,21 @@ import { judgeCliFindings, privateReadFindings, stopFindings } from "./_lib/judg
  *
  * Only non-read access counts (`e.fs.access`): write and delete take the tier; exec and
  * unknown (a command whose effect on the file is not known: `jq … file`, `vim file`) are
- * capped at hold. An opaque call (interpreter, eval, a tool the normalizer cannot read)
- * whose text names a kill-tier path, and a harness CLI changing config (the
- * `harness-config` verb), are held. Precedents never lower a kill (D-035, the engine).
+ * capped at hold. A directory above a tree root (home, `/`, `~/.config`, the repo root,
+ * `/etc`) takes the highest tier below it, kill, when removed (`rm -r`), moved away (`mv`)
+ * or re-moded (`chmod`, `chown`); a write into it, a filtered delete (`find -delete`) and
+ * any other access to it do not count (`ls ~`, `touch ~/notes.txt`, `tar -x` in the repo).
+ * An opaque call (interpreter, eval, a tool the normalizer cannot read) whose text names a
+ * kill-tier path, and a harness CLI changing config (the `harness-config` verb), are held.
+ * Precedents never lower a kill (D-035, the engine).
  *
  * The judge itself (M1 gate review, findings M2 and L1), held: any non-write access to
  * `ctx.config.privatePaths` (audit log, store, `~/.jev-cops/`: the scored decisions agent
  * channels never carry, T6), the agent running `cops explain|replay` (which print them),
- * `cops install` or `cops budget --reset`, and stopping `copsd` or `cops-hook` by name
- * (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/`systemctl` stop; a bare
- * pid is not recognized). Other reads never match.
+ * `cops install` or `cops budget --reset` (`cops` as the command's program, past `sudo` or
+ * `env` and inside `bash -c`; not a `cops` word: `echo cops explain`), and stopping `copsd`
+ * or `cops-hook` by name (`pkill`/`killall` patterns, `kill $(pgrep …)`, a `launchctl`/
+ * `systemctl` stop; a bare pid is not recognized). Other reads never match.
  *
  * The trees are shared with the OpenShell compiler; the call's findings on them are in
  * `./_lib/config-findings.ts`, the judge's own guards in `./_lib/judge-guard.ts`.
@@ -82,7 +87,7 @@ function reasonFor(f: Finding): string {
 
 export default definePolicy({
   name: "config-tamper",
-  version: 2,
+  version: 3,
   owner: "cyber-team",
   when: (e, ctx) => findings(e, ctx).length > 0,
   decide: (e, ctx) => top(e, ctx).tier,

@@ -20,7 +20,10 @@
  *
  * Matching is case-insensitive on absolute paths with backslashes turned into slashes
  * ({@link canon}). A directory that contains a kill rule is itself kill (deleting or
- * replacing `~/.claude` removes `settings.json`).
+ * replacing `~/.claude` removes `settings.json`). A directory above a placed tree's root
+ * (home, `/`, `~/.config`, a repo root, `/etc`) is in no tree ({@link pathTier} is null) but
+ * takes the highest tier of the trees below it ({@link ancestorTier}); which accesses to it
+ * count is the caller's to say.
  */
 
 /** How much a change to a path matters, lowest first. */
@@ -224,7 +227,7 @@ function place(tree: ConfigTree, base: string): PlacedTree {
  * Every tree at every base for one call: home trees under `home`, project trees under each
  * project root, absolute ones as they are, plus each protected path as a kill tree
  * (absolute, or under each project root when relative). Build once per call, then ask
- * {@link pathTier} per path.
+ * {@link pathTier} (or {@link ancestorTier}) per path.
  */
 export function placeTrees(roots: TreeRoots): PlacedTree[] {
   const home = canon(roots.home);
@@ -252,7 +255,8 @@ function tierIn(tree: PlacedTree, rel: readonly string[]): Tier | null {
   return holdsKill ? "kill" : tree.rest;
 }
 
-function maxTier(tiers: readonly (Tier | null)[]): Tier | null {
+/** The highest of `tiers` by {@link TIER_RANK}; null when every one is null. */
+export function maxTier(tiers: readonly (Tier | null)[]): Tier | null {
   return tiers.reduce<Tier | null>(
     (m, t) => (t !== null && (m === null || TIER_RANK[t] > TIER_RANK[m]) ? t : m),
     null,
@@ -271,6 +275,30 @@ export function pathTier(path: string, trees: readonly PlacedTree[]): Tier | nul
     return tierIn(t, segs(p.slice(t.base.length)));
   });
   return maxTier(tiers);
+}
+
+/** The directories above {@link WINDOWS_MANAGED}: `c:` and `c:/program files`. */
+const WINDOWS_ABOVE: readonly string[] = segs(WINDOWS_MANAGED)
+  .slice(0, -1)
+  .map((_, i, above) => above.slice(0, i + 1).join("/"));
+
+/** The highest tier anywhere in a placed tree: its rest or a rule's (`ignore` is none). */
+function treeTier(tree: PlacedTree): Tier | null {
+  return maxTier([tree.rest, ...tree.rules.map((r) => (r.tier === "ignore" ? null : r.tier))]);
+}
+
+/**
+ * The tier a directory takes from the trees below it: the highest tier of every placed tree
+ * whose root sits strictly under `path` (absolute), or null when none does. Home, `/`,
+ * `~/.config` and a repo root are kill; a tree's own root is not its ancestor (its tier is
+ * {@link pathTier}'s). A directory above {@link WINDOWS_MANAGED} (`c:`, `c:/program files`,
+ * wherever it appears in a path) is kill.
+ */
+export function ancestorTier(path: string, trees: readonly PlacedTree[]): Tier | null {
+  const p = canon(path);
+  if (WINDOWS_ABOVE.some((w) => p === w || p.endsWith(`/${w}`))) return "kill";
+  const under = p === "/" ? "/" : `${p}/`;
+  return maxTier(trees.filter((t) => t.base.startsWith(under)).map(treeTier));
 }
 
 /** Kill-tier paths of {@link CONFIG_TREES} as code names them: relative to the anchor. */

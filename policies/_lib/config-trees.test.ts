@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  ancestorTier,
   CONFIG_TREES,
   canon,
   killMarkers,
@@ -160,6 +161,77 @@ describe("pathTier", () => {
 
   test("an empty tree list covers nothing", () => {
     expect(pathTier(`${HOME}/.claude/settings.json`, [])).toBeNull();
+  });
+});
+
+describe("ancestorTier", () => {
+  test.each(
+    rows(
+      [
+        HOME,
+        "/home",
+        "/",
+        `${HOME}/.config`,
+        REPO,
+        "/work",
+        "/etc",
+        "/Library",
+        "/Library/Application Support",
+        "/c/Program Files",
+        "C:\\Program Files",
+        `${REPO}/C:`,
+      ],
+      "kill",
+    ),
+  )("a directory above a kill-tier tree root takes its tier: %s → %s", (path, tier) => {
+    expect(ancestorTier(path, trees())).toBe(tier);
+  });
+
+  test.each(
+    rows(
+      [
+        `${REPO}/build`,
+        `${REPO}/src`,
+        `${HOME}/notes.md`,
+        `${HOME}/.cache`,
+        `${HOME}/.claude`,
+        `${HOME}/.claude/settings.json`,
+        "/tmp",
+        "/work/other",
+      ],
+      null,
+    ),
+  )("above no tree root (a root is not its own ancestor): %s → %s", (path, tier) => {
+    expect(ancestorTier(path, trees())).toBe(tier);
+  });
+
+  test("protected paths count like trees: the directories above them are kill", () => {
+    const placed = trees(REPO, ["/opt/jev/bin/cops-hook"]);
+    expect(ancestorTier("/opt/jev/bin", placed)).toBe("kill");
+    expect(ancestorTier("/opt", placed)).toBe("kill");
+    expect(ancestorTier("/opt/other", placed)).toBeNull();
+  });
+
+  test("the highest tier of the trees below wins; an ignore rule counts for nothing", () => {
+    const placed: PlacedTree[] = [
+      { base: "/a/b/.mcp.json", rest: "hold", rules: [] },
+      { base: "/a/c/data", rest: "annotate", rules: [{ segs: ["wt"], tier: "ignore" }] },
+      { base: "/a/d/conf", rest: "hold", rules: [{ segs: ["hooks"], tier: "kill" }] },
+    ];
+    expect(ancestorTier("/a/b", placed)).toBe("hold");
+    expect(ancestorTier("/a/c", placed)).toBe("annotate");
+    expect(ancestorTier("/a/d", placed)).toBe("kill");
+    expect(ancestorTier("/a", placed)).toBe("kill");
+  });
+
+  test("case-insensitive, trailing slashes ignored; home itself is in no tree", () => {
+    const placed = trees();
+    expect(ancestorTier("/HOME/Dev/", placed)).toBe("kill");
+    expect(pathTier(HOME, placed)).toBeNull();
+  });
+
+  test("an empty tree list is below nothing", () => {
+    expect(ancestorTier("/", [])).toBeNull();
   });
 });
 

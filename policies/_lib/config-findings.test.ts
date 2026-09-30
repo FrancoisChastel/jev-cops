@@ -48,6 +48,51 @@ describe("accessFindings", () => {
     expect(access(await bash("cat ~/.claude/settings.json"))).toEqual([]);
   });
 
+  test.each([
+    ["rm -rf ~", "/home/dev", "delete"],
+    ["rm -rf $HOME", "/home/dev", "delete"],
+    ["rm -r -- /home/dev/", "/home/dev", "delete"],
+    ["sudo rm -rf ~", "/home/dev", "delete"],
+    ['bash -c "rm -rf ~"', "/home/dev", "delete"],
+    ["mv ~ /tmp/x", "/home/dev", "delete"],
+    ["mv ~/.config ~/.config.bak", "/home/dev/.config", "delete"],
+    ["rm -rf ~/.config", "/home/dev/.config", "delete"],
+    ["chmod -R 000 ~", "/home/dev", "write"],
+    ["chmod 755 ~", "/home/dev", "write"],
+    ["chown -R nobody ~", "/home/dev", "write"],
+    ["rm -rf /work/repo", "/work/repo", "delete"],
+    ["rm -rf .", "/work/repo", "delete"],
+    ["rm -rf /", "/", "delete"],
+    ["rm -rf /etc", "/etc", "delete"],
+    ['rm -rf "/Library/Application Support"', "/Library/Application Support", "delete"],
+  ] as const)(
+    "%s removes or re-modes a directory above a kill tree: kill",
+    async (command, target, how) => {
+      expect(access(await bash(command))).toEqual([{ tier: "kill", target, how }]);
+    },
+  );
+
+  test.each([
+    "rm -rf /work/repo/build",
+    "ls ~",
+    "du -sh ~",
+    "code .",
+    "touch ~/notes.txt",
+    "mkdir -p ~/.config",
+    "cp notes.txt ~",
+    "mv /tmp/y ~",
+    "tar -xf /tmp/a.tar",
+    "rsync -a /tmp/e/ ~/",
+    "find . -name '*.pyc' -delete",
+    "find ~ -delete",
+    "git rm -r --cached .",
+    "rm ~",
+    "rmdir ~/.config",
+    "chgrp -R staff ~",
+  ])("%s does not remove or re-mode a directory above a tree: no finding", async (command) => {
+    expect(access(await bash(command))).toEqual([]);
+  });
+
   test("trees follow the call's cwd and the daemon's protected paths", async () => {
     const e = await write("/work/repo/policies/_lib/config-trees.ts");
     expect(access(e)).toEqual([]);
