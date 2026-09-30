@@ -1,6 +1,6 @@
 import { normalize } from "../../../packages/core/src/normalizer/normalize.ts";
 import type { NormalizedEvent } from "../../../packages/core/src/normalizer/types.ts";
-import { type Event, parseEvent } from "../../../packages/core/src/schema/event.ts";
+import { type Event, type Harness, parseEvent } from "../../../packages/core/src/schema/event.ts";
 import { loadEventFixture } from "../events/index.ts";
 
 /** Home directory every context fixture expands `~` to. */
@@ -23,6 +23,8 @@ export interface EventShape {
   actor?: "agent" | "subagent" | "user";
   git?: Json | null;
   sandbox?: "openshell" | "none";
+  /** The harness that sent the call (default: the fixture's, Claude Code). */
+  harness?: Harness;
 }
 
 /** Result fields of a post event. */
@@ -66,6 +68,7 @@ export function buildEvent(
   const base = loadEventFixture("pre-bash") as Json;
   const raw: Json = {
     ...base,
+    ...(shape.harness === undefined ? {} : { harness: shape.harness }),
     phase: result === undefined ? "pre" : "post",
     session: sessionOf(base, shape),
     actor: { kind: shape.actor ?? "agent" },

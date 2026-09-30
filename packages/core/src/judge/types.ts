@@ -93,7 +93,7 @@ export interface JudgeState {
   readonly kind: CallKind;
   /** Normalized commands, one argv per line (tool plus targets for non-shell tools). */
   readonly command: string;
-  /** The verbatim command, or the tool input minus agent-prose fields. */
+  /** The verbatim command, a spawn's boolean flags, or the tool input minus agent-prose fields. */
   readonly raw: string;
   readonly verbs: readonly string[];
   readonly paths: readonly string[];

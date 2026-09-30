@@ -1,6 +1,7 @@
 import type { Features } from "../context/features.ts";
 import type { CallRecord, CaseFile } from "../context/types.ts";
 import { canonicalJson } from "../normalizer/hash.ts";
+import { toolRule } from "../normalizer/tools.ts";
 import type { NormalizedEvent } from "../normalizer/types.ts";
 import { DEFAULT_JUDGE_CONFIG, type JudgeStateConfig } from "./config.ts";
 import type { JudgeCallSummary, JudgeState } from "./types.ts";
@@ -17,6 +18,21 @@ export const AGENT_PROSE_KEYS: ReadonlySet<string> = new Set([
   "reason",
   "rationale",
   "justification",
+]);
+
+/**
+ * What the judge may see of a tool that hands work to another agent: these boolean flags
+ * and nothing else (D-032). The rest of such an input is text the agent wrote for another
+ * agent (Claude Code `Agent`/`Task` `description`, `prompt`, `subagent_type`; OpenCode
+ * `task` `description`, `prompt`, `subagent_type`, `command`, `task_id`; Codex
+ * `spawn_agent`, `followup_task`, `send_input`, `send_message`, `resume_agent` `message`,
+ * `items`, `agent_type`, ids), so it is allow-listed rather than filtered: a field a
+ * harness adds later, and any key the agent invents, stay out.
+ */
+export const SPAWN_STATE_FLAGS: ReadonlySet<string> = new Set([
+  "run_in_background",
+  "background",
+  "interrupt",
 ]);
 
 function clip(text: string, max: number): string {
@@ -38,6 +54,30 @@ function withoutProse(input: Readonly<Record<string, unknown>>): Record<string, 
   return Object.fromEntries(Object.entries(input).filter(([key]) => !AGENT_PROSE_KEYS.has(key)));
 }
 
+/**
+ * A tool that hands work to another agent: a `spawn` rule on the event's own harness, or a
+ * tool core has no rule for that the adapter sent as `spawn`.
+ */
+function isSpawnTool(n: NormalizedEvent): boolean {
+  const rule = toolRule(n.event.call.tool, n.event.harness);
+  return rule === undefined ? n.event.call.kind === "spawn" : rule.reader === "spawn";
+}
+
+function spawnFlags(input: Readonly<Record<string, unknown>>): Record<string, boolean> {
+  const flags = Object.entries(input).filter(
+    (entry): entry is [string, boolean] =>
+      SPAWN_STATE_FLAGS.has(entry[0]) && typeof entry[1] === "boolean",
+  );
+  return Object.fromEntries(flags);
+}
+
+/** The input text the judge sees: the command, a spawn's flags, or the input minus prose. */
+function judgedRaw(n: NormalizedEvent): string {
+  const input = n.event.call.input;
+  if (isSpawnTool(n)) return canonicalJson(spawnFlags(input));
+  return isShell(n) ? n.raw : canonicalJson(withoutProse(input));
+}
+
 function commandText(n: NormalizedEvent): string {
   if (isShell(n)) return n.commands.map((c) => c.argv.join(" ")).join("\n");
   return [n.event.call.tool, ...n.paths, ...n.hosts].join(" ");
@@ -56,8 +96,9 @@ function callSummary(c: CallRecord, cfg: JudgeStateConfig): JudgeCallSummary {
 /**
  * The state the judge sees for `n`, built field by field from the normalized event and
  * a bounded case-file summary. Never includes agent prose: for a shell call `raw` is
- * the command itself, for any other tool it is the input without {@link AGENT_PROSE_KEYS};
- * the task comes from the case file (immutable, T11), never from the event. Frozen.
+ * the command itself, for a tool that spawns an agent only its {@link SPAWN_STATE_FLAGS},
+ * for any other tool the input without {@link AGENT_PROSE_KEYS}; the task comes from the
+ * case file (immutable, T11), never from the event. Frozen.
  */
 export function buildJudgeState(
   n: NormalizedEvent,
@@ -70,7 +111,7 @@ export function buildJudgeState(
     .recentCalls(cfg.recentWindowMs)
     .filter((c) => c.callId !== callId)
     .slice(-cfg.recentCalls);
-  const raw = isShell(n) ? n.raw : canonicalJson(withoutProse(n.event.call.input));
+  const raw = judgedRaw(n);
   return Object.freeze({
     stateHash: n.stateHash,
     tool: n.event.call.tool,

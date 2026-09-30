@@ -11,7 +11,8 @@ import type { PathAccess } from "./types.ts";
  * the background, or reads `input.ws.url` as a net target; `path` reads the first string
  * among `fields` as a file path; `url` reads `input[field]` as a URL; `patch` reads
  * `input[field]` as an `apply_patch` patch (patch.ts); `spawn` reads nothing (prompt and
- * description stay in `raw`); `kind` reads nothing and has a fixed kind (a web search, an
+ * description stay in `raw`, and the judge sees only the input's boolean flags, D-032);
+ * `kind` reads nothing and has a fixed kind (a web search, an
  * upload) plus optional `verbs`; `inert` has no side effect (bookkeeping): kind `other`,
  * verb `inert`.
  */
