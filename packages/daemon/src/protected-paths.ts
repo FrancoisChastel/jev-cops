@@ -17,10 +17,10 @@ export interface JudgeInputs {
   readonly selfBinary: string | null;
   /**
    * The installed jev-cops code when the daemon runs from an npm or bun install, the
-   * source-package counterpart of `selfBinary` (see {@link installedCodeDirs}); empty in a
-   * source checkout or a compiled binary.
+   * source-package counterpart of `selfBinary` (see {@link installedCodeDirs}); absent or
+   * empty in a source checkout or a compiled binary.
    */
-  readonly installedCode: readonly string[];
+  readonly installedCode?: readonly string[];
   /** The OS user's home: the defaults live in its `~/.jev-cops/`, whatever `[daemon] home` says. */
   readonly osHome: string;
   /** The daemon's working directory; it and every directory above it are shared. */
@@ -137,7 +137,7 @@ export function judgeInputPaths(config: DaemonConfig, inputs: JudgeInputs): stri
     join(inputs.osHome, ".jev-cops"),
     join(config.daemon.home, ".jev-cops"),
     ...binaries,
-    ...inputs.installedCode,
+    ...(inputs.installedCode ?? []),
   ];
   return [...new Set(paths.flatMap((p) => [p, realPath(p)]))];
 }
