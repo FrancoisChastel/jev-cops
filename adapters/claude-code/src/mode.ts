@@ -2,11 +2,12 @@
  * Headless detection (PLAN-M1 §2 row 10, D-068 proposal). The hook input carries a
  * `permission_mode` but no interactive/print flag, so the session mode is read from the argv
  * of the `claude` process that spawned the hook: headless iff it runs in print mode (`-p`,
- * `--print`) with no permission host (`--permission-prompt-tool`, unless
+ * `--print`, or a print-only flag: `--output-format`, `--input-format`, which is how the
+ * Agent SDK starts it) with no permission host (`--permission-prompt-tool`, unless
  * `--permission-prompts none`). A wrong "interactive" guess only yields an `ask` that a
  * host-less `-p` run denies; but that run then shows the ask's reason to Claude (observed on
- * 2.1.280), so a parent that cannot be read, or is not recognizably `claude`, counts as
- * headless.
+ * 2.1.280, and through the Agent SDK 0.3.285 in the M1 live capture), so a parent that
+ * cannot be read, or is not recognizably `claude`, counts as headless.
  */
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -32,6 +33,11 @@ const MAX_SHELL_LAYERS = 3;
 const CLAUDE_PACKAGE = /[\\/]claude-code[\\/]/i;
 /** A cluster of short flags (`-cp`) that includes `p`. */
 const SHORT_CLUSTER = /^-[A-Za-z]*p[A-Za-z]*$/;
+/**
+ * Flags that "only work with --print" (`claude --help`): the Agent SDK passes these and no
+ * `-p` (`--output-format stream-json --input-format stream-json`, SDK 0.3.285).
+ */
+const PRINT_ONLY_FLAGS: readonly string[] = ["--output-format", "--input-format"];
 const PS_TIMEOUT_MS = 1_000;
 /**
  * `ps` by absolute path, never from `PATH`: the hook inherits Claude Code's `PATH`, whose
@@ -41,7 +47,8 @@ const PS_TIMEOUT_MS = 1_000;
 export const PS_PATH = "/bin/ps";
 
 function isPrint(flag: string): boolean {
-  return flag === "--print" || SHORT_CLUSTER.test(flag);
+  const name = flag.split("=")[0] ?? flag;
+  return flag === "--print" || SHORT_CLUSTER.test(flag) || PRINT_ONLY_FLAGS.includes(name);
 }
 
 function hasHost(flags: readonly string[]): boolean {

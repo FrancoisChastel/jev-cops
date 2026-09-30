@@ -31,6 +31,34 @@ describe("modeOfArgs: headless iff print mode without a permission host (plan §
     [["claude", "--permission-prompts", "none"], "interactive"],
     [["claude", "--print-config"], "interactive"],
     [["claude", "fix -p flag"], "interactive"],
+    // The Agent SDK (0.3.285, bundled claude 2.1.285) passes no -p: stream-json in and out.
+    // Both flags exist only in print mode, so they mean headless unless a host is given.
+    [
+      [
+        "/sdk/node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude",
+        ...["--output-format", "stream-json", "--verbose", "--input-format", "stream-json"],
+        ...["--setting-sources=user", "--permission-mode", "default"],
+      ],
+      "headless",
+    ],
+    [
+      [
+        "claude",
+        ...["--output-format", "stream-json", "--verbose", "--input-format", "stream-json"],
+        ...["--permission-prompt-tool", "stdio"],
+      ],
+      "interactive",
+    ],
+    [["claude", "--output-format=json", "go"], "headless"],
+    [["claude", "--input-format", "stream-json"], "headless"],
+    [
+      [
+        "claude",
+        ...["--output-format", "stream-json", "--permission-prompt-tool", "stdio"],
+        ...["--permission-prompts", "none"],
+      ],
+      "headless",
+    ],
   ] as const)("%p → %s", (args, mode) => {
     expect(modeOfArgs(args)).toBe(mode);
   });
