@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { readAudit } from "./audit.ts";
@@ -105,7 +113,7 @@ describe("copsd process", () => {
     const stderr = await new Response(proc.stderr).text();
     expect(stderr).toContain(`copsd listening on ${socket}`);
     expect(stderr).toContain(`admin ${join(dir, "a.sock")}`);
-    expect(stderr).toContain("1 policy");
+    expect(stderr).toContain(`1 policy from ${join(dir, "policies")}`);
     expect(stderr).toContain("judge off");
     expect(stderr).toContain("WARNING: enforcement = observe");
     expect(stderr).toContain("WARNING: judge = off");
@@ -119,6 +127,38 @@ describe("copsd process", () => {
     expect(config?.policy.privatePaths).toContain(`!${join(dir, "j.toml")}`);
     expect(existsSync(socket)).toBe(false);
     expect(existsSync(join(dir, "a.sock"))).toBe(false);
+  });
+
+  test("no [policies] dir anywhere: it judges with the installed starter set, protected", async () => {
+    const starter = realpathSync(join(import.meta.dir, "..", "..", "..", "policies"));
+    const toml = readFileSync(join(dir, "j.toml"), "utf8").replace(/\[policies\]\ndir = .*\n/, "");
+    writeFileSync(join(dir, "k.toml"), toml);
+    const proc = Bun.spawn(
+      ["bun", join(import.meta.dir, "main.ts"), "--config", join(dir, "k.toml"), "--enforce"],
+      { cwd: dir, env: { ...process.env, HOME: dir }, stderr: "pipe", stdout: "pipe" },
+    );
+    const socket = join(dir, "d.sock");
+    const deadline = Date.now() + 10_000;
+    let health: { policies?: { name: string }[] } | null = null;
+    while (health === null && Date.now() < deadline) {
+      await Bun.sleep(50);
+      health = existsSync(socket)
+        ? await fetch("http://localhost/v1/health", { unix: socket }).then(
+            (r) => (r.ok ? (r.json() as Promise<{ policies?: { name: string }[] }>) : null),
+            () => null,
+          )
+        : null;
+    }
+    proc.kill("SIGTERM");
+    expect(await proc.exited).toBe(0);
+    const stderr = await new Response(proc.stderr).text();
+    expect(stderr).toMatch(new RegExp(` · \\d+ policies from ${starter} · `));
+    expect(health?.policies?.map((p) => p.name)).toContain("config-tamper");
+    const boot = readAudit(join(dir, "audit.jsonl")).lines[0]?.payload.config as
+      | { policy: { protectedPaths: string[]; privatePaths: string[] } }
+      | undefined;
+    expect(boot?.policy.protectedPaths).toContain(starter); // D-082: config-tamper guards it
+    expect(boot?.policy.privatePaths).toContain(`!${starter}`); // agents may read it
   });
 
   test("a broken config exits 1 with the reason", async () => {

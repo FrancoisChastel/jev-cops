@@ -32,6 +32,9 @@ Usage: copsd [--config path] [--socket path] [--admin-socket path] [--http host:
   --enforce              return verdicts as judged
   -h, --help             this text
 
+Policies: [policies] dir in cops.toml, else the installed @jev-cops/policies starter set,
+else ./policies. copsd refuses to start with no policy.
+
 Environment: JEV_COPS_DEBUG=1 also logs debug lines to stderr (e.g. why env.git was not
 derived from an event's cwd).
 
@@ -114,7 +117,7 @@ function bootLine(d: RunningDaemon): string {
   return [
     `copsd listening on ${d.listening.socket}${http}`,
     `admin ${d.listening.adminSocket}`,
-    `${count} ${count === 1 ? "policy" : "policies"}`,
+    `${count} ${count === 1 ? "policy" : "policies"} from ${d.runtime.policies.dir}`,
     `${protectedPathCount(d.runtime.config)} protected paths`,
     `judge ${judge}`,
     `enforcement ${d.runtime.config.enforcement.mode}`,

@@ -38,9 +38,10 @@ const DEFAULT_DEBOUNCE_MS = 100;
 /**
  * The daemon's policies: loaded from `[policies] dir` with core `loadPolicies`, watched
  * with `fs.watch`, reloaded with Bun's import cache busted per changed file. Invariant:
- * the set in force always loaded without problems. At boot any problem is fatal; on
- * reload a problem, or a result with zero policies, keeps the previous set and is
- * reported, so a typo never leaves the daemon judging with nothing.
+ * the set in force always loaded without problems and is never empty. At boot any
+ * problem, or no policy at all, is fatal; on reload a problem, or a result with zero
+ * policies, keeps the previous set and is reported, so a typo never leaves the daemon
+ * judging with nothing.
  */
 export class PolicySet {
   private snapshot: PolicySnapshot;
@@ -60,10 +61,15 @@ export class PolicySet {
     return (this.opts.now ?? Date.now)();
   }
 
-  /** Loads `dir`; throws {@link PolicyLoadError} on any loader problem. */
+  /** Loads `dir`; throws {@link PolicyLoadError} on any loader problem or on zero policies. */
   static async load(dir: string, opts: PolicySetOptions = {}): Promise<PolicySet> {
     const loaded = await loadPolicies(dir, { cacheBust: true });
     if (loaded.problems.length > 0) throw new PolicyLoadError(loaded.problems);
+    if (loaded.policies.length === 0) {
+      throw new PolicyLoadError([
+        `no policies in ${dir}: point [policies] dir in cops.toml at a policy directory`,
+      ]);
+    }
     return new PolicySet(dir, Object.freeze([...loaded.policies]), opts);
   }
 

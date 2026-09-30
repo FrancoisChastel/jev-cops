@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { ConfigError, DEFAULT_DAEMON_CONFIG, loadConfig, parseHttpBind } from "./config.ts";
+import {
+  ConfigError,
+  DEFAULT_DAEMON_CONFIG,
+  defaultPoliciesDir,
+  installedPoliciesDir,
+  loadConfig,
+  parseHttpBind,
+} from "./config.ts";
 
 let root: string;
 let home: string;
@@ -26,8 +33,9 @@ function write(path: string, text: string): string {
 }
 
 const userFile = () => join(home, ".config", "jev-cops", "cops.toml");
+/** Without the installed starter set, so `[policies] dir` defaults to `<cwd>/policies`. */
 const load = (opts: { configPath?: string; env?: Record<string, string> } = {}) =>
-  loadConfig({ home, cwd, env: opts.env ?? {}, ...opts });
+  loadConfig({ home, cwd, env: opts.env ?? {}, installedPolicies: null, ...opts });
 
 describe("defaults", () => {
   test("observe by default, judge off, HTTP off, paths under ~/.jev-cops", () => {
@@ -54,6 +62,42 @@ describe("defaults", () => {
   test("the exported defaults are frozen", () => {
     expect(Object.isFrozen(DEFAULT_DAEMON_CONFIG)).toBe(true);
     expect(DEFAULT_DAEMON_CONFIG.enforcement.mode).toBe("observe");
+  });
+});
+
+describe("[policies] dir default: the installed starter set, else ./policies", () => {
+  /** The repository's `policies/`, which the workspace links in as `@jev-cops/policies`. */
+  const REPO_POLICIES = realpathSync(join(import.meta.dir, "..", "..", "..", "policies"));
+
+  test("unset everywhere: the installed @jev-cops/policies directory", () => {
+    expect(installedPoliciesDir()).toBe(REPO_POLICIES);
+    const { config } = loadConfig({ home, cwd, env: {} });
+    expect(config.policies.dir).toBe(REPO_POLICIES);
+  });
+
+  test("not installed: <cwd>/policies (a source checkout or a compiled copsd)", () => {
+    expect(defaultPoliciesDir(cwd, null)).toBe(join(cwd, "policies"));
+    expect(load().config.policies.dir).toBe(join(cwd, "policies"));
+  });
+
+  test("a configured dir wins over the installed set", () => {
+    write(userFile(), '[policies]\ndir = "/srv/mine"\n');
+    const { config } = loadConfig({ home, cwd, env: {}, installedPolicies: REPO_POLICIES });
+    expect(config.policies.dir).toBe("/srv/mine");
+  });
+
+  test("installedPoliciesDir: the manifest's directory, or null when unresolvable", () => {
+    const manifest = join(root, "pkg", "package.json");
+    mkdirSync(join(root, "pkg"));
+    expect(installedPoliciesDir(() => manifest)).toBe(join(root, "pkg"));
+    expect(
+      installedPoliciesDir(() => {
+        throw new Error("Cannot find module");
+      }),
+    ).toBeNull();
+    expect(installedPoliciesDir(() => join(root, "gone", "package.json"))).toBeNull();
+    writeFileSync(join(root, "file"), "");
+    expect(installedPoliciesDir(() => join(root, "file", "package.json"))).toBeNull();
   });
 });
 

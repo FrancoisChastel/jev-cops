@@ -24,7 +24,8 @@ Commands:
                                            normalized command and human detail (no daemon needed)
   replay <audit.jsonl> [--policies dir] [--json]
                                            re-judge recorded events with the current policies
-                                           and print verdict deltas (event_id old → new)
+                                           (default: the starter set copsd defaults to) and
+                                           print verdict deltas (event_id old → new)
   budget <session-id> [--socket path] [--reset --admin-socket path]
                                            show a session's risk budget (agent socket), or
                                            reset it (admin socket: human only, H1)

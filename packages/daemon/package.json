@@ -56,6 +56,7 @@
   "dependencies": {
     "@jev-cops/core": "workspace:*",
     "@jev-cops/judge": "workspace:*",
+    "@jev-cops/policies": "workspace:*",
     "@jev-cops/sdk": "workspace:*",
     "zod": "^4.6.5"
   }

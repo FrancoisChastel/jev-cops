@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
@@ -144,7 +144,6 @@ const DEFAULT_TABLE: Table = deepFreeze({
     hold_token_ttl_ms: DEFAULT_HOLD_TOKEN_TTL_MS,
     git_probe_timeout_ms: DEFAULT_GIT_PROBE_TIMEOUT_MS,
   },
-  policies: { dir: "policies" },
   judge: { provider: "off", timeout_ms: 10_000, cache_ttl_ms: 600_000 },
   context: {},
   policy: {},
@@ -154,6 +153,49 @@ const DEFAULT_TABLE: Table = deepFreeze({
 });
 
 const SECRET_KEY = /api[_-]?key|token|secret|password/i;
+
+/** The starter set's manifest, resolved to find its directory. */
+const STARTER_POLICIES_MANIFEST = "@jev-cops/policies/package.json";
+
+/** Resolves a package specifier to a file path; throws when the package is not installed. */
+export type ResolvePackage = (specifier: string) => string;
+
+const resolveFromHere: ResolvePackage = (specifier) => Bun.resolveSync(specifier, import.meta.dir);
+
+/**
+ * The directory of the installed starter set, `@jev-cops/policies`, resolved from this
+ * module: `node_modules/@jev-cops/policies` in an npm or bun install, the workspace link to
+ * `policies/` in the repository. Null when it is not installed or not a directory; a
+ * compiled `copsd` has no `node_modules` to resolve from, so it always gets null.
+ */
+export function installedPoliciesDir(
+  resolvePackage: ResolvePackage = resolveFromHere,
+): string | null {
+  let manifest: string;
+  try {
+    manifest = resolvePackage(STARTER_POLICIES_MANIFEST);
+  } catch {
+    return null;
+  }
+  const dir = dirname(manifest);
+  try {
+    return statSync(dir).isDirectory() ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `[policies] dir` when no config file sets it: the installed starter set, else
+ * `<cwd>/policies` (a source checkout, or a compiled `copsd` run from one). Never empty in
+ * effect: a directory that is missing or holds no policy fails the daemon's boot.
+ */
+export function defaultPoliciesDir(
+  cwd: string,
+  installed: string | null = installedPoliciesDir(),
+): string {
+  return installed ?? join(cwd, "policies");
+}
 
 function expandPath(path: string, base: string, home: string): string {
   if (path === "~") return home;
@@ -238,6 +280,11 @@ export interface LoadConfigOptions {
   cwd?: string;
   /** Expands `~` in paths; default `os.homedir()`. */
   home?: string;
+  /**
+   * The starter set's directory for the `[policies] dir` default; default
+   * {@link installedPoliciesDir}(). Null skips it, so the default is `<cwd>/policies`.
+   */
+  installedPolicies?: string | null;
 }
 
 /** The resolved config, the files it came from (lowest first) and rejected repo keys. */
@@ -254,7 +301,7 @@ export interface LoadedConfig {
   inputs: string[];
 }
 
-function toConfig(t: Table, home: string): DaemonConfig {
+function toConfig(t: Table, home: string, policiesDir: string): DaemonConfig {
   const f = t as z.output<typeof fileSchema>;
   const http = f.daemon?.http;
   const bind = typeof http === "string" ? parseHttpBind(http) : null;
@@ -269,7 +316,7 @@ function toConfig(t: Table, home: string): DaemonConfig {
       gitProbeTimeoutMs: f.daemon?.git_probe_timeout_ms ?? DEFAULT_GIT_PROBE_TIMEOUT_MS,
       hookBinary: f.daemon?.hook_binary ?? null,
     },
-    policies: { dir: f.policies?.dir ?? "" },
+    policies: { dir: f.policies?.dir ?? policiesDir },
     judge: {
       provider: f.judge?.provider ?? "off",
       model: f.judge?.model ?? null,
@@ -293,6 +340,7 @@ function existing(path: string | undefined): string | null {
  * (`~/.config/jev-cops/cops.toml`), the repo override (`./.cops.toml`, which may
  * only tighten: its other keys are dropped and reported), `$JEV_COPS_CONFIG`, then
  * `--config`. Objects merge, scalars replace. API keys are refused (env only, D-044).
+ * `[policies] dir` unset in every file means {@link defaultPoliciesDir}.
  * Throws {@link ConfigError} on unreadable, invalid TOML or unknown keys.
  */
 export function loadConfig(opts: LoadConfigOptions = {}): LoadedConfig {
@@ -326,11 +374,15 @@ export function loadConfig(opts: LoadConfigOptions = {}): LoadedConfig {
   );
   // Resolved like the reads above: against the process's cwd.
   const inputs = [userPath, ...named.map((p) => resolve(p))];
-  return { config: toConfig(merged, home), sources, rejected, inputs };
+  const installed =
+    opts.installedPolicies === undefined ? installedPoliciesDir() : opts.installedPolicies;
+  const policiesDir = defaultPoliciesDir(cwd, installed);
+  return { config: toConfig(merged, home, policiesDir), sources, rejected, inputs };
 }
 
 /** The defaults as resolved for the current user and working directory. Frozen. */
 export const DEFAULT_DAEMON_CONFIG: DaemonConfig = toConfig(
   resolvePaths(DEFAULT_TABLE, process.cwd(), homedir()),
   homedir(),
+  defaultPoliciesDir(process.cwd()),
 );

@@ -67,6 +67,19 @@ beforeAll(async () => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("cops replay", () => {
+  test("no --policies: the starter set copsd defaults to, not ./policies", async () => {
+    const io = captureIo();
+    const cwd = process.cwd();
+    process.chdir(root); // no ./policies here
+    try {
+      expect(await runReplayCommand([audit, "--json"], io)).toBe(0);
+    } finally {
+      process.chdir(cwd);
+    }
+    expect(io.stderr.join("\n")).not.toContain("cannot read policy directory");
+    expect(io.stdout.join("\n")).toContain('"events"');
+  });
+
   test("unchanged policies: zero deltas, recorded judge answers replayed", async () => {
     const dir = policiesDir("same", { "guard.ts": guard("hold"), "asks.ts": ASKS });
     const io = captureIo();

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { loadPolicies } from "@jev-cops/core";
-import { readAudit, verifyChain } from "@jev-cops/daemon";
+import { defaultPoliciesDir, readAudit, verifyChain } from "@jev-cops/daemon";
 import { EXIT, type Io } from "../io.ts";
 import { type ReplayReport, replayAudit } from "../replay-engine.ts";
 
@@ -71,7 +71,9 @@ export async function runReplayCommand(argv: readonly string[], io: Io): Promise
       `WARNING audit chain broken at seq ${chain.brokenAt} (${chain.reason}); replaying anyway`,
     );
   for (const p of problems) io.err(`WARNING ${p}`);
-  const dir = resolve(parsed.values.policies ?? "policies");
+  // Without --policies: copsd's own default, the installed starter set or ./policies.
+  const given = parsed.values.policies;
+  const dir = given === undefined ? defaultPoliciesDir(process.cwd()) : resolve(given);
   const loaded = await loadPolicies(dir);
   if (loaded.problems.length > 0) {
     for (const p of loaded.problems) io.err(`cops replay: ${p}`);

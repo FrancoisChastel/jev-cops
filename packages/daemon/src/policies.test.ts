@@ -66,6 +66,13 @@ describe("boot", () => {
   test("a missing directory is fatal", async () => {
     await expect(PolicySet.load(join(dir, "nope"))).rejects.toBeInstanceOf(PolicyLoadError);
   });
+
+  test("a directory without a single policy is fatal: the daemon never judges with nothing", async () => {
+    write("README.md", "not a policy\n");
+    const load = PolicySet.load(dir);
+    await expect(load).rejects.toBeInstanceOf(PolicyLoadError);
+    await expect(load).rejects.toThrow(`no policies in ${dir}`);
+  });
 });
 
 describe("reload", () => {
