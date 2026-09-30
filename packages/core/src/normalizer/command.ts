@@ -3,9 +3,11 @@ import { type ParsedScript, parseScript, type RawCommand } from "./bash.ts";
 import { type Classification, classifyArgv, maxKind } from "./classify.ts";
 import { decodeLiteral, isDecoder } from "./decode.ts";
 import { withHarnessEnv } from "./harness.ts";
+import { INTERACTIVE_SHELL_VERB } from "./interpreters.ts";
 import { readShellPatch } from "./patch.ts";
 import { absolutize } from "./paths.ts";
 import { redirectHosts, redirectRefs } from "./redirects.ts";
+import { PAGERS } from "./sessions.ts";
 import type {
   DecodedLiteral,
   NormalizedCommand,
@@ -206,9 +208,27 @@ function unique(values: ReadonlyArray<string>): string[] {
   return [...new Set(values)];
 }
 
+/** Redirect operators that send stdout to a file (`>`, `1>>`, `&>`, …). */
+const STDOUT_OPS = new Set([">", ">>", ">|", "&>", "&>>"]);
+
+/**
+ * The command's verbs, less `interactive-shell` for a pager (`less`, `man`) whose output
+ * goes to a later pipe stage or a file: it then copies its input like `cat` and reads no
+ * commands (`man tar | head`, `less a.log > b.log`).
+ */
+function sessionVerbs(raw: RawCommand, verbs: ReadonlyArray<string>): string[] {
+  const pager = verbs.some((v) => (PAGERS as ReadonlyArray<string>).includes(v));
+  const piped = raw.pipe !== null && raw.pipe.index < raw.pipe.size - 1;
+  const toFile = raw.redirects.some((r) => STDOUT_OPS.has(r.op.replace(/^1(?=>)/, "")));
+  return pager && (piped || toFile)
+    ? verbs.filter((v) => v !== INTERACTIVE_SHELL_VERB)
+    : [...verbs];
+}
+
 function buildCommand(ctx: CommandContext, scope: Scope, redirects: PathRef[]): NormalizedCommand {
   const { raw, c } = ctx;
   const pathRefs = [...argRefs(raw, c, scope), ...redirects];
+  const verbs = sessionVerbs(raw, c.verbs);
   return {
     argv: argvOf(raw),
     env: { ...raw.env, ...c.env },
@@ -221,7 +241,7 @@ function buildCommand(ctx: CommandContext, scope: Scope, redirects: PathRef[]): 
       hosts: unique([...c.hosts, ...redirectHosts(raw.redirects)]).filter((h) => !/[$`]/.test(h)),
     },
     pathRefs,
-    verbs: raw.background ? [...c.verbs, "background"] : c.verbs,
+    verbs: raw.background ? [...verbs, "background"] : verbs,
     isInterpreter: c.interpreter !== null,
     viaInterpreter: scope.via,
     ...(scope.remote ? { remote: true as const } : {}),

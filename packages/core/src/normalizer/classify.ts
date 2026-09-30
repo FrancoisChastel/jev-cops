@@ -13,11 +13,17 @@ import { type Classification, type InterpreterInfo, maxKind, plain } from "./cla
 import { filePaths, rmVerbs, sedEffects, sedMode } from "./files.ts";
 import { GIT_SUBCOMMAND_KINDS, readGit } from "./git.ts";
 import { classifyHarness } from "./harness.ts";
-import { classifyInterpreter, interactive, isBareRepl } from "./interpreters.ts";
+import {
+  classifyInterpreter,
+  INTERACTIVE_SHELL_VERB,
+  interactive,
+  isBareRepl,
+} from "./interpreters.ts";
 import { readCurl, readWget, SSH_VALUE_OPTS, urlHost, verbHosts } from "./net.ts";
 import { hasOption, lookup, optionValue, type Positional, parseArgs } from "./options.ts";
 import { classifyApplyPatch } from "./patch.ts";
 import { looksLikePath } from "./paths.ts";
+import { opensSession } from "./sessions.ts";
 import type { PathArg } from "./types.ts";
 import { COPY_RULES, classifyDd, copyPaths } from "./writers.ts";
 
@@ -32,6 +38,7 @@ export { FILE_RULES } from "./files.ts";
 export { HARNESS_CLIS, HARNESS_CONFIG_VERB } from "./harness.ts";
 export { INTERACTIVE_SHELL_VERB, INTERPRETER_INLINE_FLAGS, REPLS, SHELLS } from "./interpreters.ts";
 export { APPLY_PATCH_COMMANDS, PATCH_VERB } from "./patch.ts";
+export { EDITORS, PAGERS } from "./sessions.ts";
 
 function kinds(kind: CallKind, verbs: ReadonlyArray<string>): Record<string, CallKind> {
   return Object.fromEntries(verbs.map((v) => [v, kind]));
@@ -283,17 +290,29 @@ function sshSession(c: Classification, args: ReadonlyArray<string>): Classificat
   return remote || noShell || c.hosts.length === 0 ? c : interactive(c);
 }
 
-/** A name with no rule of its own: harness CLIs, subcommand tables, REPLs, the verb table. */
+/** True when the argv opens a session taking later input (a container's command). */
+function opensSessionItself(argv: ReadonlyArray<string>): boolean {
+  return classifyArgv(argv).verbs.includes(INTERACTIVE_SHELL_VERB);
+}
+
+/**
+ * A name with no rule of its own: harness CLIs, subcommand tables, the verb table. A bare
+ * REPL, an editor, a pager, a database shell or a container `exec -i` into a session also
+ * gets the interactive-shell verb (sessions.ts).
+ */
 function classifyByName(name: string, args: ReadonlyArray<string>, base: number): Classification {
   const harness = classifyHarness(name, args);
   if (harness !== null) return harness;
-  if (lookup(SUBCOMMAND_KINDS, name) !== undefined) return classifySubcommand(name, args);
   const copies = lookup(COPY_RULES, name) !== undefined;
-  const c = plain(lookup(VERB_KINDS, name) ?? "exec", [name], {
-    paths: copies ? copyPaths(name, args, base) : filePaths(name, args, base),
-    hosts: verbHosts(name, args),
-  });
-  return isBareRepl(name, args) ? interactive(c) : c;
+  const c =
+    lookup(SUBCOMMAND_KINDS, name) !== undefined
+      ? classifySubcommand(name, args)
+      : plain(lookup(VERB_KINDS, name) ?? "exec", [name], {
+          paths: copies ? copyPaths(name, args, base) : filePaths(name, args, base),
+          hosts: verbHosts(name, args),
+        });
+  const session = isBareRepl(name, args) || opensSession(name, args, opensSessionItself);
+  return session ? interactive(c) : c;
 }
 
 function unique(values: ReadonlyArray<string>): string[] {

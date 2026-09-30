@@ -22,6 +22,8 @@ describe("normalizer public API", () => {
     expect(normalizer.mcpServer).toBe(tools.mcpServer);
     expect(normalizer.INTERACTIVE_SHELL_VERB).toBe("interactive-shell");
     expect(normalizer.REPLS).toContain("irb");
+    expect(normalizer.EDITORS).toContain("vim");
+    expect(normalizer.PAGERS).toContain("less");
     expect(normalizer.PATCH_VERB).toBe("apply_patch");
     expect(normalizer.APPLY_PATCH_COMMANDS).toEqual(["apply_patch", "applypatch"]);
     expect(normalizer.parsePatch).toBe(patch.parsePatch);

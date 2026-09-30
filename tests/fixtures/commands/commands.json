@@ -2191,6 +2191,51 @@
     }
   },
   {
+    "command": "vim ~/.bashrc",
+    "expect": {
+      "kind": "exec",
+      "verbs": ["vim", "interactive-shell"],
+      "access": { "/home/dev/.bashrc": "unknown" }
+    }
+  },
+  {
+    "command": "cat app.log | less",
+    "expect": {
+      "kind": "fs.read",
+      "verbs": ["cat", "less", "interactive-shell"],
+      "opaque": []
+    }
+  },
+  {
+    "command": "psql -h db.internal -U app appdb",
+    "expect": {
+      "kind": "exec",
+      "verbs": ["psql", "interactive-shell"]
+    }
+  },
+  {
+    "command": "sqlite3 app.db",
+    "expect": {
+      "kind": "exec",
+      "verbs": ["sqlite3", "interactive-shell"]
+    }
+  },
+  {
+    "command": "docker exec -it web bash",
+    "expect": {
+      "kind": "exec",
+      "verbs": ["docker", "exec", "interactive-shell"],
+      "opaque": []
+    }
+  },
+  {
+    "command": "kubectl exec -it web -- sh",
+    "expect": {
+      "kind": "exec",
+      "verbs": ["kubectl", "interactive-shell"]
+    }
+  },
+  {
     "command": "codex --disable hooks exec hi",
     "expect": {
       "kind": "spawn",

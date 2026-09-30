@@ -3,9 +3,11 @@ import { hasOption, lookup, optionValue, parseArgs } from "./options.ts";
 import type { PathArg } from "./types.ts";
 
 /**
- * Verb of a shell, REPL or remote login started without a command to run: it accepts
- * later input jev-cops never sees (Codex's `write_stdin` into a running `exec_command`
- * session does not run `PreToolUse`, PLAN-M3 §2.1 row 9). `opaque-exec` v2 holds it.
+ * Verb of a shell, REPL or remote login started without a command to run, and of an
+ * editor, pager, database shell or container `exec -i` into a session (sessions.ts): it
+ * accepts later input jev-cops never sees (Codex's `write_stdin` into a running
+ * `exec_command` session does not run `PreToolUse`, PLAN-M3 §2.1 row 9). `opaque-exec` v2
+ * holds it.
  */
 export const INTERACTIVE_SHELL_VERB = "interactive-shell";
 
