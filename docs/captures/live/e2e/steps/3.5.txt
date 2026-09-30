@@ -1,0 +1,24 @@
+$ cc /opt/jev-cops-live/bin/run-harness.sh claude-code /home/dev/live/out/annotate SCENARIO:annotate compute the answer --permission-mode manual --allowedTools Bash(python3:*)
+claude-code exited 0
+(exit 0)
+$ check judge <work>/e2e-20260930T203132Z/artifacts/claude-code-audit.jsonl Bash python3 -c annotate
+seq 17 evt_01M3T08B3KWQW08TBDG8A0S6GT headless Bash {"command":"python3 -c 'print(6*7)'","description":"Compute a number"} → annotate (opaque-exec@1) "Runs code the judge cannot fully read (interpreter, eval or encoded input)."
+(exit 0)
+==> PASS audit: python3 -c → annotate (opaque-exec)
+$ check saw <work>/e2e-20260930T203132Z/artifacts/requests.jsonl annotate 42
+request 5 /v1/messages (annotate step 0): …256":"4cd482acc469dd87c103cbdb5132ea050a35db118fbed47ac32e764281d09fa7"},"tools":["Agent","Bash","CronCreate","CronDelete"…
+request 6 /v1/messages (annotate step 1): …tool_use_id":"toolu_fake_5","type":"tool_result","content":"42","is_error":false}]},{"role":"system","content":[{"type":"t…
+(exit 0)
+==> PASS the command ran (the model got 42)
+$ check saw <work>/e2e-20260930T203132Z/artifacts/requests.jsonl annotate could not read everything this runs
+request 6 /v1/messages (annotate step 1): …PreToolUse:Bash hook additional context: jev-cops: jev-cops could not read everything this runs (interpreter); it was logged.\n\n<total_tokens>14999985 tok…
+(exit 0)
+==> PASS the context note reached the model (additionalContext)
+$ check seen <work>/e2e-20260930T203132Z/artifacts/requests.jsonl annotate
+request 5 (step 0) → call Bash {"command":"python3 -c 'print(6*7)'","description":"Compute a number"}
+  text: <system-reminder> As you answer the user's questions, you can use the following context: # gitStatus This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation. Current branch: main Main branch (you will usually u…
+  text: <system-reminder> Attribution for git commits and pull requests you create from here on (this replaces Claude Code's own earlier attribution guidance, such as a previous copy of this reminder; the user's own instructions about these lines, such as a CLAUDE.md or memory rule, take precedence over thi…
+  text: SCENARIO:annotate compute the answer
+request 6 (step 1) → text "Noted the tool result."
+  tool_result: 42
+(exit 0)

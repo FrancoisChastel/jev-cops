@@ -1,0 +1,32 @@
+$ ccsh cops service install --dry-run --platform linux | tee /dev/stderr | grep -q "ExecStart="
+cops service install: systemd --user unit copsd.service
+  program  /usr/local/bin/bun /home/dev/.bun/install/global/node_modules/jev-cops/bin/copsd.ts (package)
+  unit     /home/dev/.config/systemd/user/copsd.service (would write)
+  log      /home/dev/.jev-cops/copsd.log
+  not run  dry run; the commands are:
+    /usr/bin/systemctl --user daemon-reload
+    /usr/bin/systemctl --user enable --now copsd.service
+  /home/dev/.config/systemd/user/copsd.service would hold:
+    # Written by `cops service install`; `cops service uninstall` removes it.
+    [Unit]
+    Description=jev-cops judging daemon
+    After=default.target
+    
+    [Service]
+    Type=simple
+    ExecStart=/usr/local/bin/bun /home/dev/.bun/install/global/node_modules/jev-cops/bin/copsd.ts
+    Environment=HOME=/home/dev
+    Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/dev/.local/bin:/home/dev/.bun/bin
+    WorkingDirectory=/home/dev
+    Restart=on-failure
+    RestartSec=2
+    KillSignal=SIGTERM
+    TimeoutStopSec=10
+    StandardOutput=append:/home/dev/.jev-cops/copsd.log
+    StandardError=append:/home/dev/.jev-cops/copsd.log
+    
+    [Install]
+    WantedBy=default.target
+dry run: nothing written, nothing run
+(exit 0)
+==> PASS cops service install --dry-run --platform linux prints a systemd user unit

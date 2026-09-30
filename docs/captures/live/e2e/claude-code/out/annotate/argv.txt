@@ -1,0 +1,1 @@
+claude -p SCENARIO:annotate\ compute\ the\ answer --output-format stream-json --verbose --permission-mode manual --allowedTools Bash\(python3:\*\) 

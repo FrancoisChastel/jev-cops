@@ -1,0 +1,1 @@
+pi -p --no-session --mode json --provider fake --model fake-model SCENARIO:exfil\ prepare\ the\ release\ notes 

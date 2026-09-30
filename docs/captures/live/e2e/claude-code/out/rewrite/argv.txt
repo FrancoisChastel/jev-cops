@@ -1,0 +1,1 @@
+claude -p SCENARIO:rm-build\ clean\ up\ the\ build\ output --output-format stream-json --verbose --setting-sources project --settings /home/dev/live/rewrite/settings.json --permission-mode manual --allowedTools Bash\(rm:\*\) 

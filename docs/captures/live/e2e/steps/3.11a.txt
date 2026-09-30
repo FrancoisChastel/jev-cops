@@ -1,0 +1,45 @@
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh start cfg-a --permission-mode manual
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh send cfg-a SCENARIO:ls list the files here
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh wait cfg-a Listed the files 60
+(exit 0)
+==> PASS the session runs ls first
+$ cc /opt/jev-cops-live/bin/edit-settings.sh theme light
+settings.json: theme light (atomic rename)
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh send cfg-a SCENARIO:ls again please
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh capture cfg-a /home/dev/live/out/configchange-unrelated.txt
+(exit 0)
+$ ccsh tail -12 ~/live/out/configchange-unrelated.txt
+
+
+
+
+
+
+
+                                                             tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scroll
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh stop cfg-a
+(exit 0)
+$ cc /opt/jev-cops-live/bin/edit-settings.sh restore /home/dev/live/settings.post-install.json
+settings.json: restore /home/dev/live/settings.post-install.json (atomic rename)
+(exit 0)
+$ ccsh tail -3 ~/.jev-cops/claude-code-hook.log
+2026-09-30T20:32:02.356Z UserPromptSubmit sess_c20b7aff-f415-48f8-9eb7-db7fb0ad5d7e session terminated by jev-cops; start a new session
+2026-09-30T20:32:05.324Z ConfigChange sess_52a20aae-488a-44a5-98ba-872954d21da3 settings change blocked: the cops hook entry is missing or altered: no cops hook on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange
+2026-09-30T20:32:08.700Z UserPromptSubmit sess_52a20aae-488a-44a5-98ba-872954d21da3 session terminated by jev-cops; start a new session
+(exit 0)
+$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11a.jsonl "report":"config-change" "intact":true
+(exit 1)
+==> FAIL audit: the theme change is reported intact:true
+$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11a.jsonl "kind":"anomaly"
+{"at":1790800325322,"event_id":"evt_01M3T08TP2GZQQPQV7P0KZN6VE","hash":"c152784be3e682c1416e5e126c2d234ef340c280a2958fee7b97cae0339a731e","kind":"anomaly","payload":{"file_path":"/home/dev/.claude/settings.json","latched":true,"reason":"hook block removed or altered","source":"user_settings"},"prev":"b8abb3345eb45c189ba7ea693bf9b6d3cb07b5f770fdfbff1031448cf1b01b3a","seq":53,"session_id":"sess_52a2
+(exit 0)
+==> FAIL an unrelated edit does not latch the session

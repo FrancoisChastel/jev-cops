@@ -1,0 +1,1 @@
+pi -p --session /home/dev/live/pi-kill-session.jsonl --mode json --provider fake --model fake-model SCENARIO:write-pi-settings\ tidy\ the\ settings 

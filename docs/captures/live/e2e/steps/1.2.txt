@@ -1,0 +1,633 @@
+$ cc cops --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops <command> [options]
+
+Commands:
+  test [dir] [--json]                      run every *.fixtures.json in dir (default ./policies)
+                                           against its policy alone and with the whole set
+  explain <event-id> [--audit path] [--json]
+                                           show a judged event's decision, features, trace,
+                                           normalized command and human detail (no daemon needed)
+  replay <audit.jsonl> [--policies dir] [--json]
+                                           re-judge recorded events with the current policies
+                                           (default: the starter set copsd defaults to) and
+                                           print verdict deltas (event_id old → new)
+  budget <session-id> [--socket path] [--reset --admin-socket path]
+                                           show a session's risk budget (agent socket), or
+                                           reset it (admin socket: human only, H1)
+  hook --harness claude-code [--socket path]
+                                           the Claude Code command hook: reads the hook
+                                           payload on stdin, exits 0 or 2 (fail closed)
+  doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path]
+         [--admin-socket path] [--config path] [--home path]
+         [--audit-pubkey path] [--audit-remote copy]
+                                           check copsd, the audit log (chain, signed
+                                           checkpoints, signing key, forwarding, and the
+                                           off-box copy with --audit-remote), each harness's
+                                           install, run a canary through the registered
+                                           hook, print every known gap; --live also runs
+                                           a real claude -p (JEV_COPS_LIVE_CANARY=1).
+                                           It writes no configuration; the canary leaves
+                                           audit lines and latches a throw-away session
+                                           in copsd
+  install claude-code [--user|--project|--local|--managed] [--socket path]
+          [--transport command|http] [--hook-binary path] [--config path] [--home dir]
+          [--project-dir dir] [--force] [--dry-run] [--uninstall] [--json]
+                                           register the command hook in Claude Code's settings,
+                                           record it in cops.toml, run the offline canary
+  install pi [--global|--project] [--socket path] [--home dir] [--project-dir dir]
+          [--dry-run] [--uninstall] [--json]
+                                           copy the Pi extension (global by default)
+  keygen [--rotate] [--config path] [--admin-socket path] [--json]
+                                           create the Ed25519 key copsd signs audit
+                                           checkpoints with ([audit] key, 0600) and its
+                                           public key for the cyber team; --rotate leaves
+                                           the next key pending and asks a running copsd
+                                           to switch (a rotation checkpoint signed by the
+                                           old key), else it switches at its next start
+  audit verify <audit.jsonl> --pubkey <file> [--pubkey <file>] [--remote <copy>] [--json]
+                                           verify the hash chain, every signed checkpoint
+                                           (following key rotations) and the unsigned tail;
+                                           with --remote, that the off-box copy (JSONL or
+                                           RFC 5424/5425 syslog) agrees: a longer copy is a
+                                           local truncation (no daemon needed)
+  openshell compile [--dry-run [--against file]] [--out file]
+          [--harness claude-code|pi] [--task text] [--repo dir|--no-repo] [--policies dir]
+          [--judge-port n|--no-judge] [--judge-host host]… [--home dir] [--workspace dir]
+          [--agent-binary path]… [--hook-binary path] [--interpreter path]
+          [--extension path] [--read-write path]…
+                                           compile the OpenShell policy (protection set, judge
+                                           route, task allowlist) with its report; --dry-run
+                                           diffs it against --against or --out and writes
+                                           nothing (exit 3 on changes); exit 1 when refused
+  openshell apply <sandbox> [--dry-run] [--openshell path] [compile options]
+                                           add the task hosts with openshell policy update
+                                           --wait, then check the revision is Loaded;
+                                           --dry-run diffs against policy get --base
+  openshell create <name> [--from image] [--provider name]… [--env K=V]…
+          [--policy-out file] [--dry-run] [--openshell path] [compile options] [-- cmd…]
+                                           print, then (with openshell on PATH and no
+                                           --dry-run) run sandbox create with the compiled
+                                           policy and pin the advisor to manual
+  service install|uninstall|status [--home dir] [--platform darwin|linux]
+          [--dry-run] [--json]
+                                           run copsd as a login service: a launchd user
+                                           agent (macOS) or a systemd --user unit (Linux);
+                                           install writes the unit, loads it and waits for
+                                           /v1/health, uninstall stops and removes it (the
+                                           log stays), status only reads
+  help [command]                           this text, or one command's help
+                                           (also: cops <command> --help | -h)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage
+  audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage
+  openshell: 0 ok, 1 refused or failed, 2 usage, 3 changes (compile or apply --dry-run)
+  service: 0 done (status: running), 1 failed (status: not installed or not running), 2 usage
+(exit 0)
+==> PASS cops --help
+$ cc cops help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops <command> [options]
+
+Commands:
+  test [dir] [--json]                      run every *.fixtures.json in dir (default ./policies)
+                                           against its policy alone and with the whole set
+  explain <event-id> [--audit path] [--json]
+                                           show a judged event's decision, features, trace,
+                                           normalized command and human detail (no daemon needed)
+  replay <audit.jsonl> [--policies dir] [--json]
+                                           re-judge recorded events with the current policies
+                                           (default: the starter set copsd defaults to) and
+                                           print verdict deltas (event_id old → new)
+  budget <session-id> [--socket path] [--reset --admin-socket path]
+                                           show a session's risk budget (agent socket), or
+                                           reset it (admin socket: human only, H1)
+  hook --harness claude-code [--socket path]
+                                           the Claude Code command hook: reads the hook
+                                           payload on stdin, exits 0 or 2 (fail closed)
+  doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path]
+         [--admin-socket path] [--config path] [--home path]
+         [--audit-pubkey path] [--audit-remote copy]
+                                           check copsd, the audit log (chain, signed
+                                           checkpoints, signing key, forwarding, and the
+                                           off-box copy with --audit-remote), each harness's
+                                           install, run a canary through the registered
+                                           hook, print every known gap; --live also runs
+                                           a real claude -p (JEV_COPS_LIVE_CANARY=1).
+                                           It writes no configuration; the canary leaves
+                                           audit lines and latches a throw-away session
+                                           in copsd
+  install claude-code [--user|--project|--local|--managed] [--socket path]
+          [--transport command|http] [--hook-binary path] [--config path] [--home dir]
+          [--project-dir dir] [--force] [--dry-run] [--uninstall] [--json]
+                                           register the command hook in Claude Code's settings,
+                                           record it in cops.toml, run the offline canary
+  install pi [--global|--project] [--socket path] [--home dir] [--project-dir dir]
+          [--dry-run] [--uninstall] [--json]
+                                           copy the Pi extension (global by default)
+  keygen [--rotate] [--config path] [--admin-socket path] [--json]
+                                           create the Ed25519 key copsd signs audit
+                                           checkpoints with ([audit] key, 0600) and its
+                                           public key for the cyber team; --rotate leaves
+                                           the next key pending and asks a running copsd
+                                           to switch (a rotation checkpoint signed by the
+                                           old key), else it switches at its next start
+  audit verify <audit.jsonl> --pubkey <file> [--pubkey <file>] [--remote <copy>] [--json]
+                                           verify the hash chain, every signed checkpoint
+                                           (following key rotations) and the unsigned tail;
+                                           with --remote, that the off-box copy (JSONL or
+                                           RFC 5424/5425 syslog) agrees: a longer copy is a
+                                           local truncation (no daemon needed)
+  openshell compile [--dry-run [--against file]] [--out file]
+          [--harness claude-code|pi] [--task text] [--repo dir|--no-repo] [--policies dir]
+          [--judge-port n|--no-judge] [--judge-host host]… [--home dir] [--workspace dir]
+          [--agent-binary path]… [--hook-binary path] [--interpreter path]
+          [--extension path] [--read-write path]…
+                                           compile the OpenShell policy (protection set, judge
+                                           route, task allowlist) with its report; --dry-run
+                                           diffs it against --against or --out and writes
+                                           nothing (exit 3 on changes); exit 1 when refused
+  openshell apply <sandbox> [--dry-run] [--openshell path] [compile options]
+                                           add the task hosts with openshell policy update
+                                           --wait, then check the revision is Loaded;
+                                           --dry-run diffs against policy get --base
+  openshell create <name> [--from image] [--provider name]… [--env K=V]…
+          [--policy-out file] [--dry-run] [--openshell path] [compile options] [-- cmd…]
+                                           print, then (with openshell on PATH and no
+                                           --dry-run) run sandbox create with the compiled
+                                           policy and pin the advisor to manual
+  service install|uninstall|status [--home dir] [--platform darwin|linux]
+          [--dry-run] [--json]
+                                           run copsd as a login service: a launchd user
+                                           agent (macOS) or a systemd --user unit (Linux);
+                                           install writes the unit, loads it and waits for
+                                           /v1/health, uninstall stops and removes it (the
+                                           log stays), status only reads
+  help [command]                           this text, or one command's help
+                                           (also: cops <command> --help | -h)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage
+  audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage
+  openshell: 0 ok, 1 refused or failed, 2 usage, 3 changes (compile or apply --dry-run)
+  service: 0 done (status: running), 1 failed (status: not installed or not running), 2 usage
+(exit 0)
+==> PASS cops help
+$ cc cops test --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops test [options]
+
+  test [dir] [--json]                      run every *.fixtures.json in dir (default ./policies)
+                                           against its policy alone and with the whole set
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops test --help
+$ cc cops help test
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops test [options]
+
+  test [dir] [--json]                      run every *.fixtures.json in dir (default ./policies)
+                                           against its policy alone and with the whole set
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops help test
+$ cc cops explain --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops explain [options]
+
+  explain <event-id> [--audit path] [--json]
+                                           show a judged event's decision, features, trace,
+                                           normalized command and human detail (no daemon needed)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops explain --help
+$ cc cops help explain
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops explain [options]
+
+  explain <event-id> [--audit path] [--json]
+                                           show a judged event's decision, features, trace,
+                                           normalized command and human detail (no daemon needed)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops help explain
+$ cc cops replay --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops replay [options]
+
+  replay <audit.jsonl> [--policies dir] [--json]
+                                           re-judge recorded events with the current policies
+                                           (default: the starter set copsd defaults to) and
+                                           print verdict deltas (event_id old → new)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops replay --help
+$ cc cops help replay
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops replay [options]
+
+  replay <audit.jsonl> [--policies dir] [--json]
+                                           re-judge recorded events with the current policies
+                                           (default: the starter set copsd defaults to) and
+                                           print verdict deltas (event_id old → new)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops help replay
+$ cc cops budget --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops budget [options]
+
+  budget <session-id> [--socket path] [--reset --admin-socket path]
+                                           show a session's risk budget (agent socket), or
+                                           reset it (admin socket: human only, H1)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops budget --help
+$ cc cops help budget
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops budget [options]
+
+  budget <session-id> [--socket path] [--reset --admin-socket path]
+                                           show a session's risk budget (agent socket), or
+                                           reset it (admin socket: human only, H1)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops help budget
+$ cc cops install --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops install [options]
+
+  install claude-code [--user|--project|--local|--managed] [--socket path]
+          [--transport command|http] [--hook-binary path] [--config path] [--home dir]
+          [--project-dir dir] [--force] [--dry-run] [--uninstall] [--json]
+                                           register the command hook in Claude Code's settings,
+                                           record it in cops.toml, run the offline canary
+  install pi [--global|--project] [--socket path] [--home dir] [--project-dir dir]
+          [--dry-run] [--uninstall] [--json]
+                                           copy the Pi extension (global by default)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage
+(exit 0)
+==> PASS cops install --help
+$ cc cops help install
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops install [options]
+
+  install claude-code [--user|--project|--local|--managed] [--socket path]
+          [--transport command|http] [--hook-binary path] [--config path] [--home dir]
+          [--project-dir dir] [--force] [--dry-run] [--uninstall] [--json]
+                                           register the command hook in Claude Code's settings,
+                                           record it in cops.toml, run the offline canary
+  install pi [--global|--project] [--socket path] [--home dir] [--project-dir dir]
+          [--dry-run] [--uninstall] [--json]
+                                           copy the Pi extension (global by default)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage
+(exit 0)
+==> PASS cops help install
+$ cc cops doctor --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops doctor [options]
+
+  doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path]
+         [--admin-socket path] [--config path] [--home path]
+         [--audit-pubkey path] [--audit-remote copy]
+                                           check copsd, the audit log (chain, signed
+                                           checkpoints, signing key, forwarding, and the
+                                           off-box copy with --audit-remote), each harness's
+                                           install, run a canary through the registered
+                                           hook, print every known gap; --live also runs
+                                           a real claude -p (JEV_COPS_LIVE_CANARY=1).
+                                           It writes no configuration; the canary leaves
+                                           audit lines and latches a throw-away session
+                                           in copsd
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops doctor --help
+$ cc cops help doctor
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops doctor [options]
+
+  doctor [--harness claude-code|pi|all] [--live] [--json] [--socket path]
+         [--admin-socket path] [--config path] [--home path]
+         [--audit-pubkey path] [--audit-remote copy]
+                                           check copsd, the audit log (chain, signed
+                                           checkpoints, signing key, forwarding, and the
+                                           off-box copy with --audit-remote), each harness's
+                                           install, run a canary through the registered
+                                           hook, print every known gap; --live also runs
+                                           a real claude -p (JEV_COPS_LIVE_CANARY=1).
+                                           It writes no configuration; the canary leaves
+                                           audit lines and latches a throw-away session
+                                           in copsd
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops help doctor
+$ cc cops keygen --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops keygen [options]
+
+  keygen [--rotate] [--config path] [--admin-socket path] [--json]
+                                           create the Ed25519 key copsd signs audit
+                                           checkpoints with ([audit] key, 0600) and its
+                                           public key for the cyber team; --rotate leaves
+                                           the next key pending and asks a running copsd
+                                           to switch (a rotation checkpoint signed by the
+                                           old key), else it switches at its next start
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops keygen --help
+$ cc cops help keygen
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops keygen [options]
+
+  keygen [--rotate] [--config path] [--admin-socket path] [--json]
+                                           create the Ed25519 key copsd signs audit
+                                           checkpoints with ([audit] key, 0600) and its
+                                           public key for the cyber team; --rotate leaves
+                                           the next key pending and asks a running copsd
+                                           to switch (a rotation checkpoint signed by the
+                                           old key), else it switches at its next start
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops help keygen
+$ cc cops audit --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops audit [options]
+
+  audit verify <audit.jsonl> --pubkey <file> [--pubkey <file>] [--remote <copy>] [--json]
+                                           verify the hash chain, every signed checkpoint
+                                           (following key rotations) and the unsigned tail;
+                                           with --remote, that the off-box copy (JSONL or
+                                           RFC 5424/5425 syslog) agrees: a longer copy is a
+                                           local truncation (no daemon needed)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage
+(exit 0)
+==> PASS cops audit --help
+$ cc cops help audit
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops audit [options]
+
+  audit verify <audit.jsonl> --pubkey <file> [--pubkey <file>] [--remote <copy>] [--json]
+                                           verify the hash chain, every signed checkpoint
+                                           (following key rotations) and the unsigned tail;
+                                           with --remote, that the off-box copy (JSONL or
+                                           RFC 5424/5425 syslog) agrees: a longer copy is a
+                                           local truncation (no daemon needed)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage
+(exit 0)
+==> PASS cops help audit
+$ cc cops openshell --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops openshell [options]
+
+  openshell compile [--dry-run [--against file]] [--out file]
+          [--harness claude-code|pi] [--task text] [--repo dir|--no-repo] [--policies dir]
+          [--judge-port n|--no-judge] [--judge-host host]… [--home dir] [--workspace dir]
+          [--agent-binary path]… [--hook-binary path] [--interpreter path]
+          [--extension path] [--read-write path]…
+                                           compile the OpenShell policy (protection set, judge
+                                           route, task allowlist) with its report; --dry-run
+                                           diffs it against --against or --out and writes
+                                           nothing (exit 3 on changes); exit 1 when refused
+  openshell apply <sandbox> [--dry-run] [--openshell path] [compile options]
+                                           add the task hosts with openshell policy update
+                                           --wait, then check the revision is Loaded;
+                                           --dry-run diffs against policy get --base
+  openshell create <name> [--from image] [--provider name]… [--env K=V]…
+          [--policy-out file] [--dry-run] [--openshell path] [compile options] [-- cmd…]
+                                           print, then (with openshell on PATH and no
+                                           --dry-run) run sandbox create with the compiled
+                                           policy and pin the advisor to manual
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  openshell: 0 ok, 1 refused or failed, 2 usage, 3 changes (compile or apply --dry-run)
+(exit 0)
+==> PASS cops openshell --help
+$ cc cops help openshell
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops openshell [options]
+
+  openshell compile [--dry-run [--against file]] [--out file]
+          [--harness claude-code|pi] [--task text] [--repo dir|--no-repo] [--policies dir]
+          [--judge-port n|--no-judge] [--judge-host host]… [--home dir] [--workspace dir]
+          [--agent-binary path]… [--hook-binary path] [--interpreter path]
+          [--extension path] [--read-write path]…
+                                           compile the OpenShell policy (protection set, judge
+                                           route, task allowlist) with its report; --dry-run
+                                           diffs it against --against or --out and writes
+                                           nothing (exit 3 on changes); exit 1 when refused
+  openshell apply <sandbox> [--dry-run] [--openshell path] [compile options]
+                                           add the task hosts with openshell policy update
+                                           --wait, then check the revision is Loaded;
+                                           --dry-run diffs against policy get --base
+  openshell create <name> [--from image] [--provider name]… [--env K=V]…
+          [--policy-out file] [--dry-run] [--openshell path] [compile options] [-- cmd…]
+                                           print, then (with openshell on PATH and no
+                                           --dry-run) run sandbox create with the compiled
+                                           policy and pin the advisor to manual
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  openshell: 0 ok, 1 refused or failed, 2 usage, 3 changes (compile or apply --dry-run)
+(exit 0)
+==> PASS cops help openshell
+$ cc cops service --help
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops service [options]
+
+  service install|uninstall|status [--home dir] [--platform darwin|linux]
+          [--dry-run] [--json]
+                                           run copsd as a login service: a launchd user
+                                           agent (macOS) or a systemd --user unit (Linux);
+                                           install writes the unit, loads it and waits for
+                                           /v1/health, uninstall stops and removes it (the
+                                           log stays), status only reads
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  service: 0 done (status: running), 1 failed (status: not installed or not running), 2 usage
+(exit 0)
+==> PASS cops service --help
+$ cc cops help service
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops service [options]
+
+  service install|uninstall|status [--home dir] [--platform darwin|linux]
+          [--dry-run] [--json]
+                                           run copsd as a login service: a launchd user
+                                           agent (macOS) or a systemd --user unit (Linux);
+                                           install writes the unit, loads it and waits for
+                                           /v1/health, uninstall stops and removes it (the
+                                           log stays), status only reads
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+  service: 0 done (status: running), 1 failed (status: not installed or not running), 2 usage
+(exit 0)
+==> PASS cops help service
+$ ccsh cops hook --help; test $? -eq 2
+cops 0.1.0 — the jev-cops command line
+
+Usage: cops hook [options]
+
+  hook --harness claude-code [--socket path]
+                                           the Claude Code command hook: reads the hook
+                                           payload on stdin, exits 0 or 2 (fail closed)
+
+Exit codes:
+  0  success (test: every fixture passed; replay: ran, whatever the delta count;
+     doctor: no check failed, warnings and gaps included)
+  1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
+     an unknown session or an unreachable daemon; doctor: a check failed)
+  2  usage error; hook: the call is blocked
+(exit 0)
+==> PASS cops hook --help prints help and exits 2 (a hook exiting 0 would let a call through)

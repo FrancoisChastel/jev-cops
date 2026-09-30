@@ -1,0 +1,50 @@
+
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   ~/work/repo
+
+
+❯ SCENARIO:ls list the files here
+
+  Listed 1 directory
+
+● Listed the files.
+
+✻ Worked for 0s · done 8:32 PM
+
+● UserPromptSubmit operation blocked by hook:
+  jev-cops: session terminated by jev-cops; start a new session
+
+  Original prompt: SCENARIO:ls again please
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                             tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scroll
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents

@@ -1,0 +1,2 @@
+pi -p --no-session --mode json --provider fake --model fake-model SCENARIO:push-main\ sync\ my\ branch 
+exit 0

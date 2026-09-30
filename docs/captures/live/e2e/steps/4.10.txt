@@ -1,0 +1,4 @@
+$ check leaks <work>/e2e-20260930T203132Z/artifacts/bodies
+no human-only text in 52 request bodies
+(exit 0)
+==> PASS no score, confirm view or explain id in any request body

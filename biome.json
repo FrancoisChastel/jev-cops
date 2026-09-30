@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/*.wasm"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!**/*.wasm", "!docs/captures/live"]
   },
   "formatter": {
     "enabled": true,

@@ -1,0 +1,1 @@
+seq 2 evt_01M3T0MM9Z8XP1M9ZKB2SX3GWF headless bash {"command":"ls","description":"List files"} → allow (no policy) "No policy concern with this action."

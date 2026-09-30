@@ -1,0 +1,103 @@
+# jev-cops live tests (docs/live-testing.md, D-115). Driven by scripts/live/run.sh and
+# scripts/live/e2e.sh, which build the images first (scripts/live/build.sh).
+#
+# Isolation: every service sits on `live`, an internal network (no route out); no host
+# directory is mounted anywhere (artifacts leave through `docker cp`); the only "model" is
+# the fake API; every key is a dummy. The one shared volume carries the syslog receiver's
+# throwaway CA certificate (read-only for the harnesses).
+name: jev-cops-live
+
+x-harness: &harness
+  init: true
+  command: ["sleep", "infinity"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  labels:
+    jev-cops.live: "1"
+  networks: [live]
+  volumes:
+    - certs:/certs:ro
+  depends_on:
+    fake-api:
+      condition: service_healthy
+
+x-fake-env: &fake-env
+  FAKE_API_URL: http://fake-api.live.internal:8080
+  FAKE_API_KEY: dummy-jev-cops-live-key-not-a-real-credential-0000
+
+services:
+  fake-api:
+    image: jev-cops-live-fake-api:local
+    hostname: fake-api.live.internal
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    labels:
+      jev-cops.live: "1"
+    environment:
+      FAKE_API_EXPECTED_KEY: dummy-jev-cops-live-key-not-a-real-credential-0000
+    networks:
+      live:
+        aliases: [fake-api.live.internal, sink.live.internal]
+
+  syslog:
+    image: jev-cops-live-syslog:local
+    hostname: syslog.live.internal
+    labels:
+      jev-cops.live: "1"
+    volumes:
+      - certs:/certs
+    networks:
+      live:
+        aliases: [syslog.live.internal]
+
+  claude-code:
+    <<: *harness
+    image: jev-cops-live-claude-code:local
+    hostname: claude-code.live.internal
+    environment:
+      <<: *fake-env
+      ANTHROPIC_BASE_URL: http://fake-api.live.internal:8080
+      ANTHROPIC_API_KEY: dummy-jev-cops-live-key-not-a-real-credential-0000
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      DISABLE_AUTOUPDATER: "1"
+      DISABLE_TELEMETRY: "1"
+      DISABLE_ERROR_REPORTING: "1"
+
+  pi:
+    <<: *harness
+    image: jev-cops-live-pi:local
+    hostname: pi.live.internal
+    environment:
+      <<: *fake-env
+      PI_OFFLINE: "1"
+      PI_SKIP_VERSION_CHECK: "1"
+      PI_TELEMETRY: "0"
+
+  codex:
+    <<: *harness
+    image: jev-cops-live-codex:local
+    hostname: codex.live.internal
+    environment:
+      <<: *fake-env
+
+  opencode:
+    <<: *harness
+    image: jev-cops-live-opencode:local
+    hostname: opencode.live.internal
+    environment:
+      <<: *fake-env
+      OPENCODE_DISABLE_AUTOUPDATE: "1"
+      OPENCODE_DISABLE_MODELS_FETCH: "1"
+      OPENCODE_DISABLE_LSP_DOWNLOAD: "1"
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "1"
+
+networks:
+  live:
+    internal: true
+    labels:
+      jev-cops.live: "1"
+
+volumes:
+  certs:
+    labels:
+      jev-cops.live: "1"

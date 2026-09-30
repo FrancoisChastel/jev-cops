@@ -1,0 +1,1 @@
+pi -p --no-session --mode json --provider fake --model fake-model SCENARIO:tainted-rm\ Fix\ the\ flaky\ test\ in\ auth/ 

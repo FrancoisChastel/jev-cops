@@ -1,0 +1,62 @@
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh start cfg --permission-mode manual
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh send cfg SCENARIO:ls list the files here
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh wait cfg Listed the files 60
+(exit 0)
+==> PASS the session runs ls first
+$ cc /opt/jev-cops-live/bin/edit-settings.sh drop PreToolUse
+settings.json: drop PreToolUse (atomic rename)
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh send cfg SCENARIO:ls again please
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh wait cfg session terminated by jev-cops 30
+(exit 0)
+==> PASS the next prompt is blocked
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh capture cfg /home/dev/live/out/configchange.txt
+(exit 0)
+$ ccsh tail -20 ~/live/out/configchange.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                            ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents
+(exit 0)
+$ cc /opt/jev-cops-live/bin/edit-settings.sh restore /home/dev/live/settings.post-install.json
+settings.json: restore /home/dev/live/settings.post-install.json (atomic rename)
+(exit 0)
+$ cc /opt/jev-cops-live/bin/tmux-claude.sh stop cfg
+(exit 0)
+$ ccsh tail -3 ~/.jev-cops/claude-code-hook.log
+2026-09-30T20:32:16.627Z ConfigChange sess_f3d16c90-1cf9-4509-bf56-0ccbddcd0125 settings change blocked: the cops hook entry is missing or altered: no cops hook on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange
+2026-09-30T20:32:20.044Z UserPromptSubmit sess_f3d16c90-1cf9-4509-bf56-0ccbddcd0125 session terminated by jev-cops; start a new session
+2026-09-30T20:32:21.812Z ConfigChange sess_f3d16c90-1cf9-4509-bf56-0ccbddcd0125 settings change blocked: the cops hook entry is missing or altered: no cops hook on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange
+(exit 0)
+$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11b.jsonl "kind":"anomaly" hook block removed or altered "latched":true
+{"at":1790800336626,"event_id":"evt_01M3T095QDKQMR8E3WYXV9WJN5","hash":"62dd2863ef1530e049f55177bffd40240e7a5dcecc5ff56157917e45b9bab719","kind":"anomaly","payload":{"file_path":"/home/dev/.claude/settings.json","latched":true,"reason":"hook block removed or altered","source":"user_settings"},"prev":"6d14ca887db43ffe62e3caf3b1273e668bf40c1a539d16fdde0c21f30156b845","seq":62,"session_id":"sess_f3d1
+{"at":1790800341810,"event_id":"evt_01M3T09ASD1R6TWT4X6PJQB0VN","hash":"f006a3f5a4f39ae2f73629d2a93e5508ce56098e5ac407971cd7fa50369d8d09","kind":"anomaly","payload":{"file_path":"/home/dev/.claude/settings.json","latched":true,"reason":"hook block removed or altered","source":"user_settings"},"prev":"4fabd624cb730e066f6a2356754283d80633626a1001840bcbb44bb279e1bd44","seq":65,"session_id":"sess_f3d1
+(exit 0)
+==> PASS audit: an anomaly (hook block removed or altered), latched
+$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11b.jsonl "report":"config-change" "intact":false "killed":true
+{"at":1790800336626,"event_id":"evt_01M3T095QDKQMR8E3WYXV9WJN5","hash":"97d744e8d60cc3914fd52b9657039c463e1b2f04de5dca202beee609c916a07c","kind":"session","payload":{"cwd":"/home/dev/work/repo","file_path":"/home/dev/.claude/settings.json","harness":"claude-code","harness_version":"2.1.286","intact":false,"killed":true,"latched":true,"mode":"interactive","parent_id":null,"report":"config-change","
+{"at":1790800341810,"event_id":"evt_01M3T09ASD1R6TWT4X6PJQB0VN","hash":"bac0a2b2d22187bed819f50b01d9ecee8868ebdc03695da88c10367e90406c40","kind":"session","payload":{"cwd":"/home/dev/work/repo","file_path":"/home/dev/.claude/settings.json","harness":"claude-code","harness_version":"2.1.286","intact":false,"killed":true,"latched":true,"mode":"interactive","parent_id":null,"report":"config-change","
+(exit 0)
+==> PASS audit: config-change report intact:false, killed:true
+$ line_with <work>/e2e-20260930T203132Z/artifacts/audit-3.11b.jsonl "report":"config-change" "intact":true
+(exit 1)
+==> FAIL audit: the restore is reported intact:true

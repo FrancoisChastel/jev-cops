@@ -1,0 +1,50 @@
+
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   ~/work/repo
+
+
+❯ SCENARIO:ls list the files here
+
+  Listed 1 directory
+
+● Listed the files.
+
+✻ Crunched for 0s · done 8:32 PM
+
+● UserPromptSubmit operation blocked by hook:
+  jev-cops: session terminated by jev-cops; start a new session
+
+  Original prompt: SCENARIO:ls again please
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                            ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents

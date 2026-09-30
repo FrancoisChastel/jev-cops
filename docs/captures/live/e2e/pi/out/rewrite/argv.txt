@@ -1,0 +1,1 @@
+pi -p --no-session --mode json --provider fake --model fake-model --no-extensions -e /home/dev/.pi/agent/extensions/jev-cops.ts SCENARIO:rm-build\ clean\ up\ the\ build\ output 

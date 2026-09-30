@@ -1,0 +1,49 @@
+$ pish cops doctor --harness pi > ~/live/doctor-pi.out 2>&1; echo "doctor exit $?" >> ~/live/doctor-pi.out; cat ~/live/doctor-pi.out
+cops doctor (jev-cops 0.1.0)
+writes no configuration; the canary leaves audit lines and latches a throw-away session in copsd
+
+config
+  [ok]   cops.toml          loaded /home/dev/.config/jev-cops/cops.toml
+
+copsd
+  [ok]   agent socket       copsd 0.1.0 answers on /home/dev/.jev-cops/copsd.sock
+  [ok]   admin socket       answers on /home/dev/.jev-cops/copsd-admin.sock (human only: never mount it into a sandbox)
+  [ok]   version            copsd 0.1.0 = cops 0.1.0
+  [ok]   policies           6 loaded: config-tamper@3, default-branch-guard@2, exfil-after-secrets@3, off-repo-write@2, opaque-exec@1, tainted-destructive@1
+  [warn] judge              disabled: the semantic judge is off; the deterministic floor and the policies decide alone
+  [ok]   enforcement        enforce
+  [ok]   protected paths    13 paths config-tamper guards beyond the harness dirs (the judge's own inputs)
+  [ok]   latched sessions   0 root session(s) latched killed (cleared only through the admin socket)
+
+audit
+  [ok]   chain              1 line verifies at /home/dev/.jev-cops/audit.jsonl
+  [warn] signatures         no public key at /home/dev/.config/jev-cops/audit-ed25519.pub: checkpoints are not verified (cops keygen writes it; hand it to the cyber team)
+  [warn] signing key        no signing key at /home/dev/.jev-cops/keys/audit-ed25519.key: copsd signs nothing (run cops keygen)
+  [warn] forwarding         the audit log is not shipped off-box ([audit.forward] unset): a tail cut at a checkpoint is invisible locally
+
+pi
+  [ok]   extension          /home/dev/.pi/agent/extensions/jev-cops.ts (global install: every project)
+  [ok]   socket             resolved at run time: /home/dev/.jev-cops/copsd.sock
+  [ok]   extension content  the file is this release's extension
+
+pi gaps
+  [gap]  No OpenShell: the agent runs with your permissions and can edit or delete this extension file; every deny is best-effort until the extensions directory is read-only (T1, T4).
+  [gap]  `pi --no-extensions` (-ne) starts Pi without discovered extensions, so without jev-cops; only an explicit `-e` path still loads.
+  [gap]  Project installs load only after the project is trusted in Pi; install globally for every project.
+  [gap]  A tool call blocked in `tool_call` produces no `tool_result`, so the daemon gets no post event for denied calls.
+  [gap]  `kill` blocks the call, sets Pi's batch-level `terminate` hint and calls ctx.abort() and ctx.shutdown(); shutdown is a no-op in print/json mode, so the abort is what ends a headless run.
+  [gap]  The adapter sends no `env.git`; copsd derives repo, branch, default branch (origin/HEAD) and dirty from the call's cwd with hardened read-only git. Those values come from a repository the agent can write, so it can steer them (for example point origin/HEAD elsewhere so `main` stops counting as the default branch); values it cannot derive are treated as exposure (D-024).
+  [gap]  Read-only tools (read, grep, find, ls) fail open when copsd is unreachable and are logged only to the Pi notification or stderr; every other tool fails closed.
+  [gap]  Tools from other extensions are sent as kind `other` with their raw input; nested agents started by other extensions are not linked as subagent sessions.
+  [gap]  Commands the user types with `!` in the Pi TUI (`user_bash`) do not go through `tool_call` and are not judged.
+  [gap]  Without OpenShell the agent can reach the daemon's sockets as you: the hold token keeps it from approving a hold this extension received or reading its confirm view, but it can post judge requests of its own and resolve or view those; the admin socket (budget reset, full explain) is human-only only when it is not mounted into the sandbox.
+  [gap]  Without OpenShell the agent runs as you and can read the judge's own records: ~/.jev-cops/audit.jsonl and the SQLite store hold every decision with its scores (the oracle no agent channel carries). config-tamper holds a direct read of them (cat, grep, sqlite3, the read tool, an agent-run `cops explain`); a read it cannot see (from inside an interpreter, a recursive read of a directory above them) gets through. OpenShell makes them unreadable to the agent (M2).
+  [gap]  Stopping copsd by name (`pkill`, `killall`, `kill $(pgrep …)`, a launchctl or systemctl stop) is held; a `kill <pid>`, or copsd run under another name, is not recognized. Either way the extension then blocks every non-read tool (fail closed): a denial of service, not a bypass; only OpenShell keeps the agent from signalling copsd (M2).
+  [gap]  config-tamper sees the paths a command names: a write through a variable (`d=~/.pi; … > $d/agent/settings.json`), through a symlink made earlier, or into a directory an archive or a patch fills (`tar -x`, `unzip`, `git apply`: the directory is judged, not the files in it) is caught only when a config path is named; OpenShell's read-only mounts close it (M2).
+
+12 ok · 4 warn · 0 fail · 13 gap → exit 0
+doctor exit 0
+(exit 0)
+$ pish grep -qx "doctor exit 0" ~/live/doctor-pi.out
+(exit 0)
+==> PASS doctor exits 0 (no check failed)

@@ -1,0 +1,1 @@
+claude -p SCENARIO:tainted-rm\ Fix\ the\ flaky\ test\ in\ auth/ --output-format stream-json --verbose --permission-mode manual --allowedTools Bash\(cat:\*\) Bash\(rm:\*\) 

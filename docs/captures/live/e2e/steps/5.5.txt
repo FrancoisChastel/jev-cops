@@ -1,0 +1,19 @@
+$ ccsh n=$(grep -n "\"verdict\":\"deny\"" ~/.jev-cops/audit.jsonl | head -1 | cut -d: -f1); echo "tampering line $n"; sed "${n}s/\"verdict\":\"deny\"/\"verdict\":\"allow\"/" ~/.jev-cops/audit.jsonl > ~/live/audit-tampered.jsonl; diff <(sed -n "${n}p" ~/.jev-cops/audit.jsonl | cut -c1-200) <(sed -n "${n}p" ~/live/audit-tampered.jsonl | cut -c1-200) || true
+tampering line 29
+(exit 0)
+$ ccsh cops audit verify ~/live/audit-tampered.jsonl --pubkey ~/.config/jev-cops/audit-ed25519.pub
+cops audit verify /home/dev/live/audit-tampered.jsonl
+  lines          79 (head seq 28)
+  chain          broken at seq 29 (hash does not match the line)
+  checkpoints    4 found
+  keys           2a06a037b92ce141
+  unsigned tail  seq 27..28 (2 lines)
+FAIL  chain broken at seq 29 (hash does not match the line): the log was edited or lines were deleted
+result: FAILED (1 failure)
+(exit 1)
+==> PASS audit verify fails on the tampered log
+$ ccsh cops audit verify ~/live/audit-tampered.jsonl --pubkey ~/.config/jev-cops/audit-ed25519.pub | grep -Ei "hash|chain"
+  chain          broken at seq 29 (hash does not match the line)
+FAIL  chain broken at seq 29 (hash does not match the line): the log was edited or lines were deleted
+(exit 0)
+==> PASS it names the broken line

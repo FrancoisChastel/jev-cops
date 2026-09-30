@@ -1,0 +1,1 @@
+codex exec --json --skip-git-repo-check -C /home/dev/work/repo SCENARIO:ls\ list\ the\ files\ here 

@@ -1,0 +1,1 @@
+claude -p SCENARIO:ls\ list\ the\ files\ here --output-format stream-json --verbose 

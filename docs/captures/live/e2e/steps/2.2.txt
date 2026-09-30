@@ -1,0 +1,29 @@
+$ cc /opt/jev-cops-live/bin/copsd.sh start --forward
+copsd listening on /home/dev/.jev-cops/copsd.sock · admin /home/dev/.jev-cops/copsd-admin.sock · 6 policies from /home/dev/.bun/install/global/node_modules/@jev-cops/policies · 15 protected paths · judge off · enforcement enforce
+(exit 0)
+==> PASS copsd starts with [audit.forward] syslog
+$ ccsh cat ~/.config/jev-cops/cops.toml
+[enforcement]
+mode = "enforce"
+
+[audit.forward]
+kind = "syslog"
+target = "syslog.live.internal:6514"
+ca_file = "/certs/ca.pem"
+app_name = "copsd"
+(exit 0)
+$ ccsh curl -sf --unix-socket ~/.jev-cops/copsd.sock http://localhost/v1/health | tee ~/live/health.json
+{"ok":true,"version":"0.1.0","policies":[{"name":"config-tamper","version":3,"degraded":false},{"name":"default-branch-guard","version":2,"degraded":false},{"name":"exfil-after-secrets","version":3,"degraded":false},{"name":"off-repo-write","version":2,"degraded":false},{"name":"opaque-exec","version":1,"degraded":false},{"name":"tainted-destructive","version":1,"degraded":false}],"judge":"disabled","enforcement":"enforce","sockets":{"agent":"/home/dev/.jev-cops/copsd.sock","admin":"/home/dev/.jev-cops/copsd-admin.sock"},"protected_paths":15,"latched_sessions":0,"audit":{"head_seq":2,"signing":{"key_id":"2a06a037b92ce141","in_force":"2a06a037b92ce141","checkpoint_every":100,"last_checkpoint_seq":2,"required":false},"forward":{"kind":"syslog","connected":true,"sent_seq":2,"lag_lines":0,"lag_ms":0,"last_error":null,"down_since":null,"required":false,"refusing":false}},"uptime":0}(exit 0)
+==> PASS agent socket /v1/health
+$ ccsh curl -sf --unix-socket ~/.jev-cops/copsd-admin.sock http://localhost/v1/health > /dev/null
+(exit 0)
+==> PASS admin socket /v1/health
+$ ccsh grep -q "\"enforcement\":\"enforce\"" ~/live/health.json && test "$(grep -o "\"name\":" ~/live/health.json | wc -l)" -eq 6
+(exit 0)
+==> PASS enforcing, 6 starter policies from the installed package
+$ ccsh grep -q "\"kind\":\"syslog\",\"connected\":true" ~/live/health.json
+(exit 0)
+==> PASS the forwarder is connected to syslog.live.internal over TLS
+$ ccsh grep -q "\"in_force\":\"" ~/live/health.json
+(exit 0)
+==> PASS the signing key is in force

@@ -1,0 +1,1 @@
+opencode run --format json SCENARIO:ls\ list\ the\ files\ here 

@@ -35,7 +35,9 @@ Tests and scripts must never run, install or configure a real harness (`claude`,
 `opencode`, `pi`), a scanner, or your login session's services on the host. Unit and e2e
 tests use fakes and throwaway `HOME` directories; live verification against real harness
 binaries runs only inside the Docker images under `docker/`, against a fake model API on
-an internal network, with no real credentials (see `scripts/live/`).
+an internal network, with no real credentials (see `scripts/live/`). How it works, how to
+run it (`JEV_COPS_LIVE=1 scripts/live/e2e.sh`) and what it guarantees:
+[docs/live-testing.md](./docs/live-testing.md).
 
 ## Workflow
 
