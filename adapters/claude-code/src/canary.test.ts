@@ -138,6 +138,7 @@ describe("runOfflineCanary with the ConfigChange probe: the hook's own intact ch
     const config = { filePath: join(h, ".claude", "settings.json") };
     const r = await runOfflineCanary({ hook: hookCommand(socket), home: h, env, config });
     expect(r.status).toBe("ok");
+    expect(r.detail).toContain("its own ConfigChange check accepted an unchanged settings file");
     expect(r.probes.map((p) => [p.name, p.outcome, p.observed])).toEqual([
       ["benign-bash", "ok", "exit 0, no output"],
       ["config-write", "ok", "exit 2, deny, continue:false"],

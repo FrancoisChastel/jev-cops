@@ -280,8 +280,11 @@ function summarize(probes: readonly CanaryProbe[]): CanaryResult {
       "copsd is in observe mode: the settings write was only reported ('would have: kill'); nothing is blocked until copsd runs with --enforce";
     return { status: "observe", detail, probes };
   }
-  const detail = "the hook let `true` run and blocked a settings write (exit 2, continue:false)";
-  return { status: "ok", detail, probes };
+  const base = "the hook let `true` run and blocked a settings write (exit 2, continue:false)";
+  const change = probes.some((p) => p.name === "config-change")
+    ? ", and its own ConfigChange check accepted an unchanged settings file"
+    : "";
+  return { status: "ok", detail: `${base}${change}`, probes };
 }
 
 /**
