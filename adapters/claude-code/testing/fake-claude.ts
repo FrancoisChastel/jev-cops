@@ -62,6 +62,12 @@ export class FakeClaudeCode {
   readonly claudeSees: string[] = [];
   /** Prompts, system messages and block reasons shown to the human. */
   readonly userSees: string[] = [];
+  /**
+   * Every hook's stdout, as Claude Code keeps it in the session transcript under
+   * `~/.claude/projects/` (a `hook_success` attachment, seen on 2.1.280): a file the agent
+   * can read, although it never enters the model's context.
+   */
+  readonly transcript: string[] = [];
   /** Set by `continue: false`: Claude stopped; a new prompt starts the next turn. */
   turnEnded = false;
 
@@ -81,11 +87,13 @@ export class FakeClaudeCode {
   }
 
   /** Runs `hook` (default: the first registered) on one payload. */
-  run(event: string, payload: Json, hook = this.o.hooks[0]): Promise<HookRun> {
+  async run(event: string, payload: Json, hook = this.o.hooks[0]): Promise<HookRun> {
     if (hook === undefined) throw new Error("no hook registered");
     const timeoutS = this.o.timeoutsS?.[event] ?? INSTALLED_TIMEOUTS_S[event] ?? 600;
     const opts = { env: this.o.env, cwd: this.o.cwd, timeoutS, headless: this.o.headless ?? false };
-    return spawnHook(hook, JSON.stringify(payload), opts);
+    const run = await spawnHook(hook, JSON.stringify(payload), opts);
+    if (run.stdout.trim() !== "") this.transcript.push(run.stdout.trim());
+    return run;
   }
 
   private async decide(tool: string, input: Json, id: string, agentId?: string) {

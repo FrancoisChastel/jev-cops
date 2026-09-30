@@ -7,12 +7,14 @@
  * | allow    | exit 0, no output: "no decision; normal permission flow applies" |
  * | annotate | exit 0, `additionalContext` only |
  * | rewrite  | exit 0, `updatedInput` only; permission rules run on the pinned input |
- * | hold     | a human can answer: `permissionDecision: "ask"`, reason = daemon reason + raw + detail (shown to the user, not Claude); else deny |
+ * | hold     | a human can answer: `permissionDecision: "ask"`, reason = daemon reason + raw + summary (shown to the user, not Claude); else deny |
  * | deny     | exit 2 + JSON deny (`permissionDecisionReason`, what Claude sees) + stderr |
  * | kill     | deny + `continue: false` + `stopReason` |
  *
  * `permissionDecision: "allow"` ("skips the permission prompt") and `"defer"` (ignored on
- * multi-call turns) are never emitted. `detail` only ever reaches an `ask`.
+ * multi-call turns) are never emitted. The daemon's scored `detail` never reaches the hook:
+ * an `ask` carries the confirm view's summary, which has no score, since Claude Code keeps
+ * the ask's text in a session transcript the agent can read.
  */
 import type { SessionMode, Verdict } from "@jev-cops/core";
 import { NO_HUMAN_PERMISSION_MODES, PERMISSION_MODES } from "@jev-cops/core/schema";
@@ -35,10 +37,13 @@ export interface Judged {
   readonly input: Record<string, unknown> | null;
 }
 
-/** The T8 confirm view of a hold: the daemon's normalized raw command and its human detail. */
+/**
+ * The T8 confirm view of a hold: the daemon's normalized raw command and its summary (the
+ * policies' plain-language lines, no score).
+ */
 export interface ConfirmView {
   readonly raw: string;
-  readonly detail: string | null;
+  readonly summary: string | null;
   /** The held event, for `cops explain` (the full decision); null when the view omits it. */
   readonly eventId?: string | null;
 }
@@ -73,7 +78,8 @@ export function humanCanAnswer(a: Audience): boolean {
 /**
  * The text of an `ask` prompt, shown to the user and not to Claude
  * (hooks#pretooluse-decision-control): the reason, the daemon's normalized command, its
- * detail, and where to read the full decision. Never the tool input's own prose (T8).
+ * summary, and where to read the full decision. Never the tool input's own prose (T8), and
+ * no score: Claude Code keeps this text in a transcript the agent can read (T6).
  */
 export function askText(reason: string, view: ConfirmView): string {
   const command = `Command, as jev-cops normalized it:\n${view.raw}`;
@@ -81,7 +87,7 @@ export function askText(reason: string, view: ConfirmView): string {
   const parts = [
     `jev-cops hold: ${reason}`,
     command,
-    ...(view.detail === null ? [] : [view.detail]),
+    ...(view.summary === null ? [] : [view.summary]),
     ...explain,
   ];
   return parts.join("\n\n");
@@ -127,8 +133,8 @@ function proceedWith(fields: Record<string, unknown>): HookOutput {
 
 /**
  * The hook output for verdict `v` of a `PreToolUse`, for audience `a`. `view` is the hold's
- * confirm view; without it a hold is blocked rather than asked with less than the spec's
- * "normalized raw command and the daemon's detail" (T8).
+ * confirm view; without it a hold is blocked rather than asked without the daemon's
+ * normalized raw command (T8).
  */
 export function toHookOutput(v: Judged, a: Audience, view: ConfirmView | null): HookOutput {
   switch (v.verdict) {

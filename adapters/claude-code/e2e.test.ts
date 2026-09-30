@@ -65,7 +65,7 @@ describe("Claude Code hook end to end: repo policies, enforce", () => {
     expect(judged.event.harness).toBe("claude-code");
   });
 
-  test("git push --force origin main, interactive: ask shows the daemon's raw command and detail (T8)", async () => {
+  test("git push --force origin main, interactive: ask shows the daemon's raw command and summary (T8)", async () => {
     const repo = makeRepo();
     try {
       const c = await started({ cwd: repo });
@@ -74,11 +74,34 @@ describe("Claude Code hook end to end: repo policies, enforce", () => {
       expect(call.decision.outcome).toBe("ask");
       const asked = c.userSees.join("\n");
       expect(asked).toContain("Irreversible git operation on the default branch.");
-      expect(asked).toContain("git push --force origin main");
-      expect(asked).toContain("default main/master");
+      expect(asked).toContain("Command, as jev-cops normalized it:\ngit push --force origin main");
+      expect(asked).toContain("default-branch-guard@2: hold");
+      expect(asked).toContain("default-branch-guard@2 detail: branch main; default main/master");
+      const judged = lines(c, "judge").at(-1);
+      expect(asked).toContain(`Full decision: cops explain ${judged?.event_id}`);
       expect(asked).not.toContain(LIE);
       expect(call.result).toBe(DECLINED);
       expect(c.claudeSees.join("\n")).not.toContain("default main/master");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("the ask Claude Code keeps in its transcript carries no score (T6); cops explain has them", async () => {
+    const repo = makeRepo();
+    try {
+      const c = await started({ cwd: repo });
+      await c.tool("Bash", { command: "git push --force origin main" });
+      const transcript = c.transcript.join("\n");
+      expect(transcript).toContain("default-branch-guard@2 detail: branch main");
+      const payload = lines(c, "judge").at(-1)?.payload as { decision?: { detail?: string } };
+      const detail = payload.decision?.detail ?? "";
+      expect(detail).toMatch(/environment \d\.\d\d: default branch/);
+      expect(detail).toContain("floor");
+      expect(transcript).not.toMatch(/\d\.\d/);
+      for (const word of ["floor", "risk 0", "taint", "environment", "budget", "judge:"]) {
+        expect(transcript).not.toContain(word);
+      }
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

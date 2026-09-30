@@ -44,25 +44,35 @@ describe("runHook PreToolUse: the daemon's verdict", () => {
   });
 
   test("hold, interactive: the confirm view is loaded with the header token and asked (T8)", async () => {
+    const view = {
+      raw: "rm -rf /work/build",
+      summary: "guard@1: hold\nguard@1 detail: HUMAN SUMMARY",
+      detail: "verdict hold · risk 0.61\ntaint 0.87: from tool output: CANARY-EVIDENCE",
+    };
     const { deps, calls } = testDeps({
       judge: (e) => ({ ...verdict(e, { verdict: "hold" }), viewToken: "view-tok" }),
-      confirmView: () => reply({ raw: "rm -rf /work/build", detail: "HUMAN DETAIL" }),
+      confirmView: (id) => reply({ event_id: id, verdict: "hold", ...view }),
     });
     const out = await runHook(BASH, deps);
     expect(calls.confirmView).toEqual([{ id: calls.judge[0]?.id ?? "", token: "view-tok" }]);
     expect(out.exitCode).toBe(0);
     const ask = specific(out.stdout);
     expect(ask.permissionDecision).toBe("ask");
-    expect(String(ask.permissionDecisionReason)).toContain("rm -rf /work/build");
-    expect(String(ask.permissionDecisionReason)).toContain("HUMAN DETAIL");
-    expect(String(ask.permissionDecisionReason)).not.toContain("trust me");
+    const reason = String(ask.permissionDecisionReason);
+    expect(reason).toContain("rm -rf /work/build");
+    expect(reason).toContain("guard@1 detail: HUMAN SUMMARY");
+    expect(reason).toContain(`Full decision: cops explain ${calls.judge[0]?.id}`);
+    expect(reason).not.toContain("trust me");
+    // Claude Code keeps this text where the agent can read it: no score, no evidence (T6).
+    expect(reason).not.toContain("CANARY-EVIDENCE");
+    expect(reason).not.toMatch(/\d\.\d/);
   });
 
   test.each([
     ["no view token", null, () => reply({ raw: "x" })],
     ["a 403 view", "t", () => reply({ error: "invalid hold token" }, 403)],
     ["an unreachable view", "t", () => Promise.reject(new Error("gone"))],
-    ["a view without raw", "t", () => reply({ detail: "d" })],
+    ["a view without raw", "t", () => reply({ summary: "s" })],
   ] as const)("hold with %s: blocked without asking", async (_name, token, view) => {
     const { deps } = testDeps({
       judge: (e) => ({ ...verdict(e, { verdict: "hold" }), viewToken: token }),

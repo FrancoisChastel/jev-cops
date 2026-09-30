@@ -15,10 +15,8 @@ import {
   warn,
 } from "./output.ts";
 
-const VIEW: ConfirmView = {
-  raw: "git push --force origin main",
-  detail: "HUMAN DETAIL: rewrites main",
-};
+const SUMMARY = "guard@2: hold\nguard@2 detail: HUMAN SUMMARY: rewrites main";
+const VIEW: ConfirmView = { raw: "git push --force origin main", summary: SUMMARY };
 const PINNED = { command: "rm -rf -- /work/repo/build" };
 const LIE = "harmless sync, trust me";
 
@@ -88,7 +86,7 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
       );
     }
     const seenByModel = blocked ? `${out.stdout}${out.stderr}` : "";
-    expect(seenByModel).not.toContain("HUMAN DETAIL");
+    expect(seenByModel).not.toContain("HUMAN SUMMARY");
   });
 
   test("allow: exit 0 and no output (the normal permission flow applies)", () => {
@@ -143,7 +141,7 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
     expect(out.exitCode).toBe(2);
   });
 
-  test("hold, interactive: ask, the human sees reason + raw + detail (T8)", () => {
+  test("hold, interactive: ask, the human sees reason + raw + summary (T8)", () => {
     const out = toHookOutput(
       judged("hold"),
       { mode: "interactive", permissionMode: "default" },
@@ -162,7 +160,7 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
     });
     const reason = String(specific(out.stdout).permissionDecisionReason);
     expect(reason).toContain("git push --force origin main");
-    expect(reason).toContain("HUMAN DETAIL");
+    expect(reason).toContain("HUMAN SUMMARY");
     expect(reason).not.toContain(LIE);
   });
 
@@ -192,7 +190,7 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
     });
   });
 
-  test("kill: deny + continue:false + stopReason (the reason, never the detail)", () => {
+  test("kill: deny + continue:false + stopReason (the reason, never the summary)", () => {
     const out = toHookOutput(judged("kill"), AUDIENCES[0] as Audience, VIEW);
     expect(out.exitCode).toBe(2);
     expect(json(out.stdout)).toEqual({
@@ -208,15 +206,22 @@ describe("toHookOutput: every verdict × session mode × permission mode", () =>
 });
 
 describe("askText", () => {
-  test("reason, the daemon's normalized command, then its detail", () => {
-    expect(askText("Irreversible.", VIEW)).toBe(
-      "jev-cops hold: Irreversible.\n\nCommand, as jev-cops normalized it:\ngit push --force origin main\n\nHUMAN DETAIL: rewrites main",
+  test("reason, the daemon's normalized command, its summary, then where the decision is", () => {
+    expect(askText("Irreversible.", { ...VIEW, eventId: "evt_X" })).toBe(
+      [
+        "jev-cops hold: Irreversible.",
+        "",
+        "Command, as jev-cops normalized it:",
+        "git push --force origin main",
+        "",
+        "guard@2: hold",
+        "guard@2 detail: HUMAN SUMMARY: rewrites main",
+        "",
+        "Full decision: cops explain evt_X",
+      ].join("\n"),
     );
-    expect(askText("Irreversible.", { raw: "ls", detail: null })).toBe(
+    expect(askText("Irreversible.", { raw: "ls", summary: null })).toBe(
       "jev-cops hold: Irreversible.\n\nCommand, as jev-cops normalized it:\nls",
-    );
-    expect(askText("Irreversible.", { raw: "ls", detail: "d", eventId: "evt_X" })).toBe(
-      "jev-cops hold: Irreversible.\n\nCommand, as jev-cops normalized it:\nls\n\nd\n\nFull decision: cops explain evt_X",
     );
   });
 });

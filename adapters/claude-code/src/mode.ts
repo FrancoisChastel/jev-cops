@@ -87,7 +87,7 @@ export function isClaude(args: readonly string[]): boolean {
  * claude itself in exec form; in shell form up to {@link MAX_SHELL_LAYERS} shells are
  * unwrapped. Anything that cannot be read, or that is not recognizably Claude Code, counts
  * as headless: a hold is then denied, never asked (an ask a host-less run cannot show a
- * human would show its reason, with the daemon's detail, to Claude).
+ * human would show its reason, with the daemon's command and policy summary, to Claude).
  */
 export function detectMode(ppid: number, read: ProcReader): SessionMode {
   let pid = ppid;

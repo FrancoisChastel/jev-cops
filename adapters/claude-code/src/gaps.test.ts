@@ -15,8 +15,12 @@ describe("CLAUDE_CODE_GAPS", () => {
 
   test("what the M1 live capture found is printed", () => {
     const text = adapter.CLAUDE_CODE_GAPS.join("\n");
-    // The ask text (with the daemon's detail) lands in agent-readable files, never in context.
+    // The ask text lands in agent-readable files, never in context; it carries no score.
     expect(text).toContain("~/.claude/projects/");
+    expect(text).toContain(
+      "limited to jev-cops's reason, the normalized command and the policies'",
+    );
+    expect(text).not.toContain("command and detail");
     // The Agent SDK starts claude without -p: its print-only flags count as headless.
     expect(text).toContain("`--output-format`/`--input-format`");
     // Only `cops install` records the version (D-092); SDK runs bundle their own claude.

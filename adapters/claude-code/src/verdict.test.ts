@@ -54,18 +54,22 @@ describe("parseJudged: the daemon's verdict, or null (the caller fails closed)",
 });
 
 describe("parseView: the T8 confirm view", () => {
-  test("raw and detail", () => {
-    expect(
-      parseView({ event_id: ID, verdict: "hold", reason: "r", raw: "ls", detail: "d" }),
-    ).toEqual({
+  test("raw, summary and event id; a scored detail, even if sent, is never read", () => {
+    const scored = "verdict hold · risk 0.61 · floor 0.61\ntaint 0.87: from tool output: x";
+    const body = { event_id: ID, verdict: "hold", reason: "r", raw: "ls", summary: "s" };
+    expect(parseView({ ...body, detail: scored })).toEqual({
       raw: "ls",
-      detail: "d",
+      summary: "s",
       eventId: ID,
     });
   });
 
-  test("a view without detail keeps the raw command", () => {
-    expect(parseView({ raw: "ls" })).toEqual({ raw: "ls", detail: null, eventId: null });
+  test("a view without a summary keeps the raw command", () => {
+    expect(parseView({ raw: "ls", detail: "d" })).toEqual({
+      raw: "ls",
+      summary: null,
+      eventId: null,
+    });
   });
 
   test.each([[null], [{}], [{ raw: 3 }], ["ls"]])("%p → null", (body) => {

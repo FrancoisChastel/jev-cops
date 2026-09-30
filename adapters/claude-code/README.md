@@ -112,7 +112,7 @@ session ([intact](../../docs/adapters.md#intact)): uninstall with `cops install 
 | `allow` | Exit 0, no output: Claude Code's normal permission flow decides. |
 | `annotate` | Exit 0 with `additionalContext`: the note reaches Claude next to the tool result. |
 | `rewrite` | Exit 0 with `updatedInput` and no decision: the pinned input runs, through the normal permission flow. |
-| `hold` | Interactive, in a permission mode that prompts: Claude Code's own ask dialog, whose reason (shown to you, not to Claude) is jev-cops's reason, the daemon's normalized command and its detail. Headless (`-p`, or the Agent SDK, without a permission host), `dontAsk`, `bypassPermissions`: denied. With an SDK `canUseTool` host, the host receives the ask. |
+| `hold` | Interactive, in a permission mode that prompts: Claude Code's own ask dialog, whose reason (shown to you, not to Claude) is jev-cops's reason, the daemon's normalized command, the matched policies' plain-language lines and a `cops explain <event-id>` pointer. No score: Claude Code keeps this text in the session transcript, which the agent can read, so features, floor, risk and the rest of the scored detail are only in `cops explain`. Headless (`-p`, or the Agent SDK, without a permission host), `dontAsk`, `bypassPermissions`: denied. With an SDK `canUseTool` host, the host receives the ask. |
 | `deny` | Exit 2: blocked; Claude sees `jev-cops: <reason>`. |
 | `kill` | Blocked with `continue: false`: Claude stops; every later call and prompt of the session is blocked. |
 
@@ -133,7 +133,8 @@ best-effort; `policy_settings` changes cannot be blocked; `kill` cannot exit Cla
 `--bare`, `--safe-mode`, `--settings`, `--restricted`, `disableAllHooks` and untrusted
 folders skip hooks (a managed install survives some); `@` references, `EndConversation` and
 `!` commands are never judged; the ask dialog also shows the tool input's own description;
-the ask's text is kept in the session transcript, which the agent can read.
+the ask's text (reason, command and the policies' lines, no score) is kept in the session
+transcript, which the agent can read.
 
 ## Appendix: the settings block by hand
 

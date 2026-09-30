@@ -29,10 +29,14 @@ export function parseJudged(body: unknown, eventId: string): Judged | null {
   return { verdict: verdict as Verdict, reason: body.reason, note, input };
 }
 
-/** The daemon's normalized raw command, detail and event id from a confirm view, or null. */
+/**
+ * The daemon's normalized raw command, summary and event id from a confirm view, or null.
+ * A `detail` in the body is never read: it is scored, and the ask lands in a transcript
+ * the agent can read.
+ */
 export function parseView(body: unknown): ConfirmView | null {
   if (!isRecord(body) || typeof body.raw !== "string") return null;
-  const detail = typeof body.detail === "string" ? body.detail : null;
+  const summary = typeof body.summary === "string" ? body.summary : null;
   const eventId = typeof body.event_id === "string" ? body.event_id : null;
-  return { raw: body.raw, detail, eventId };
+  return { raw: body.raw, summary, eventId };
 }
