@@ -136,9 +136,20 @@ clone → check → gate → build all green. Fixes before M1:
 99.1 % lines (80 % per file enforced), `bun run gate` PASS (6 policies, 93 cases, 186 runs),
 `bun run build` → `dist/copsd`, `dist/cops`, `dist/cops-hook`.
 
+- **M1 steps 6–7 — `cops install` and `cops doctor`**: installer for Claude Code (all
+  scopes incl. managed drop-in, merge/backup/idempotent/uninstall/dry-run, refusals and
+  warnings incl. 10 docs-drift items, offline canary with rollback) and Pi; read-only
+  doctor with daemon/audit/settings/binary/trust checks, offline canary, gated live canary
+  and every known gap printed. T4 installer + doctor halves live. Flaky policy-watch test
+  made deterministic. Decisions D-089–D-092.
+
+**Totals:** 2932 tests + 6 todo, coverage 98.7 % functions / 99.2 % lines, gate PASS.
+
 ## In progress
 
-- Nothing: PLAN-M1 session boundary after step 5.
+- M1 steps 8–9: one shared canary (doctor switches to the adapter's `runOfflineCanary`),
+  remaining Claude Code tamper parts, docs, and a real interactive `claude` capture against
+  a local fake API.
 
 ## Next
 
