@@ -12,13 +12,12 @@ The same `git push --force` is allowed on a feature branch the user asked about,
 on the default branch, and denied in a headless session. What changes is the context,
 not the command string.
 
-> **Status: M0 complete and gate-reviewed.** Core, policy engine, SDK,
-> starter policies, judge providers, daemon, CLI and the **Pi adapter** are built and
-> tested; a real `pi` run blocks and rewrites tool calls end to end
-> ([capture](docs/captures/pi-m0.md)). **M1 in progress:** the Claude Code command hook,
-> `cops install claude-code` and `cops doctor` are built and verified against the real
-> `claude` binary, interactive and headless ([capture](docs/captures/claude-code-m1.md)).
-> Codex and OpenCode in M3. Not production-ready yet: see [docs/STATUS.md](docs/STATUS.md).
+> **Status: M0 and M1 complete** (M1 in gate review). Works today with **Pi** and **Claude
+> Code**: the hook blocks, rewrites and asks, verified against the real `pi` and `claude`
+> binaries ([Pi capture](docs/captures/pi-m0.md), [Claude Code capture](docs/captures/claude-code-m1.md)).
+> `cops install` wires it up and `cops doctor` proves it fires. Next: OpenShell hard
+> enforcement (M2), Codex and OpenCode (M3). Not production-ready yet: see
+> [docs/STATUS.md](docs/STATUS.md).
 
 ## How it works
 
@@ -53,7 +52,7 @@ Requires [Bun](https://bun.sh) ≥ 1.3. Node is not a supported runtime.
 ```bash
 git clone https://github.com/FrancoisChastel/jev-cops && cd jev-cops
 bun install
-bun run check          # lint + typecheck + 2950 tests
+bun run check          # lint + typecheck + ~3000 tests
 bun run gate           # cops test: every starter policy against its fixtures
 bun run build          # dist/copsd, dist/cops, dist/cops-hook (WASM grammar embedded)
 ```
