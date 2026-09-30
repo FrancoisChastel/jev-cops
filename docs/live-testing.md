@@ -44,8 +44,10 @@ developer's machine (D-115: "don't mess up my claude, codex etc. — use docker 
 
 ## Running
 
-Requirements: Docker (Desktop 29.4 verified, linux/arm64; the Dockerfiles also build for
-linux/amd64 with `JEV_COPS_LIVE_PLATFORM=linux/amd64`) and Bun on the host.
+Requirements: Docker (Desktop 29.4, linux/arm64, is what the captures ran on) and Bun on
+the host. The base images are pinned by their multi-arch index digest and every harness
+package ships linux x64 and arm64 builds, so `JEV_COPS_LIVE_PLATFORM=linux/amd64` builds the
+amd64 images (only the base image was built and run for amd64 so far, under emulation).
 
 ```bash
 JEV_COPS_LIVE=1 scripts/live/build.sh                     # pack + build every image
