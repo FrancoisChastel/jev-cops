@@ -19,10 +19,116 @@ contract, every difference from the spec and the gap list are in
 | `src/intact.ts`, `src/settings.ts` | The ConfigChange check: is the cops hook still in force. |
 | `src/mode.ts` | Headless detection from the parent `claude` argv. |
 | `src/gaps.ts` | `CLAUDE_CODE_GAPS`, printed by install and doctor. |
+| `src/install.ts`, `src/refusals.ts` | `cops install claude-code`, the settings half: scopes, refusals, warnings, merge, write, uninstall, rollback. |
+| `src/hook-entries.ts`, `src/settings-merge.ts`, `src/settings-io.ts` | The entries it registers, the pure merge/strip, the atomic write with backup. |
+| `src/canary.ts` | `runOfflineCanary`: the hook run exactly as registered on two synthetic calls (install and doctor). |
+| `src/hook-binary.ts`, `src/install-state.ts`, `src/spawn.ts` | The hook binary checks, `~/.jev-cops/claude-code.json`, a never-throwing process runner. |
 | `testing/fake-claude.ts` | A fake Claude Code with the documented exit-code and JSON semantics, used by the tests. |
 
-## Install by hand (until `cops install claude-code`, M1 step 6)
+## Install
 
+1. Build the binaries and start the daemon: `bun run build` (→ `dist/copsd`, `dist/cops`,
+   `dist/cops-hook`), then `./dist/copsd --enforce`, or leave the default `observe` mode to
+   log only.
+2. Register the hook: `./dist/cops install claude-code` (see what it would change first with
+   `--dry-run`).
+
+```sh
+./dist/cops install claude-code                  # ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR)
+./dist/cops install claude-code --project        # <project>/.claude/settings.json, shared
+./dist/cops install claude-code --local          # <project>/.claude/settings.local.json
+sudo ./dist/cops install claude-code --managed \
+  --socket "$HOME/.jev-cops/copsd.sock" \
+  --hook-binary /usr/local/libexec/jev-cops/cops-hook   # admins: a root-owned hook binary
+./dist/cops install claude-code --uninstall      # removes only jev-cops's entries
+```
+
+| Option | Effect |
+|---|---|
+| `--user` (default), `--project`, `--local`, `--managed` | Which settings file (one per run). `--managed` writes `<managed dir>/managed-settings.d/50-jev-cops.json` (macOS `/Library/Application Support/ClaudeCode`, Linux `/etc/claude-code`, Windows `C:\Program Files\ClaudeCode`) only when run as root; otherwise it prints the JSON and the path for an administrator and exits 1. It never runs sudo, writes no cops.toml or state file (it prints the `[daemon] hook_binary` line instead), and warns when the hook binary is not root-owned. A managed install keeps working under `--safe-mode`, `--restricted`, `--settings` and a non-managed `disableAllHooks`; it is skipped when server-managed settings or an MDM profile supply the managed policy (first-wins, see `/status`). |
+| `--socket <path>` | The daemon's agent socket. Default: `[daemon] socket` from cops.toml, `~/.jev-cops/copsd.sock`. |
+| `--transport http` | Post events go to the daemon's loopback HTTP listener (`[daemon] http` must be set). `PreToolUse` always stays the command hook, because HTTP hooks fail open. |
+| `--hook-binary <path>` | Default: `cops-hook` next to `cops`, else `cops-hook` on `PATH`. |
+| `--config <path>` | The cops.toml that records `[daemon] hook_binary`. Default: `~/.config/jev-cops/cops.toml`. |
+| `--home <dir>`, `--project-dir <dir>` | Install under another home directory or project. With `--home`, `CLAUDE_CONFIG_DIR` and `JEV_COPS_CONFIG` are ignored when they point outside it. |
+| `--dry-run` | Print the diff and what would be recorded; write nothing. |
+| `--force` | Install despite a refusal. Each refusal is then printed as `FORCED: …` and recorded in the result. |
+| `--json` | One JSON object (settings text left out, except a dry run's diff). |
+
+What an install does, in order:
+
+1. **Checks the hook binary.** It must exist, be executable, and print the same version as
+   `cops --version`. Claude Code treats a hook that cannot start as a non-blocking error, so
+   a mistyped path would silently switch the gate off.
+2. **Reads every settings file Claude Code loads and refuses** on:
+   - a bare `Bash`, `Bash(*)`, `PowerShell` or `Monitor` allow rule at any scope (spec: the
+     installer refuses when `Bash` is on the allow list);
+   - `disableAllHooks` (for a non-managed install), or `disableAllHooks` in managed settings
+     (for any install);
+   - `allowManagedHooksOnly` for a non-managed install;
+   - `--transport http` without the daemon's HTTP bind, or without an `allowedHttpHookUrls`
+     entry that admits it.
+3. **Merges the entries** into the file, one group per event with no matcher, in exec form.
+   Foreign hooks, other keys and key order are left alone, and stale jev-cops entries are
+   replaced. The write is atomic, and the previous file is backed up as
+   `<file>.jev-cops-<UTC time>.bak` (mode 0600). User and local files are 0600. Running the
+   install again changes nothing.
+4. **Records the install** (not for `--managed`). It sets `[daemon] hook_binary` in cops.toml, which makes copsd
+   protect the binary from its next start. It also writes `~/.jev-cops/claude-code.json`,
+   whose `claude_version` (from `claude --version`) the hook reports as `harness_version`.
+5. **Runs the offline canary** through the entry exactly as written. `Bash true` must exit
+   0 silently, and a `Write` to `~/.claude/settings.json` must exit 2 with `continue: false`
+   (the `config-tamper` kill).
+   - If the daemon is down, the install still succeeds, with the warning "daemon not
+     reachable: the hook will block every non-read call until copsd runs (fail closed)".
+   - If the daemon is in `observe` mode, that is reported.
+   - Any other answer exits 1, and the settings, cops.toml and state are rolled back.
+6. **Prints the warnings and gaps.** Warnings cover a `bypassPermissions`/`dontAsk` default
+   mode (holds become denies), an untrusted workspace, a project install below the
+   repository root, and `CLAUDE_CONFIG_DIR`. Every install also says that
+   `--dangerously-skip-permissions` is out of scope for the hook, that without OpenShell
+   every deny is best-effort, and prints every gap below.
+
+Exit codes: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage.
+
+An interactive session holds hooks back until you accept the folder's workspace trust. A
+settings change that drops or alters one of the `PreToolUse`, `PostToolUse`,
+`PostToolUseFailure`, `UserPromptSubmit` or `ConfigChange` entries is blocked and ends the
+session ([intact](../../docs/adapters.md#intact)): uninstall with `cops install claude-code
+--uninstall` outside a Claude Code session.
+
+## How verdicts map
+
+| Verdict | In Claude Code |
+|---|---|
+| `allow` | Exit 0, no output: Claude Code's normal permission flow decides. |
+| `annotate` | Exit 0 with `additionalContext`: the note reaches Claude next to the tool result. |
+| `rewrite` | Exit 0 with `updatedInput` and no decision: the pinned input runs, through the normal permission flow. |
+| `hold` | Interactive, in a permission mode that prompts: Claude Code's own ask dialog, whose reason (shown to you, not to Claude) is jev-cops's reason, the daemon's normalized command and its detail. Headless (`-p` without a permission host), `dontAsk`, `bypassPermissions`: denied. |
+| `deny` | Exit 2: blocked; Claude sees `jev-cops: <reason>`. |
+| `kill` | Blocked with `continue: false`: Claude stops; every later call and prompt of the session is blocked. |
+
+Failures fail closed: a daemon that is down, too slow (13 s), or answers anything but a
+verdict for this call blocks it with `jev-cops: judge unreachable (…)` or `jev-cops: judge
+timeout`. Only `Read`, `Glob`, `Grep` and Claude Code's bookkeeping tools proceed, with a
+warning and a line in `~/.jev-cops/claude-code-hook.log`. Post events never block. A prompt
+the daemon could not record proceeds with a warning; a settings change it could not record
+is blocked.
+
+## Known gaps
+
+`CLAUDE_CODE_GAPS` in `src/gaps.ts` (printed by `cops install claude-code`, and by `cops
+doctor` from M1 step 7), explained in
+[`docs/adapters.md`](../../docs/adapters.md#gaps-cops-doctor-must-print-m1-1). In short:
+a hook that cannot start or is killed lets calls through; without OpenShell every deny is
+best-effort; `policy_settings` changes cannot be blocked; `kill` cannot exit Claude Code;
+`--bare`, `--safe-mode`, `--settings`, `--restricted`, `disableAllHooks` and untrusted
+folders skip hooks (a managed install survives some); `@` references, `EndConversation` and
+`!` commands are never judged; the ask dialog also shows the tool input's own description.
+
+## Appendix: the settings block by hand
+
+`cops install claude-code` writes this. To do it yourself:
 1. Start the daemon (`copsd --enforce`, or leave it in the default `observe` mode to log
    only) and build the hook: `bun run build:hook` → `dist/cops-hook`.
 2. Add this block to `~/.claude/settings.json` (all projects) or a project's
@@ -60,32 +166,3 @@ settings change that drops or alters one of the `PreToolUse`, `PostToolUse`,
 `PostToolUseFailure`, `UserPromptSubmit` or `ConfigChange` entries is blocked and ends the
 session ([intact](../../docs/adapters.md#intact)). An interactive session holds hooks back
 until you accept the folder's workspace trust.
-
-## How verdicts map
-
-| Verdict | In Claude Code |
-|---|---|
-| `allow` | Exit 0, no output: Claude Code's normal permission flow decides. |
-| `annotate` | Exit 0 with `additionalContext`: the note reaches Claude next to the tool result. |
-| `rewrite` | Exit 0 with `updatedInput` and no decision: the pinned input runs, through the normal permission flow. |
-| `hold` | Interactive, in a permission mode that prompts: Claude Code's own ask dialog, whose reason (shown to you, not to Claude) is jev-cops's reason, the daemon's normalized command and its detail. Headless (`-p` without a permission host), `dontAsk`, `bypassPermissions`: denied. |
-| `deny` | Exit 2: blocked; Claude sees `jev-cops: <reason>`. |
-| `kill` | Blocked with `continue: false`: Claude stops; every later call and prompt of the session is blocked. |
-
-Failures fail closed: a daemon that is down, too slow (13 s), or answers anything but a
-verdict for this call blocks it with `jev-cops: judge unreachable (…)` or `jev-cops: judge
-timeout`. Only `Read`, `Glob`, `Grep` and Claude Code's bookkeeping tools proceed, with a
-warning and a line in `~/.jev-cops/claude-code-hook.log`. Post events never block. A prompt
-the daemon could not record proceeds with a warning; a settings change it could not record
-is blocked.
-
-## Known gaps
-
-`CLAUDE_CODE_GAPS` in `src/gaps.ts` (printed by `cops install claude-code` and `jev-cops
-doctor` from M1 steps 6–7), explained in
-[`docs/adapters.md`](../../docs/adapters.md#gaps-cops-doctor-must-print-m1-1). In short:
-a hook that cannot start or is killed lets calls through; without OpenShell every deny is
-best-effort; `policy_settings` changes cannot be blocked; `kill` cannot exit Claude Code;
-`--bare`, `--safe-mode`, `--settings`, `--restricted`, `disableAllHooks` and untrusted
-folders skip hooks (a managed install survives some); `@` references, `EndConversation` and
-`!` commands are never judged; the ask dialog also shows the tool input's own description.

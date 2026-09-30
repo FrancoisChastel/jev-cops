@@ -11,36 +11,31 @@ difference from the spec are in [`docs/adapters.md`](../../docs/adapters.md#pi).
 |---|---|
 | `jev-cops.ts` | The extension. Node built-ins only; this one file is what gets installed. |
 | `pi-types.ts` | The subset of Pi's extension types it uses (type-only import, erased at load). |
-| `install.ts` | `installPiExtension()`: copies the extension into place and prints the known gaps. |
+| `install.ts` | `installPiExtension()` / `uninstallPiExtension()`, behind `cops install pi`: copies the extension into place (or removes it) and prints the known gaps. |
 | `testing/fake-pi.ts` | A fake Pi runner with v0.87.1 semantics, used by the tests. |
 
 ## Install
 
 Start the daemon first (`copsd --enforce`, or leave it in the default `observe` mode to
-log only). Then install the extension using one of these options:
+log only). Then install the extension with the CLI:
 
 ```sh
-# Global: every project (Pi's agent dir, or $PI_CODING_AGENT_DIR)
-mkdir -p ~/.pi/agent/extensions
-cp adapters/pi/jev-cops.ts ~/.pi/agent/extensions/jev-cops.ts
-
-# Project: loads only after you trust the project in Pi
-mkdir -p .pi/extensions && cp adapters/pi/jev-cops.ts .pi/extensions/jev-cops.ts
-
-# One run only
-pi -e adapters/pi/jev-cops.ts
+./dist/cops install pi                    # global: ~/.pi/agent/extensions (or $PI_CODING_AGENT_DIR)
+./dist/cops install pi --project          # <project>/.pi/extensions: loads only after you trust the project
+./dist/cops install pi --socket /run/jev-cops/copsd.sock   # bake the daemon socket into the file
+./dist/cops install pi --dry-run          # where it would go; writes nothing
+./dist/cops install pi --uninstall        # removes the jev-cops extension (and nothing else)
 ```
+
+`--home <dir>` and `--project-dir <dir>` install somewhere else (with `--home`, a
+`PI_CODING_AGENT_DIR` outside it is ignored); `--json` prints one JSON object. Every run
+prints the known gaps below. Exit codes: 0 done, 1 failed (for example an uninstall that
+finds a file that is not the jev-cops extension), 2 usage.
 
 The socket is resolved in this order: a path baked in by the installer, `$JEV_COPS_SOCKET`,
 then `~/.jev-cops/copsd.sock` (the daemon's default). That is the agent socket. The
 daemon's admin socket (`~/.jev-cops/copsd-admin.sock`, budget resets) is for a human's
-shell only: never point the extension at it or mount it into a sandbox. The installer does the copy and the
-baking from code (the `cops install pi` command lands in M1):
-
-```ts
-import { installPiExtension } from "@jev-cops/adapter-pi/install";
-installPiExtension({ global: true, socket: "/run/jev-cops/copsd.sock" });
-```
+shell only: never point the extension at it or mount it into a sandbox.
 
 When you run `pi -p` from a script whose stdin is a pipe, close stdin (`< /dev/null`).
 Otherwise print mode waits on it.
@@ -65,7 +60,7 @@ observe-only events). Post events never block: the extension waits at most 2 s f
 
 ## Known gaps
 
-`installPiExtension` prints these gaps, and `cops doctor` will print them from M1 on
+`cops install pi` prints these gaps, and `cops doctor` will print them from M1 step 7
 (`PI_GAPS` in `install.ts`):
 
 - **No OpenShell.** The agent can edit or delete the extension file, so every deny is
@@ -89,3 +84,24 @@ observe-only events). Post events never block: the extension waits at most 2 s f
   agent from approving, or reading the confirm view of, a hold this extension received,
   but it can post its own judge requests; the admin socket (budget reset, full explain) is
   human-only only when it is not mounted into the sandbox.
+
+## Appendix: install by hand
+
+```sh
+# Global: every project (Pi's agent dir, or $PI_CODING_AGENT_DIR)
+mkdir -p ~/.pi/agent/extensions
+cp adapters/pi/jev-cops.ts ~/.pi/agent/extensions/jev-cops.ts
+
+# Project: loads only after you trust the project in Pi
+mkdir -p .pi/extensions && cp adapters/pi/jev-cops.ts .pi/extensions/jev-cops.ts
+
+# One run only
+pi -e adapters/pi/jev-cops.ts
+```
+
+Or from code, which is what `cops install pi` calls:
+
+```ts
+import { installPiExtension } from "@jev-cops/adapter-pi/install";
+installPiExtension({ global: true, socket: "/run/jev-cops/copsd.sock" });
+```

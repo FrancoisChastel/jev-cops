@@ -70,10 +70,23 @@ Configuration lives in `~/.config/jev-cops/cops.toml` (see `packages/daemon/src/
 for every key and default); a repo-local `.cops.toml` may only tighten it. Judge API keys
 are read from the environment only (`.env.example`).
 
-To try it with [Pi](https://pi.dev), see [adapters/pi/README.md](adapters/pi/README.md); with
-Claude Code (manual settings block until `cops install` lands), see
-[adapters/claude-code/README.md](adapters/claude-code/README.md).
-`cops install <harness>` and `cops doctor` arrive with M1.
+### Install for Claude Code / Pi
+
+Start the daemon, then register jev-cops with the harness:
+
+```bash
+./dist/copsd --enforce &                     # while copsd is down the hook blocks non-read calls
+./dist/cops install claude-code --dry-run    # the settings diff, nothing written
+./dist/cops install claude-code              # ~/.claude/settings.json; --project, --local, --managed
+./dist/cops install pi                       # ~/.pi/agent/extensions/jev-cops.ts; --project
+```
+
+`cops install claude-code` merges the hook into Claude Code's settings (with a backup),
+refuses on a bare `Bash` allow rule (the spec's rule) or `disableAllHooks` (`--force`
+overrides), records the hook binary in `cops.toml`, and runs a canary through the installed
+hook. Both installers print every known gap, and `--uninstall` removes only what they
+added. Details: [adapters/claude-code/README.md](adapters/claude-code/README.md),
+[adapters/pi/README.md](adapters/pi/README.md). `cops doctor` arrives with M1 step 7.
 
 ## Writing a policy
 

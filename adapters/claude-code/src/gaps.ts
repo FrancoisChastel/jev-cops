@@ -21,4 +21,6 @@ export const CLAUDE_CODE_GAPS: readonly string[] = [
   "A denied call produces no post event: Claude Code fires no PostToolUseFailure for a permission denial.",
   "`harness_version` is the `claude --version` recorded in ~/.jev-cops/claude-code.json by install or doctor; it is omitted until then (Claude Code gives hooks no version).",
   "Windows paths (backslash separators) are passed through unnormalized in M1.",
+  "A managed install (`managed-settings.d/50-jev-cops.json`) is skipped without a warning when server-managed settings or an MDM profile supply the managed policy (default `managedSourcesBehavior` first-wins); `/status` names the source Claude Code applies.",
+  "With `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` (v2.1.251+) hooks do not see `CLAUDE_CONFIG_DIR`, so the ConfigChange check looks for user settings in ~/.claude: a user install under `CLAUDE_CONFIG_DIR` then fails closed on every settings change (blocked, session latched).",
 ];

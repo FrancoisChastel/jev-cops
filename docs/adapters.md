@@ -26,6 +26,12 @@ Real runs used the locally installed Pi **0.83.0**; see
   - `~/.pi/agent/extensions/`, or `$PI_CODING_AGENT_DIR/extensions/` (user);
   - `<cwd>/.pi/extensions/` (project; it loads **only after project trust** is granted);
   - `pi -e <path>` (explicit; still loads under `--no-extensions`).
+- `cops install pi` (M1 step 6) copies it, global by default (`--project` for
+  `<cwd>/.pi/extensions/`), with `--socket` baked in, `--dry-run` and `--uninstall` (which
+  deletes only a file carrying the extension's `INSTALLED_SOCKET` line). The compiled
+  `dist/cops` reads the extension from `dist/../adapters/pi/jev-cops.ts`: Bun keys its
+  module cache by path, so a text import of the same file would collide with its module
+  import.
 - The installed extension is one file. `pi-types.ts` is imported with `import type` only,
   and jiti erases that import. Verified on 0.83.0: a type-only import of a missing file
   loads, while a runtime import of a missing file fails with "Cannot find module".
@@ -139,7 +145,7 @@ model reads it; a failure only warns.
 
 ### Gaps `cops doctor` must print (M1)
 
-These are the `PI_GAPS` strings in `adapters/pi/install.ts`, which the installer already
+These are the `PI_GAPS` strings in `adapters/pi/install.ts`, which `cops install pi`
 prints:
 
 - **Without OpenShell, every deny is best-effort.** The agent can edit or delete the
@@ -192,13 +198,17 @@ human resets a budget.
 
 ## Claude Code
 
-Built in M1 steps 4–5 (`adapters/claude-code`, `cops hook`, `dist/cops-hook`).
+Built in M1 steps 4–6 (`adapters/claude-code`, `cops hook`, `dist/cops-hook`, `cops install
+claude-code`).
 Verified on 2026-09-29 against the Claude Code docs for **v2.1.285**
 (`code.claude.com/docs/en/{hooks,hooks-guide,settings,permissions,permission-modes,managed-settings,headless,cli-reference,tools-reference,sub-agents,env-vars}`,
 re-fetched for this step and unchanged since the M1 plan) and against a real **claude
 2.1.280** whose model calls were scripted by a local fake Anthropic Messages API (Claude
 Code, its hook runner and the hook were real; see [Verified live](#verified-live)).
-`install claude-code`, `doctor` and a captured real-model run are M1 steps 6–9.
+`doctor` and a captured real-model run are M1 steps 7–9. The installer's docs were
+re-checked on 2026-09-29 (settings, settings-reference, hooks, permissions,
+managed-settings, env-vars; changelog head still v2.1.285): see [Install](#install) and
+[Docs drift found for the installer](#docs-drift-found-for-the-installer).
 
 ### Entry and registration
 
@@ -212,13 +222,12 @@ and `SessionEnd`, with no matcher:
   "timeout": 30 }
 ```
 
-- `dist/cops-hook` (`bun run build:hook`) is a separate lean binary: 124 modules, no
+- `dist/cops-hook` (`bun run build:hook`) is a separate lean binary: 126 modules, no
   tree-sitter, no WASM; `cops hook --harness claude-code` runs the same code from the full
   CLI. `--harness pi` is refused (Pi runs an extension).
 - The socket is an argument (default `~/.jev-cops/copsd.sock`), never an environment
   variable. `JEV_COPS_HOOK_DEADLINE_MS` can only lower the hook's deadlines (drills, tests).
-- Timeouts registered by the installer (step 6): `PreToolUse` 30 s, post events 15 s, the
-  others 10 s. The hook's own deadlines are 13 s for `PreToolUse` (the daemon's 12 s + 1 s)
+- Timeouts the installer registers: `PreToolUse` 30 s, post events 15 s, the others 10 s. The hook's own deadlines are 13 s for `PreToolUse` (the daemon's 12 s + 1 s)
   and 5 s for the rest, 2 s per short request, so Claude Code's timeout, which lets the call
   proceed, never fires first.
 - Cold start of the compiled binary on a benign call (daemon answering allow, macOS arm64):
@@ -307,9 +316,12 @@ resolving (after `${CLAUDE_PROJECT_DIR}`, `PATH` and symlinks) to the running ex
 the same leading arguments (the script under `bun`, `hook` under the CLI), `--harness
 claude-code`, the same socket, no `if`, not `async`/`asyncRewake`, and a `timeout` absent
 or at least 14 s (`PreToolUse`) or 6 s (the rest), so the hook's own deadline comes first.
-An HTTP post handler (`--transport http`, step 6) does not count: the hook cannot tell the
-daemon's loopback port from a decoy's, so such a change could blind the taint feed while
-looking intact (found in review); step 6 has to hand the daemon's URL to the hook first.
+An HTTP post handler counts only for a hook started with `--http-url <url>` (what
+`cops install claude-code --transport http` registers on every command entry), only on
+`PostToolUse`/`PostToolUseFailure`, and only when its `url` is exactly that URL +
+`/v1/hooks/claude-code`: the hook cannot tell the daemon's loopback port from a decoy's, so
+it trusts only the URL its own entry was installed with, and an entry whose `--http-url`
+differs from the running hook's is not this hook (found in review; closed in step 6).
 And nothing switches it off: `disableAllHooks` in any file
 disables a non-managed install, `allowManagedHooksOnly` in managed settings does too, and
 managed `disableAllHooks` disables everything. A changed file that is not valid JSON is not
@@ -381,10 +393,101 @@ interactive `ask` dialog text and its rendering of newlines, `auto` mode's class
 hook `ask` (what Claude reads if the classifier denies), `ConfigChange` firing on a real
 settings edit, SDK / VS Code argv (row 10), and `stopReason` display.
 
+### Install
+
+`cops install claude-code` (M1 step 6; adapter `src/install.ts`, `src/refusals.ts`, CLI
+`packages/cli/src/commands/install*.ts`; usage in the
+[adapter README](../adapters/claude-code/README.md#install)):
+
+- **Scopes.** `--user` (default: `$CLAUDE_CONFIG_DIR/settings.json` or
+  `~/.claude/settings.json`), `--project` (`.claude/settings.json`), `--local`
+  (`.claude/settings.local.json`), `--managed` (`<managed dir>/managed-settings.d/50-jev-cops.json`;
+  root only, else the JSON and path are printed and the exit code is 1; never sudo; no
+  cops.toml or state file written in a home directory).
+- **Entries.** One group per event of `PreToolUse`, `PostToolUse`, `PostToolUseFailure`,
+  `UserPromptSubmit`, `ConfigChange`, `SessionStart`, `SessionEnd`; no matcher; exec form
+  (`command` + `args: ["--harness", "claude-code", "--socket", <socket>]`); timeouts 30 / 15 /
+  15 / 10 / 10 / 10 / 10 s. They pass the ConfigChange [intact](#intact) check by
+  construction (a test runs `checkIntact` over the written files). With `--transport http`
+  the two post events are `{ "type": "http", "url": "<daemon>/v1/hooks/claude-code",
+  "timeout": 15 }` and every command entry also carries `--http-url <daemon>`.
+- **Merge.** Handlers the installer owns (a `cops-hook`, `cops hook` or `…/hook-main.ts`
+  command for `--harness claude-code`, the `--hook-binary` path, shell-form leftovers, HTTP
+  hooks to `/v1/hooks/claude-code`) are removed first, then one fresh group per event is
+  appended. Nothing else changes (key order, foreign hooks, unknown keys); the file keeps its
+  indentation. Same entries twice = `unchanged`, no write.
+- **Write.** Temp file + rename in the same directory; the previous file is copied to
+  `<file>.jev-cops-<UTC>.bak` (0600) first; user and local files are 0600 (their new
+  directory 0700 / 0755), project and managed 0644. A failed rename leaves the old file.
+- **Refusals** (exit 1, nothing written; `--force` turns each into a `FORCED:` warning and
+  lists it in the result): a bare `Bash`, `Bash(*)`, `Bash(:*)`, `PowerShell`, `PowerShell(*)`
+  or `Monitor` allow rule in any settings file; `disableAllHooks` true in a non-managed file
+  (non-managed install) or in managed settings (any install); `allowManagedHooksOnly` in
+  managed settings (non-managed install); `--transport http` without an `allowedHttpHookUrls`
+  entry that admits the URL when any file defines that key (`*` wildcard; an invalid list
+  admits nothing). `--transport http` without `[daemon] http` (or with port 0) cannot be
+  forced.
+- **Warnings** (never refuse): `permissions.defaultMode` `bypassPermissions`/`dontAsk` (holds
+  become denies); an untrusted workspace (`projects[<git root or folder>].hasTrustDialogAccepted`
+  in `~/.claude.json`); a project/local install below the repository root; unreadable
+  settings files; `CLAUDE_CONFIG_DIR` (see drift below); for `--managed`, the first-wins rule
+  and a hook binary that is not root-owned and locked; when forced, that the ConfigChange
+  check would not find the hook intact. Always: `--dangerously-skip-permissions` is out of
+  scope for the hook (OpenShell, M2), and "Without OpenShell, every deny is best-effort"
+  (spec §OpenShell). Then every `CLAUDE_CODE_GAPS` string.
+- **Hook binary.** `--hook-binary`, else `cops-hook` next to the running `cops` (the repo's
+  `dist/cops-hook` when `cops` runs from source), else on `PATH`. It must exist, be
+  executable, and `cops-hook --version` must print `cops --version` (plan §5 row 1).
+- **Records.** `[daemon] hook_binary = "<abs path>"` in `--config` or
+  `~/.config/jev-cops/cops.toml` (a line-level edit verified by re-parsing; a dotted
+  `daemon.*` key or an inline `daemon = {…}` table is left to a human), so copsd protects the
+  binary (D-082); `~/.jev-cops/claude-code.json` = `{ claude_version, installed_at, scope,
+  settings_path, hook_binary, socket }`, `claude_version` from `claude --version` run with the
+  install's `HOME` (null when `claude` is not on `PATH`).
+- **Canary.** `runOfflineCanary` (`src/canary.ts`, shared with `cops doctor`) spawns the
+  `PreToolUse` entry read back from the written file, with `HOME` and `PATH` only: `Bash`
+  `true` → exit 0, no output; `Write` of `<home>/.claude/settings.json` → exit 2, JSON deny,
+  `continue: false`, each under its own throw-away `jev-cops-canary-*` session (the write's
+  session stays latched). Outcomes: `ok`; `observe` (exit 0 with "would have: kill");
+  `unreachable` (the hook failed closed: "daemon not reachable: the hook will block every
+  non-read call until copsd runs (fail closed)", exit 0); `failed` (exit 1, and the settings,
+  cops.toml and state are restored).
+- **Uninstall.** Removes the installer-owned handlers, the groups and event arrays they
+  emptied and a `hooks` object left empty; a file left as `{}` is deleted (its backup
+  stays); the state file goes when it names that settings file; `[daemon] hook_binary`
+  stays in cops.toml. Works when cops.toml does not load.
+- **Test safety.** Home, project, managed directory, platform, uid, process runner and file
+  system are injected; `os.homedir()` is read only in `processContext()` (a test fails if
+  another install module mentions it). `--home <dir>` drops `CLAUDE_CONFIG_DIR`,
+  `PI_CODING_AGENT_DIR` and `JEV_COPS_CONFIG` when they point outside it.
+
+`cops install pi` wraps `installPiExtension` with the same `--home`, `--project-dir`,
+`--socket`, `--dry-run`, `--uninstall` and `--json` conventions (`--global` is the default,
+`--project` the alternative) and prints `PI_GAPS`.
+
+### Docs drift found for the installer
+
+Re-read on 2026-09-29 against the current `settings`, `settings-reference`, `hooks`,
+`permissions`, `managed-settings` and `env-vars` pages (Claude Code changelog head v2.1.285,
+unchanged). Differences from PLAN-M1 §2 and what was built on it:
+
+| # | Fact (docs today) | Consequence |
+|---|---|---|
+| 34 | managed-settings#how-claude-code-combines-managed-sources: under the default `managedSourcesBehavior` `"first-wins"`, "Claude Code uses the highest-ranked source that delivers at least one policy key and ignores the rest" (remote/server-managed, then MDM, then the files); "Claude Code shows no warning for the sources it skips". | A `--managed` drop-in is silently skipped on a machine that also gets server-managed settings or an MDM policy. The installer warns; `/status` names the source in use; doctor should check it. |
+| 35 | managed-settings#split-a-file-based-policy-across-teams: `managed-settings.json` first, then `managed-settings.d/*.json` "in alphabetical order"; "ignores hidden files"; lists combine with duplicates removed. A managed or drop-in file that is not a JSON object makes Claude Code refuse to start. | `settingsFiles()` now skips hidden drop-ins (the ConfigChange check read them). The drop-in name `50-jev-cops.json` sorts after lower-numbered team files; hooks lists merge. |
+| 36 | hooks#disable-or-remove-hooks: "Claude Code reads the value left after settings precedence applies, so a `"disableAllHooks": false` in a project's `.claude/settings.json` overrides a `true` in your user settings." | The intact check and the installer treat `true` in any non-managed file as disabling (stricter than the docs): a `true` a higher file overrides still refuses the install. Kept on purpose. |
+| 37 | env-vars `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`: "On v2.1.251 or later, the scrub also removes Claude Code's own configuration-store pointer variables (such as `CLAUDE_CONFIG_DIR`)" from hooks. | A hook under the scrub cannot find `$CLAUDE_CONFIG_DIR/settings.json`, so its ConfigChange check would see no cops hook and block every settings change. The installer warns whenever `CLAUDE_CONFIG_DIR` is set. |
+| 38 | settings: "If you start Claude Code in a subdirectory of a git repository, it reads and writes [`settings.local.json`] at the repository root"; trust is keyed on the repository root. | `--project`/`--local` below the repository root warn and name `--project-dir <root>`. |
+| 39 | settings-reference#permissions-defaultmode: `auto` and `bypassPermissions` "don't take effect from project or local settings" (v2.1.257+); `"manual"` is an alias for `"default"` (v2.1.200+). | The installer still warns for `bypassPermissions`/`dontAsk` in any file (conservative). The hook's `permission_mode` input lists no `manual`; doctor should treat it as `default` if it appears. |
+| 40 | permissions#project-allow-rules-and-workspace-trust: project `permissions.allow` rules apply only after workspace trust; a tracked `settings.local.json` needs trust too. | A bare `Bash` rule in an untrusted project still refuses the install (it applies once the folder is trusted). |
+| 41 | permissions: "`Bash(*)` is equivalent to `Bash`"; "a bare `PowerShell` or `PowerShell(*)` matches every command"; the `:*` suffix equals a trailing ` *`. | The refusal matches those forms (and `Monitor`, which the normalizer treats as Bash, D-071). |
+| 42 | settings-reference#allowedhttphookurls: "array of URL patterns, with `*` as a wildcard", "Arrays merge across settings files"; managed-settings: an invalid managed list is an empty managed allowlist while other files' entries still apply. | The HTTP refusal merges every file's list and matches `*` as "anything". |
+| 43 | The docs do not say where `~/.claude.json` lives when `CLAUDE_CONFIG_DIR` is set. | Trust is read from `$CLAUDE_CONFIG_DIR/.claude.json`, then `~/.claude.json` (unverified). |
+
 ### Gaps `cops doctor` must print (M1)
 
-These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`; install
-(step 6) and doctor (step 7) print them:
+These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`;
+`cops install claude-code` prints them, and doctor (step 7) will:
 
 - **A hook that cannot start is a non-blocking error.** A missing, non-executable or
   mistyped binary lets every call through; doctor checks the path and runs a canary.
@@ -419,6 +522,10 @@ These are the `CLAUDE_CODE_GAPS` strings in `adapters/claude-code/src/gaps.ts`; 
 - **Denied calls produce no post event.**
 - **`harness_version` needs `~/.jev-cops/claude-code.json`** (install/doctor); omitted until then.
 - **Windows backslash paths are not normalized in M1.**
+- **A managed install can be skipped silently** when server-managed settings or an MDM
+  profile supply the managed policy (first-wins, drift row 34).
+- **`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` hides `CLAUDE_CONFIG_DIR` from hooks** (drift row
+  37): a user install under it fails closed on every settings change.
 
 ## Codex
 
