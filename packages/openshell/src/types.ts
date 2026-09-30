@@ -20,6 +20,18 @@ export interface FragmentReport {
   readonly refusals: readonly string[];
 }
 
+/**
+ * One `openshell policy update <sandbox> --rule-name <r> --binary <b>… --add-endpoint <e>`
+ * (main.rs:2106-2166). One endpoint per call: `--rule-name` "is only supported when exactly
+ * one --add-endpoint is provided" (crates/openshell-cli/src/policy_update.rs:82-86).
+ */
+export interface PolicyUpdate {
+  readonly ruleName: string;
+  /** `host:port[:access[:protocol[:enforcement]]]` (policy_update.rs:418-483). */
+  readonly addEndpoint: string;
+  readonly binaries: readonly string[];
+}
+
 /** `path` equals `root` or lies below it (plain string paths, no normalisation). */
 export function isUnder(path: string, root: string): boolean {
   if (root === "/") return path.startsWith("/");
