@@ -15,9 +15,10 @@ not the command string.
 > **Status: M0 complete and gate-reviewed.** Core, policy engine, SDK,
 > starter policies, judge providers, daemon, CLI and the **Pi adapter** are built and
 > tested; a real `pi` run blocks and rewrites tool calls end to end
-> ([capture](docs/captures/pi-m0.md)). **M1 in progress:** the Claude Code command hook is
-> built and verified against the real `claude` binary; `cops install`/`doctor` come
-> next. Codex and OpenCode in M3. Not production-ready yet: see [docs/STATUS.md](docs/STATUS.md).
+> ([capture](docs/captures/pi-m0.md)). **M1 in progress:** the Claude Code command hook,
+> `cops install claude-code` and `cops doctor` are built and verified against the real
+> `claude` binary, interactive and headless ([capture](docs/captures/claude-code-m1.md)).
+> Codex and OpenCode in M3. Not production-ready yet: see [docs/STATUS.md](docs/STATUS.md).
 
 ## How it works
 
@@ -52,7 +53,7 @@ Requires [Bun](https://bun.sh) ≥ 1.3. Node is not a supported runtime.
 ```bash
 git clone https://github.com/FrancoisChastel/jev-cops && cd jev-cops
 bun install
-bun run check          # lint + typecheck + 2600 tests
+bun run check          # lint + typecheck + 2950 tests
 bun run gate           # cops test: every starter policy against its fixtures
 bun run build          # dist/copsd, dist/cops, dist/cops-hook (WASM grammar embedded)
 ```
@@ -72,21 +73,25 @@ are read from the environment only (`.env.example`).
 
 ### Install for Claude Code / Pi
 
-Start the daemon, then register jev-cops with the harness:
+Start the daemon, register jev-cops with the harness, then check the whole chain:
 
 ```bash
 ./dist/copsd --enforce &                     # while copsd is down the hook blocks non-read calls
 ./dist/cops install claude-code --dry-run    # the settings diff, nothing written
 ./dist/cops install claude-code              # ~/.claude/settings.json; --project, --local, --managed
 ./dist/cops install pi                       # ~/.pi/agent/extensions/jev-cops.ts; --project
+./dist/cops doctor                           # read-only: daemon, audit chain, hooks, canary, gaps
 ```
 
 `cops install claude-code` merges the hook into Claude Code's settings (with a backup),
 refuses on a bare `Bash` allow rule (the spec's rule) or `disableAllHooks` (`--force`
 overrides), records the hook binary in `cops.toml`, and runs a canary through the installed
 hook. Both installers print every known gap, and `--uninstall` removes only what they
-added. Details: [adapters/claude-code/README.md](adapters/claude-code/README.md),
-[adapters/pi/README.md](adapters/pi/README.md). `cops doctor` arrives with M1 step 7.
+added. `cops doctor` checks copsd on both sockets, the audit chain, each harness's install
+(hook in force on every event, binary, socket, risky settings, workspace trust), runs the
+same canary through the registered hook, and prints every gap it cannot close; it exits 1
+on any failure. Details: [adapters/claude-code/README.md](adapters/claude-code/README.md),
+[adapters/pi/README.md](adapters/pi/README.md).
 
 ## Writing a policy
 
@@ -121,7 +126,7 @@ packages/core       event schema, normalizer, context engine, judge interface, p
 packages/sdk        definePolicy, question builders, fixture runner  (@jev-cops/sdk)
 packages/judge      semantic judge providers: TypeSafe Jev, OpenRouter, Vercel AI SDK
 packages/daemon     copsd: socket + loopback HTTP, SQLite stores, hash-chained audit log
-packages/cli        cops test | explain | replay | budget   (install, doctor: M1)
+packages/cli        cops test | explain | replay | budget | install | doctor | hook
 adapters/           pi (M0) · claude-code command hook (M1) · codex, opencode (M3)
 policies/           starter policy set, one *.fixtures.json per policy
 tests/tamper        T1–T13 anti-tamper acceptance tests (see tests/tamper/README.md)

@@ -17,7 +17,7 @@ import type { ClaudeCodePostInput, PreToolUseInput, SessionInput } from "./paylo
 
 /** What the hook knows beyond the payload. */
 export interface MapContext {
-  /** `claude --version` as install/doctor recorded it; null when unknown (then omitted). */
+  /** `claude --version` as `cops install` recorded it (D-092); null when unknown (then omitted). */
   readonly harnessVersion: string | null;
   /** Interactive unless the parent `claude` runs headless (see mode.ts). */
   readonly mode: SessionMode;

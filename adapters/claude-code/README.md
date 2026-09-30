@@ -4,9 +4,12 @@ The jev-cops command hook for [Claude Code](https://code.claude.com). Claude Cod
 every tool call, prompt, settings change and session start/end; it forwards each to
 `copsd` as a canonical `jev-cops.event/1` event or `jev-cops.session/1` report, maps the
 verdict back onto Claude Code's hook contract, and fails closed. It contains no policy.
-Verified against the Claude Code docs for v2.1.285 and a real `claude` 2.1.280; the full
+Verified against the Claude Code docs for v2.1.285, a real interactive `claude` 2.1.280 and
+Agent SDK 0.3.285 runs ([live capture](../../docs/captures/claude-code-m1.md)); the full
 contract, every difference from the spec and the gap list are in
 [`docs/adapters.md`](../../docs/adapters.md#claude-code).
+
+In short: build, start `copsd`, run `cops install claude-code`, then `cops doctor`.
 
 | File | What it is |
 |---|---|
@@ -21,7 +24,7 @@ contract, every difference from the spec and the gap list are in
 | `src/gaps.ts` | `CLAUDE_CODE_GAPS`, printed by install and doctor. |
 | `src/install.ts`, `src/refusals.ts` | `cops install claude-code`, the settings half: scopes, refusals, warnings, merge, write, uninstall, rollback. |
 | `src/hook-entries.ts`, `src/settings-merge.ts`, `src/settings-io.ts` | The entries it registers, the pure merge/strip, the atomic write with backup. |
-| `src/canary.ts` | `runOfflineCanary`: the hook run exactly as registered on two synthetic calls (install and doctor). |
+| `src/canary.ts` | `runOfflineCanary`: the hook run exactly as registered on two synthetic calls; the one canary of `cops install` and `cops doctor`. |
 | `src/hook-binary.ts`, `src/install-state.ts`, `src/spawn.ts` | The hook binary checks, `~/.jev-cops/claude-code.json`, a never-throwing process runner. |
 | `testing/fake-claude.ts` | A fake Claude Code with the documented exit-code and JSON semantics, used by the tests. |
 
@@ -32,6 +35,11 @@ contract, every difference from the spec and the gap list are in
    log only.
 2. Register the hook: `./dist/cops install claude-code` (see what it would change first with
    `--dry-run`).
+3. Check it: `./dist/cops doctor` (read-only; `--harness claude-code` to skip Pi). It checks
+   copsd on both sockets, the audit chain, the `claude` version, that the hook is in force on
+   every event it needs, the binary, the socket, risky settings and workspace trust, runs the
+   same canary as the install through the registered entry, and prints every known gap. Exit
+   1 on any failure.
 
 ```sh
 ./dist/cops install claude-code                  # ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR)
@@ -104,7 +112,7 @@ session ([intact](../../docs/adapters.md#intact)): uninstall with `cops install 
 | `allow` | Exit 0, no output: Claude Code's normal permission flow decides. |
 | `annotate` | Exit 0 with `additionalContext`: the note reaches Claude next to the tool result. |
 | `rewrite` | Exit 0 with `updatedInput` and no decision: the pinned input runs, through the normal permission flow. |
-| `hold` | Interactive, in a permission mode that prompts: Claude Code's own ask dialog, whose reason (shown to you, not to Claude) is jev-cops's reason, the daemon's normalized command and its detail. Headless (`-p` without a permission host), `dontAsk`, `bypassPermissions`: denied. |
+| `hold` | Interactive, in a permission mode that prompts: Claude Code's own ask dialog, whose reason (shown to you, not to Claude) is jev-cops's reason, the daemon's normalized command and its detail. Headless (`-p`, or the Agent SDK, without a permission host), `dontAsk`, `bypassPermissions`: denied. With an SDK `canUseTool` host, the host receives the ask. |
 | `deny` | Exit 2: blocked; Claude sees `jev-cops: <reason>`. |
 | `kill` | Blocked with `continue: false`: Claude stops; every later call and prompt of the session is blocked. |
 
@@ -117,14 +125,15 @@ is blocked.
 
 ## Known gaps
 
-`CLAUDE_CODE_GAPS` in `src/gaps.ts` (printed by `cops install claude-code`, and by `cops
-doctor` from M1 step 7), explained in
+`CLAUDE_CODE_GAPS` in `src/gaps.ts` (printed by `cops install claude-code` and `cops
+doctor`), explained in
 [`docs/adapters.md`](../../docs/adapters.md#gaps-cops-doctor-must-print-m1-1). In short:
 a hook that cannot start or is killed lets calls through; without OpenShell every deny is
 best-effort; `policy_settings` changes cannot be blocked; `kill` cannot exit Claude Code;
 `--bare`, `--safe-mode`, `--settings`, `--restricted`, `disableAllHooks` and untrusted
 folders skip hooks (a managed install survives some); `@` references, `EndConversation` and
-`!` commands are never judged; the ask dialog also shows the tool input's own description.
+`!` commands are never judged; the ask dialog also shows the tool input's own description;
+the ask's text is kept in the session transcript, which the agent can read.
 
 ## Appendix: the settings block by hand
 

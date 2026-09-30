@@ -20,7 +20,7 @@ function withState(content: string | null): string {
   return home;
 }
 
-describe("readHarnessVersion (claude --version as install/doctor recorded it)", () => {
+describe("readHarnessVersion (claude --version as cops install recorded it)", () => {
   test("reads a recorded version", () => {
     const h = withState(JSON.stringify({ claude_version: "2.1.285" }));
     expect(readHarnessVersion(h)).toBe("2.1.285");
