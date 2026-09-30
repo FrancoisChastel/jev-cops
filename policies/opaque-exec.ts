@@ -75,7 +75,6 @@ export default definePolicy({
   detail: (e, ctx) =>
     [
       `opaque: ${why(e, ctx).join(", ")}`,
-      `taint fraction ${ctx.taint.fraction.toFixed(2)}`,
       `inner delete/net/privilege: ${dangerousInner(e) || e.verbs.includes("privilege")}`,
     ].join("; "),
   range: ["annotate", "hold"],

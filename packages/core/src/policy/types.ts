@@ -203,7 +203,11 @@ export interface PolicyDefinition<Q extends readonly Question[] = readonly Quest
   decide(e: PolicyEvent, ctx: PolicyContext, a: AnswersFor<Q>): Verdict;
   /** One sentence, safe to show the agent. */
   readonly reason: string | PolicyFn<Q, string>;
-  /** For the human only; never reaches the harness. */
+  /**
+   * For the human only; never reaches the harness. Plain language, no score: on a hold it
+   * is the confirm prompt's own line, which can land where the agent reads it (Claude
+   * Code's session transcript); features, taint and risk are in the engine's detail.
+   */
   detail?(e: PolicyEvent, ctx: PolicyContext, a: AnswersFor<Q>): string;
   /** `updated_input` for a `rewrite`; null means no rewrite is possible. */
   rewrite?(e: PolicyEvent, ctx: PolicyContext, a: AnswersFor<Q>): Record<string, unknown> | null;

@@ -41,7 +41,7 @@ export default definePolicy({
   detail: (e, ctx) => {
     const tainted = taintedTargets(e, ctx);
     const list = tainted.length > 0 ? tainted.join(", ") : "none above the deny threshold";
-    return `taint fraction ${ctx.taint.fraction.toFixed(2)}; tainted targets: ${list}`;
+    return `tainted targets: ${list}`;
   },
   range: ["hold", "deny"],
 });
