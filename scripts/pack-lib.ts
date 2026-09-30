@@ -32,6 +32,17 @@ export const PUBLISH_ORDER: readonly string[] = [
   "jev-cops",
 ];
 
+/**
+ * Published packages that `bun add -g jev-cops` does not install, each with the reason. Every
+ * other published package must be reached from the `jev-cops` meta package through
+ * dependencies ({@link metaPackageProblems}), so nothing ships to npm unused by accident, and
+ * a package listed here that the meta package does reach is a problem too (a stale entry).
+ */
+export const NOT_IN_META: Readonly<Record<string, string>> = Object.freeze({
+  "@jev-cops/scanner":
+    "published for the setup track: nothing jev-cops installs imports it until the daemon wires it in (PLAN-SETUP S2); the meta package depends on it from then on",
+});
+
 /** The fields of a package.json the rules read. */
 export interface Manifest {
   readonly name: string;
@@ -116,6 +127,54 @@ export function publishOrderProblems(
       if (at >= 0 && names.has(dep) && depAt > at) {
         problems.push(`${p.manifest.name} is published before its dependency ${dep}`);
       }
+    }
+  }
+  return problems;
+}
+
+/** Each package the meta package installs, with the package that pulls it in. */
+function installedBy(
+  pkgs: readonly WorkspacePackage[],
+  meta: WorkspacePackage,
+): Map<string, string> {
+  const byName = new Map(pkgs.map((p) => [p.manifest.name, p]));
+  const via = new Map<string, string>([[meta.manifest.name, meta.manifest.name]]);
+  const queue = [meta];
+  for (let p = queue.shift(); p !== undefined; p = queue.shift()) {
+    for (const dep of Object.keys(p.manifest.dependencies ?? {})) {
+      const next = byName.get(dep);
+      if (next === undefined || via.has(dep)) continue;
+      via.set(dep, p.manifest.name);
+      queue.push(next);
+    }
+  }
+  return via;
+}
+
+/**
+ * Published packages the `jev-cops` meta package does not install that {@link NOT_IN_META}
+ * does not name, and names in it that the meta package installs after all.
+ */
+export function metaPackageProblems(
+  pkgs: readonly WorkspacePackage[],
+  order: readonly string[] = PUBLISH_ORDER,
+  standalone: Readonly<Record<string, string>> = NOT_IN_META,
+): string[] {
+  const meta = pkgs.find((p) => p.manifest.name === "jev-cops");
+  if (meta === undefined) return ["no jev-cops package in the workspace"];
+  const via = installedBy(pkgs, meta);
+  const problems = order
+    .filter((name) => !via.has(name) && !Object.hasOwn(standalone, name))
+    .map(
+      (name) =>
+        `${name} is published but jev-cops does not install it: add it to the jev-cops package's dependencies, or to NOT_IN_META (scripts/pack-lib.ts) with the reason`,
+    );
+  for (const name of Object.keys(standalone)) {
+    const parent = via.get(name);
+    if (parent !== undefined) {
+      problems.push(
+        `${name} is in NOT_IN_META but jev-cops installs it (through ${parent}): drop it from NOT_IN_META`,
+      );
     }
   }
   return problems;
@@ -412,7 +471,7 @@ export interface PackedPackage {
  */
 export async function packAll(dest: string, repo: string = REPO): Promise<PackedPackage[]> {
   const all = workspacePackages(repo);
-  const orderProblems = publishOrderProblems(all);
+  const orderProblems = [...publishOrderProblems(all), ...metaPackageProblems(all)];
   if (orderProblems.length > 0) throw new Error(orderProblems.join("\n"));
   const version = releaseVersion(all);
   const internal = new Set(all.map((p) => p.manifest.name));

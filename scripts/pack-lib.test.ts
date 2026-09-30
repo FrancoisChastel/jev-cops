@@ -8,6 +8,8 @@ import {
   importProblems,
   type Manifest,
   manifestProblems,
+  metaPackageProblems,
+  NOT_IN_META,
   type PackedPackage,
   PUBLISH_ORDER,
   packAll,
@@ -145,6 +147,41 @@ describe("publish order", () => {
     expect(publishable(pkgs).map((p) => p.manifest.name)).toEqual(["@jev-cops/core", "jev-cops"]);
     expect(releaseVersion(pkgs)).toBe("1.0.0");
     expect(() => releaseVersion([pkg("other")])).toThrow("no jev-cops package");
+  });
+});
+
+describe("what `bun add -g jev-cops` installs", () => {
+  const pkg = (name: string, deps: Record<string, string> = {}): WorkspacePackage => ({
+    dir: `packages/${name}`,
+    manifest: { name, version: "1.0.0", dependencies: deps },
+  });
+
+  test("every published package is installed with jev-cops, except those NOT_IN_META names", () => {
+    expect(metaPackageProblems(workspacePackages())).toEqual([]);
+    // Nothing installed imports the scanner yet: the daemon wires it in at PLAN-SETUP S2.
+    expect(Object.keys(NOT_IN_META)).toEqual(["@jev-cops/scanner"]);
+    const meta = workspacePackages().find((p) => p.manifest.name === "jev-cops");
+    expect(meta?.manifest.dependencies).not.toHaveProperty("@jev-cops/scanner");
+  });
+
+  test("a package nothing installs, and a NOT_IN_META entry that is installed after all", () => {
+    const pkgs = [
+      pkg("jev-cops", { "@jev-cops/a": "workspace:*" }),
+      pkg("@jev-cops/a", { "@jev-cops/b": "workspace:*" }),
+      pkg("@jev-cops/b"),
+      pkg("@jev-cops/lonely"),
+      pkg("@jev-cops/standalone"),
+    ];
+    const order = pkgs.map((p) => p.manifest.name);
+    expect(
+      metaPackageProblems(pkgs, order, { "@jev-cops/standalone": "why", "@jev-cops/b": "old" }),
+    ).toEqual([
+      "@jev-cops/lonely is published but jev-cops does not install it: add it to the jev-cops package's dependencies, or to NOT_IN_META (scripts/pack-lib.ts) with the reason",
+      "@jev-cops/b is in NOT_IN_META but jev-cops installs it (through @jev-cops/a): drop it from NOT_IN_META",
+    ]);
+    expect(metaPackageProblems([pkg("x")], ["x"], {})).toEqual([
+      "no jev-cops package in the workspace",
+    ]);
   });
 });
 
