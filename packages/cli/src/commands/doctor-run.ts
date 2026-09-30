@@ -106,10 +106,18 @@ function configPart(o: DoctorOptions, e: DoctorEnv): { check: Check; paths: Daem
   }
 }
 
+/** Matchers under which Claude Code sends every tool to a PreToolUse group. */
+const MATCH_ALL: ReadonlySet<unknown> = new Set([undefined, "", "*"]);
+
+/**
+ * The PreToolUse hooks to run the canary through: exec form and in a group matching every
+ * tool, since Claude Code would never send a `Write` to a hook scoped to other tools.
+ */
 function canaryHooks(f: HookFacts, e: DoctorEnv): { hook: CanaryHook; socket: string | null }[] {
   const seen = new Set<string>();
   return f.cops.flatMap(({ ref, form }) => {
-    if (form !== "exec" || ref.event !== "PreToolUse") return [];
+    if (form !== "exec" || ref.event !== "PreToolUse" || !MATCH_ALL.has(ref.group.matcher))
+      return [];
     const id = identityOf(ref.handler, f.view.projectDir, e);
     if (seen.has(id.key)) return [];
     seen.add(id.key);
@@ -126,7 +134,7 @@ function canaryHooks(f: HookFacts, e: DoctorEnv): { hook: CanaryHook; socket: st
 /** Why the canary cannot run at all, or null. */
 function canaryBlocked(hooks: readonly unknown[], probe: DaemonProbe): Check | null {
   if (hooks.length === 0) {
-    const detail = "not run: no jev-cops PreToolUse hook is registered";
+    const detail = "not run: no jev-cops PreToolUse hook is registered for every tool";
     return check("canary", "offline canary", "warn", detail);
   }
   if (probe.agent.ok) return null;

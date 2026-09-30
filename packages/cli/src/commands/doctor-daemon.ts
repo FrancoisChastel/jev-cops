@@ -152,17 +152,15 @@ function policiesCheck(h: Health): Check {
   const degraded = h.policies
     .filter((p) => p.degraded === true)
     .map((p) => `${p.name}@${p.version}`);
-  const problems = [
-    ...(degraded.length > 0
-      ? [`degraded: ${degraded.join(", ")} (a \`when\` overran its budget)`]
-      : []),
-    ...(h.policies.some((p) => p.name === "config-tamper")
-      ? []
-      : ["config-tamper is not loaded: writes to harness and jev-cops config are not killed (T1)"]),
-  ];
   const listed = `${keys.length} loaded: ${keys.join(", ")}`;
-  if (problems.length === 0) return check(GROUP, "policies", "ok", listed);
-  return check(GROUP, "policies", "warn", `${listed}; ${problems.join("; ")}`);
+  if (!h.policies.some((p) => p.name === "config-tamper")) {
+    const off =
+      "config-tamper is not loaded: writes to harness and jev-cops config are not killed (T1)";
+    return check(GROUP, "policies", "fail", `${listed}; ${off}`);
+  }
+  if (degraded.length === 0) return check(GROUP, "policies", "ok", listed);
+  const note = `degraded: ${degraded.join(", ")} (a \`when\` overran its budget)`;
+  return check(GROUP, "policies", "warn", `${listed}; ${note}`);
 }
 
 function versionCheck(h: Health): Check {
@@ -232,7 +230,7 @@ export function auditChecks(path: string): Check[] {
         "audit",
         "chain",
         "ok",
-        `${report.lines} line${report.lines === 1 ? "" : "s"} verify at ${path}. ${AUDIT_CAVEAT}`,
+        `${report.lines === 1 ? "1 line verifies" : `${report.lines} lines verify`} at ${path}. ${AUDIT_CAVEAT}`,
       ),
     ];
   }

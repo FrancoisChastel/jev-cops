@@ -162,7 +162,14 @@ function ancestors(dir: string): string[] {
   return up === dir ? [dir] : [dir, ...ancestors(up)];
 }
 
-/** The trust key for `dir`: its repository root, else itself or a trusted parent (permissions docs). */
+/**
+ * The trust key for `dir`: its repository root, else itself or a trusted parent. Docs
+ * (v2.1.285): hooks wait "until you accept the workspace trust dialog for the folder, or for
+ * a parent directory whose trust extends to it" (hooks#workspace-trust); "In a repository,
+ * Claude Code keys the trust on the git repository root"; outside one, "the trust covers any
+ * subdirectory of that directory apart from a git repository nested inside it"
+ * (permissions#project-allow-rules-and-workspace-trust).
+ */
 function trustedKey(
   projects: Record<string, unknown>,
   dir: string,

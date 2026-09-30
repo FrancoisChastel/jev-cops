@@ -89,15 +89,20 @@ describe("T12 log tampering", () => {
       const report = JSON.parse(io.stdout.join("\n")) as {
         checks: { name: string; status: string; detail: string }[];
       };
-      return { code, chain: report.checks.find((c) => c.name === "chain") };
+      const failed = report.checks.filter((c) => c.status === "fail").map((c) => c.name);
+      return { code, failed, chain: report.checks.find((c) => c.name === "chain") };
     };
     try {
-      expect(await doctor()).toMatchObject({ code: 0, chain: { status: "ok" } });
+      // This daemon runs a lone `ok` policy, so `policies` fails (no config-tamper) throughout.
+      const before = await doctor();
+      expect(before.chain?.status).toBe("ok");
+      expect(before.failed).toEqual(["policies"]);
       const l = lines();
       l[1] = (l[1] ?? "").replace('"verdict":"allow"', '"verdict":"deny"');
       writeFileSync(path, `${l.join("\n")}\n`);
       const after = await doctor();
       expect(after).toMatchObject({ code: 1, chain: { status: "fail" } });
+      expect(after.failed).toEqual(["policies", "chain"]);
       expect(after.chain?.detail).toContain("broken at seq 2");
     } finally {
       f.dispose();

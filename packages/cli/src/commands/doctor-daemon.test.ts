@@ -59,7 +59,7 @@ describe("doctor: copsd health on both sockets", () => {
     expect(checks.every((c) => c.group === "copsd")).toBe(true);
   });
 
-  test("observe mode warns that no verdict is enforced; a set without config-tamper warns", async () => {
+  test("observe mode warns that no verdict is enforced; a set without config-tamper fails (T1 off)", async () => {
     const probe = await probeDaemon(
       observe.config.daemon.socket,
       observe.config.daemon.adminSocket,
@@ -67,7 +67,7 @@ describe("doctor: copsd health on both sockets", () => {
     const checks = daemonChecks(probe);
     expect(byName(checks, "enforcement")?.status).toBe("warn");
     expect(byName(checks, "enforcement")?.detail).toContain("no verdict is enforced");
-    expect(byName(checks, "policies")?.status).toBe("warn");
+    expect(byName(checks, "policies")?.status).toBe("fail");
     expect(byName(checks, "policies")?.detail).toContain("config-tamper is not loaded");
     expect(enforcementOf(probe)).toBe("observe");
   });

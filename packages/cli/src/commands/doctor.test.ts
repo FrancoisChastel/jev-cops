@@ -151,6 +151,24 @@ describe("cops doctor", () => {
     expect(text).toMatch(/\d+ ok · \d+ warn · 0 fail · \d+ gap → exit 0$/);
   });
 
+  test("a PreToolUse hook scoped to Bash only: not registered, and the canary does not vouch for it", async () => {
+    healthy();
+    const settings = installHook(f, td.config.daemon.socket) as {
+      hooks: Record<string, { hooks: unknown[] }[]>;
+    };
+    const pre = (settings.hooks.PreToolUse ?? []).map((g) => ({ ...g, matcher: "Bash" }));
+    writeJson(join(f.home, ".claude", "settings.json"), {
+      ...settings,
+      hooks: { ...settings.hooks, PreToolUse: pre },
+    });
+    const { code, report } = await doctorJson(["--harness", "claude-code"]);
+    expect(code).toBe(1);
+    expect(report.checks.find((c) => c.name === "registered")?.status).toBe("fail");
+    const canary = report.checks.filter((c) => c.group === "canary");
+    expect(canary).toHaveLength(1);
+    expect(canary[0]?.detail).toContain("for every tool");
+  });
+
   test("a hook on another socket: the socket check fails and no canary runs through it", async () => {
     healthy();
     installHook(f, join(f.root, "other.sock"));
