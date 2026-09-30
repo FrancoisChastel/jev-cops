@@ -175,7 +175,7 @@ config all behaved as specified; fresh clone → check → gate → build green.
 | # | Sev | Finding | Status |
 |---|---|---|---|
 | M1 | medium | `dd of=<kill-tier path>` is `allow`: the normalizer does not know `dd`, so config-tamper never sees the write (hook binary, store, Codex config) | fixed: `dd`, `install`, `rsync`, copies into dirs, `tar -x`, `unzip -d`, `patch` (D-097) |
-| M2 | medium | `cat ~/.jev-cops/audit.jsonl` is `allow`: the full scored decisions (the T6 oracle kept off agent channels by D-066/D-096) are readable, and no gap line says so | in progress |
+| M2 | medium | `cat ~/.jev-cops/audit.jsonl` is `allow`: the full scored decisions (the T6 oracle kept off agent channels by D-066/D-096) are readable, and no gap line says so | fixed: private paths held on read, agent-run `cops explain` held, gap lines (D-098, D-099) |
 | L1 | low | `pkill -f copsd` / `cops-hook` is `allow` (DoS only: the hook fails closed); symlink and `$VAR`-built write paths uncaught (documented normalizer gaps) | fixed: stopping the judge held by name (D-100); pid kills, `$VAR` and symlink writes printed as gaps |
 | L2 | low | `cops doctor` says "read-only" but its canary appends audit lines and latches throw-away sessions | fixed: doctor states its footprint (D-102) |
 | L3 | note | SIGUSR1 to the hook panics Bun (exit 133, no output → the tool proceeds); same class as PLAN-M1 §5 residual #2 (SIGKILL/OOM), closed only by OpenShell | documented |
