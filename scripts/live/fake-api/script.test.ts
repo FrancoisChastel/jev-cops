@@ -95,6 +95,12 @@ describe("loadScript", () => {
     expect(loadScript(path).scenarios.size).toBe(1);
   });
 
+  test("the committed live scenarios parse", () => {
+    const s = loadScript(join(import.meta.dir, "..", "scenarios.json"));
+    expect([...s.scenarios.keys()]).toContain("push-main");
+    expect(s.scenarios.get("tainted-rm")).toHaveLength(2);
+  });
+
   test("names the file on invalid JSON or a missing file", () => {
     const path = join(dir, "bad.json");
     writeFileSync(path, "{");
