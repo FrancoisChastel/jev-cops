@@ -71,7 +71,7 @@ describe("T9: rewrite pins the input Claude Code runs (updatedInput)", () => {
 
 describe("T2: daemon unreachable", () => {
   test("exec, write and MCP calls are blocked; Read and Grep proceed with a warning and a log line", async () => {
-    td = await startTestDaemon({ policies: {} });
+    td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     const socket = td.config.daemon.socket;
     await td.stop();
     td = null;

@@ -9,6 +9,7 @@ import { join } from "node:path";
 import type { Server } from "bun";
 import type { AuditLine } from "../../packages/daemon/src/audit.ts";
 import { startTestDaemon, type TestDaemon } from "../../packages/daemon/src/testing/daemon.ts";
+import { policyModule } from "../../packages/daemon/src/testing/policies.ts";
 import { register } from "./jev-cops.ts";
 import { FakePi, fakeContext } from "./testing/fake-pi.ts";
 
@@ -234,7 +235,7 @@ describe("Pi adapter failure modes (T2, T3)", () => {
   }
 
   test("daemon stopped: exec and write fail closed, a read proceeds and warns (T2)", async () => {
-    const td = await startTestDaemon({ policies: {} });
+    const td = await startTestDaemon({ policies: { "ok.ts": policyModule("ok") } });
     const socket = td.config.daemon.socket;
     await td.stop();
     const { pi, ctx } = await session(socket, { hasUI: true });
