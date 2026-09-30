@@ -1,7 +1,9 @@
 /**
  * How Claude Code turns PreToolUse hook runs into one decision (hooks#pretooluse-decision-
- * control, #exit-code-2, #other-exit-codes; checked against a real claude 2.1.280):
- * - exit 2 blocks "whether or not you print JSON"; the reason Claude sees is the JSON
+ * control, #exit-code-2, #other-exit-codes; checked against a real claude 2.1.280; unit
+ * tests in pre-decision.test.ts quote the docs):
+ * - exit 2 blocks "whether or not you print JSON", even JSON that fails to parse or to
+ *   validate (a `hookSpecificOutput` for another event); the reason Claude sees is the JSON
  *   `permissionDecisionReason` of a deny when there is one, else stderr;
  * - otherwise a valid JSON object decides: `deny`, `ask` (reason shown to the user),
  *   `allow` (skips the prompt), `defer` (ignored with a warning in interactive sessions);
@@ -58,9 +60,15 @@ const NONE: Omit<PreDecision, "ms"> = {
   hookErrors: [],
 };
 
+/** exit 2 without a usable JSON decision: blocked, stderr is the reason (hooks#exit-code-2). */
+function blockedByExit2(run: HookRun): PreDecision {
+  return { ...NONE, outcome: "deny", reason: run.stderr.trim(), ms: run.ms };
+}
+
 function fromJson(json: Json, run: HookRun): PreDecision {
   const hso = isRecord(json.hookSpecificOutput) ? json.hookSpecificOutput : {};
   if (hso.hookEventName !== undefined && hso.hookEventName !== "PreToolUse") {
+    if (run.exitCode === 2) return blockedByExit2(run);
     return { ...NONE, hookErrors: ["hookSpecificOutput for another event"], ms: run.ms };
   }
   const decision = str(hso.permissionDecision);
@@ -93,12 +101,11 @@ function fromJson(json: Json, run: HookRun): PreDecision {
 
 /** One handler's run as Claude Code reads it. */
 export function decisionOf(run: HookRun): PreDecision {
+  if (run.exitCode === 2 && run.json === null) return blockedByExit2(run);
   if (run.exitCode === null || run.hookError !== null) {
     return { ...NONE, hookErrors: [run.hookError ?? "hook error"], ms: run.ms };
   }
   if (run.json !== null) return fromJson(run.json, run);
-  if (run.exitCode === 2)
-    return { ...NONE, outcome: "deny", reason: run.stderr.trim(), ms: run.ms };
   return { ...NONE, ms: run.ms };
 }
 
