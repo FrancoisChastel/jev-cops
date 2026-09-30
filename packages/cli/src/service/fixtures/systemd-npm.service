@@ -1,0 +1,20 @@
+# Written by `cops service install`; `cops service uninstall` removes it.
+[Unit]
+Description=jev-cops judging daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/home/me/.bun/bin/bun /home/me/.bun/install/global/node_modules/@jev-cops/daemon/src/main.ts
+Environment=HOME=/home/me
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/me/.local/bin:/home/me/.bun/bin
+WorkingDirectory=/home/me
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=10
+StandardOutput=append:/home/me/.jev-cops/copsd.log
+StandardError=append:/home/me/.jev-cops/copsd.log
+
+[Install]
+WantedBy=default.target
