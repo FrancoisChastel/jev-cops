@@ -1,0 +1,264 @@
+{
+  "directory": "/work/repo",
+  "before": {
+    "bash": {
+      "input": {
+        "tool": "bash",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc01Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "command": "rm -rf ./build",
+          "timeout": 120000
+        }
+      }
+    },
+    "bash-workdir": {
+      "input": {
+        "tool": "bash",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc02Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "command": "echo '{}' > opencode.json",
+          "workdir": "/home/dev/.config/opencode"
+        }
+      }
+    },
+    "bash-interactive": {
+      "input": {
+        "tool": "bash",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc03Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "command": "python3"
+        }
+      }
+    },
+    "edit": {
+      "input": {
+        "tool": "edit",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc04Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "filePath": "/work/repo/src/app.ts",
+          "oldString": "return 1",
+          "newString": "return 2"
+        }
+      }
+    },
+    "write": {
+      "input": {
+        "tool": "write",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc05Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "filePath": "/home/dev/.config/opencode/opencode.json",
+          "content": "{}"
+        }
+      }
+    },
+    "read": {
+      "input": {
+        "tool": "read",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc06Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "filePath": "/home/dev/.local/share/opencode/auth.json"
+        }
+      }
+    },
+    "glob": {
+      "input": {
+        "tool": "glob",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc07Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "pattern": "**/*.pem",
+          "path": "/home/dev/.ssh"
+        }
+      }
+    },
+    "grep": {
+      "input": {
+        "tool": "grep",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc08Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "pattern": "API_KEY",
+          "path": "src",
+          "include": "*.ts"
+        }
+      }
+    },
+    "lsp": {
+      "input": {
+        "tool": "lsp",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc09Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "operation": "hover",
+          "filePath": "src/app.ts",
+          "line": 3,
+          "character": 5
+        }
+      }
+    },
+    "task": {
+      "input": {
+        "tool": "task",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc10Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "description": "Explore auth",
+          "prompt": "Find the flaky test",
+          "subagent_type": "general"
+        }
+      }
+    },
+    "webfetch": {
+      "input": {
+        "tool": "webfetch",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc11Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "url": "https://docs.example/install",
+          "format": "markdown"
+        }
+      }
+    },
+    "websearch": {
+      "input": {
+        "tool": "websearch",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc12Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "query": "opencode plugin hooks"
+        }
+      }
+    },
+    "apply_patch": {
+      "input": {
+        "tool": "apply_patch",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc13Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "patchText": "*** Begin Patch\n*** Add File: /home/dev/.config/opencode/plugins/evil.ts\n+export const Evil = async () => ({});\n*** Delete File: tmp/scratch.txt\n*** End Patch"
+        }
+      }
+    },
+    "skill": {
+      "input": {
+        "tool": "skill",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc14Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "name": "release"
+        }
+      }
+    },
+    "todowrite": {
+      "input": {
+        "tool": "todowrite",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc15Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "todos": [
+            {
+              "id": "1",
+              "content": "rm -rf /",
+              "status": "pending",
+              "priority": "high"
+            }
+          ]
+        }
+      }
+    },
+    "question": {
+      "input": {
+        "tool": "question",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc16Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "questions": [
+            {
+              "question": "Proceed?",
+              "header": "Confirm",
+              "options": [
+                {
+                  "label": "Yes",
+                  "description": "go"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "plan_exit": {
+      "input": {
+        "tool": "plan_exit",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc17Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {}
+      }
+    },
+    "execute": {
+      "input": {
+        "tool": "execute",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc18Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "code": "await tools.github.create_issue({ title: 'x' })"
+        }
+      }
+    },
+    "mcp": {
+      "input": {
+        "tool": "github_create_issue",
+        "sessionID": "ses_4f1c2b8e7ffeWq3kT9vX0yZa1B",
+        "callID": "call_oc19Hk3Lm5Np7Qr9St1Uv3Wx5Yz"
+      },
+      "output": {
+        "args": {
+          "title": "x",
+          "body": "rm -rf /"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "session_id": "019a7c1e-5b2d-7f10-9c3a-2e4d6f8a0b1c",
+  "turn_id": "019a7c1e-6a01-7c22-8d44-0f1e2d3c4b5a",
+  "transcript_path": "/home/dev/.codex/sessions/2026/09/30/rollout-2026-09-30T09-12-00-019a7c1e-5b2d-7f10-9c3a-2e4d6f8a0b1c.jsonl",
+  "cwd": "/work/repo",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.5",
+  "permission_mode": "default",
+  "tool_name": "spawn_agent",
+  "tool_input": {
+    "message": "Find every caller of main()",
+    "agent_type": "explorer"
+  },
+  "tool_use_id": "call_Sp1a2W3n4A5g6E7n8T9x0Y1z"
+}
