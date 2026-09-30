@@ -1,0 +1,17 @@
+session: sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f
+$ cc cops budget sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f
+sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f: spent 1/100
+(exit 0)
+==> PASS cops budget <session> reads the budget (agent socket)
+$ ccsh cops budget 'sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f' --reset --admin-socket ~/.jev-cops/copsd.sock
+cops budget: not found
+(exit 1)
+==> PASS the agent socket refuses a reset (human-only route, H1)
+$ ccsh cops budget 'sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f' --reset --admin-socket ~/.jev-cops/copsd-admin.sock
+sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f: reset; now 0/100
+(exit 0)
+==> PASS --reset through the admin socket
+$ cc cops budget sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f --reset
+sess_f9f3cbfd-6c29-4a20-8fbf-4bdc7c81711f: reset; now 0/100
+(exit 0)
+==> PASS --reset with no socket named uses the default admin socket

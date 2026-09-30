@@ -1,0 +1,47 @@
+$ live_compose up -d fake-api syslog claude-code pi codex opencode
+ Network jev-cops-live_live Creating 
+ Network jev-cops-live_live Created 
+ Volume jev-cops-live_certs Creating 
+ Volume jev-cops-live_certs Created 
+ Container jev-cops-live-syslog-1 Creating 
+ Container jev-cops-live-fake-api-1 Creating 
+ Container jev-cops-live-syslog-1 Created 
+ Container jev-cops-live-fake-api-1 Created 
+ Container jev-cops-live-claude-code-1 Creating 
+ Container jev-cops-live-pi-1 Creating 
+ Container jev-cops-live-opencode-1 Creating 
+ Container jev-cops-live-codex-1 Creating 
+ Container jev-cops-live-codex-1 Created 
+ Container jev-cops-live-pi-1 Created 
+ Container jev-cops-live-claude-code-1 Created 
+ Container jev-cops-live-opencode-1 Created 
+ Container jev-cops-live-fake-api-1 Starting 
+ Container jev-cops-live-syslog-1 Starting 
+ Container jev-cops-live-syslog-1 Started 
+ Container jev-cops-live-fake-api-1 Started 
+ Container jev-cops-live-fake-api-1 Waiting 
+ Container jev-cops-live-fake-api-1 Waiting 
+ Container jev-cops-live-fake-api-1 Waiting 
+ Container jev-cops-live-fake-api-1 Waiting 
+ Container jev-cops-live-fake-api-1 Healthy 
+ Container jev-cops-live-fake-api-1 Healthy 
+ Container jev-cops-live-opencode-1 Starting 
+ Container jev-cops-live-fake-api-1 Healthy 
+ Container jev-cops-live-claude-code-1 Starting 
+ Container jev-cops-live-pi-1 Starting 
+ Container jev-cops-live-fake-api-1 Healthy 
+ Container jev-cops-live-codex-1 Starting 
+ Container jev-cops-live-pi-1 Started 
+ Container jev-cops-live-codex-1 Started 
+ Container jev-cops-live-opencode-1 Started 
+ Container jev-cops-live-claude-code-1 Started 
+(exit 0)
+==> PASS docker compose up
+$ live_compose ps --format {{.Name}} {{.Status}}
+jev-cops-live-claude-code-1 Up Less than a second
+jev-cops-live-codex-1 Up Less than a second
+jev-cops-live-fake-api-1 Up 2 seconds (healthy)
+jev-cops-live-opencode-1 Up Less than a second
+jev-cops-live-pi-1 Up Less than a second
+jev-cops-live-syslog-1 Up 2 seconds
+(exit 0)

@@ -1,0 +1,57 @@
+$ <repo>/scripts/live/build.sh
+packing the repository into <work>/pack
+packed @jev-cops/core → jev-cops-core-0.1.0.tgz
+packed @jev-cops/sdk → jev-cops-sdk-0.1.0.tgz
+packed @jev-cops/judge → jev-cops-judge-0.1.0.tgz
+packed @jev-cops/scanner → jev-cops-scanner-0.1.0.tgz
+packed @jev-cops/policies → jev-cops-policies-0.1.0.tgz
+packed @jev-cops/openshell → jev-cops-openshell-0.1.0.tgz
+packed @jev-cops/daemon → jev-cops-daemon-0.1.0.tgz
+packed @jev-cops/adapter-claude-code → jev-cops-adapter-claude-code-0.1.0.tgz
+packed @jev-cops/adapter-pi → jev-cops-adapter-pi-0.1.0.tgz
+packed @jev-cops/cli → jev-cops-cli-0.1.0.tgz
+packed jev-cops → jev-cops-0.1.0.tgz
+building jev-cops-live-base:local
+building jev-cops-live-fake-api:local
+building jev-cops-live-syslog:local
+building jev-cops-live-claude-code:local
+building jev-cops-live-codex:local
+building jev-cops-live-opencode:local
+building jev-cops-live-pi:local
+images:
+  jev-cops-live-claude-code:local  2.1.286 (Claude Code) · jev-cops 0.1.0
+  jev-cops-live-codex:local  codex-cli 0.159.2 · jev-cops 0.1.0
+  jev-cops-live-opencode:local  1.18.33 · jev-cops 0.1.0
+  jev-cops-live-pi:local  0.99.2 · jev-cops 0.1.0
+(exit 0)
+==> PASS scripts/live/build.sh packs and builds every image
+$ cat <work>/pack/tarballs/manifest.json
+{
+  "version": "0.1.0",
+  "tarballs": {
+    "@jev-cops/core": "jev-cops-core-0.1.0.tgz",
+    "@jev-cops/sdk": "jev-cops-sdk-0.1.0.tgz",
+    "@jev-cops/judge": "jev-cops-judge-0.1.0.tgz",
+    "@jev-cops/scanner": "jev-cops-scanner-0.1.0.tgz",
+    "@jev-cops/policies": "jev-cops-policies-0.1.0.tgz",
+    "@jev-cops/openshell": "jev-cops-openshell-0.1.0.tgz",
+    "@jev-cops/daemon": "jev-cops-daemon-0.1.0.tgz",
+    "@jev-cops/adapter-claude-code": "jev-cops-adapter-claude-code-0.1.0.tgz",
+    "@jev-cops/adapter-pi": "jev-cops-adapter-pi-0.1.0.tgz",
+    "@jev-cops/cli": "jev-cops-cli-0.1.0.tgz",
+    "jev-cops": "jev-cops-0.1.0.tgz"
+  }
+}
+(exit 0)
+$ bash -c test $(grep -c '\.tgz"' '<work>/pack/tarballs/manifest.json') -eq 11 && grep -q scanner '<work>/pack/tarballs/manifest.json' && grep -q openshell '<work>/pack/tarballs/manifest.json'
+(exit 0)
+==> PASS 11 tarballs packed, @jev-cops/scanner and @jev-cops/openshell included
+$ docker image ls --filter label=jev-cops.live=1 --format {{.Repository}}:{{.Tag}} {{.Size}}
+jev-cops-live-pi:local 1.03GB
+jev-cops-live-opencode:local 1.38GB
+jev-cops-live-codex:local 1.64GB
+jev-cops-live-claude-code:local 1.33GB
+jev-cops-live-syslog:local 155MB
+jev-cops-live-fake-api:local 348MB
+jev-cops-live-base:local 685MB
+(exit 0)

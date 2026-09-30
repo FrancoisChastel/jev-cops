@@ -1,0 +1,129 @@
+{
+  "theme": "dark",
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+            "args": [
+              "--harness",
+              "claude-code",
+              "--socket",
+              "/home/dev/.jev-cops/copsd.sock"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+            "args": [
+              "--harness",
+              "claude-code",
+              "--socket",
+              "/home/dev/.jev-cops/copsd.sock"
+            ],
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+            "args": [
+              "--harness",
+              "claude-code",
+              "--socket",
+              "/home/dev/.jev-cops/copsd.sock"
+            ],
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+            "args": [
+              "--harness",
+              "claude-code",
+              "--socket",
+              "/home/dev/.jev-cops/copsd.sock"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+            "args": [
+              "--harness",
+              "claude-code",
+              "--socket",
+              "/home/dev/.jev-cops/copsd.sock"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+            "args": [
+              "--harness",
+              "claude-code",
+              "--socket",
+              "/home/dev/.jev-cops/copsd.sock"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts",
+            "args": [
+              "--harness",
+              "claude-code",
+              "--socket",
+              "/home/dev/.jev-cops/copsd.sock"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

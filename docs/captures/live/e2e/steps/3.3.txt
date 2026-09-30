@@ -1,0 +1,94 @@
+$ ccsh cops doctor --harness claude-code > ~/live/doctor.out 2>&1; echo "doctor exit $?" >> ~/live/doctor.out; cat ~/live/doctor.out
+cops doctor (jev-cops 0.1.0)
+writes no configuration; the canary leaves audit lines and latches a throw-away session in copsd
+
+config
+  [ok]   cops.toml               loaded /home/dev/.config/jev-cops/cops.toml
+
+copsd
+  [ok]   agent socket            copsd 0.1.0 answers on /home/dev/.jev-cops/copsd.sock
+  [ok]   admin socket            answers on /home/dev/.jev-cops/copsd-admin.sock (human only: never mount it into a sandbox)
+  [ok]   version                 copsd 0.1.0 = cops 0.1.0
+  [ok]   policies                6 loaded: config-tamper@3, default-branch-guard@2, exfil-after-secrets@3, off-repo-write@2, opaque-exec@1, tainted-destructive@1
+  [warn] judge                   disabled: the semantic judge is off; the deterministic floor and the policies decide alone
+  [ok]   enforcement             enforce
+  [ok]   protected paths         15 paths config-tamper guards beyond the harness dirs (the judge's own inputs)
+  [ok]   latched sessions        1 root session(s) latched killed (cleared only through the admin socket)
+
+audit
+  [ok]   chain                   5 lines verify at /home/dev/.jev-cops/audit.jsonl
+  [ok]   signatures              1 checkpoint(s) verify with key 2a06a037b92ce141, signed through seq 1; 3 line(s) after it not signed yet. Signed checkpoints (Ed25519, private key outside the sandbox) make every line up to the last checkpoint impossible to edit, drop or recompute without that key; the lines after it, and a tail cut exactly at a checkpoint, show only against the off-box copy (--audit-remote).
+  [ok]   signing key             key 2a06a037b92ce141 at /home/dev/.jev-cops/keys/audit-ed25519.key (0600, outside any sandbox)
+  [ok]   forwarding              syslog, connected, sent through seq 5 of 5
+
+claude-code
+  [ok]   claude on PATH          /home/dev/.npm-global/bin/claude
+  [warn] claude version          2.1.286; the adapter was verified against 2.1.285: check the changelog for hook changes (docs/adapters.md#claude-code)
+  [ok]   recorded version        2.1.286 in /home/dev/.jev-cops/claude-code.json
+  [warn] workspace trust         /home/dev is the home directory: Claude Code keeps its trust for one session only, so each interactive session here asks again; until then no hook runs
+  [ok]   hook log                no /home/dev/.jev-cops/claude-code-hook.log: the hook never had to decide alone
+
+claude-code hook
+  [ok]   registered              in force on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange (exec form, every tool, D-087)
+  [ok]   exec form               every jev-cops command entry passes `args` (no shell)
+  [ok]   hook binary             /home/dev/.bun/install/global/node_modules/jev-cops/bin/cops-hook.ts is an executable file
+  [ok]   hook version            0.1.0 = cops 0.1.0
+  [ok]   socket                  --socket /home/dev/.jev-cops/copsd.sock is copsd's agent socket
+  [ok]   duplicates              no mismatched jev-cops entries (Claude Code runs identical handlers once)
+  [ok]   other PreToolUse hooks  none
+
+claude-code settings
+  [ok]   settings files          read: /home/dev/.claude/settings.json, /home/dev/.claude/settings.json
+  [ok]   disableAllHooks         not set
+  [ok]   allowManagedHooksOnly   not set
+  [ok]   permissions.allow       no bare Bash or PowerShell allow rule
+  [ok]   defaultMode             not set (interactive sessions start in auto mode from Claude Code 2.1.283, in default before; -p in default)
+  [ok]   allowedHttpHookUrls     not set
+
+canary
+  [ok]   benign call proceeds    via cops-hook.ts: expected exit 0, no output; observed exit 0, no output. A benign call proceeds with no output
+  [ok]   config write is killed  via cops-hook.ts: expected exit 2, deny, continue:false (observe mode: exit 0, additionalContext); observed exit 2, deny, continue:false. The hook ran, copsd answered, config-tamper killed the write, and the kill ends the turn
+
+claude-code gaps
+  [gap]  A hook that cannot start (binary missing, not executable, path mistyped) is a non-blocking error: Claude Code runs the tool anyway, so the gate is silently disabled; `cops doctor` checks the registered path and runs a canary through it.
+  [gap]  A hook killed by the OS (SIGKILL, out of memory) or not started within the settings timeout (30 s) lets the call proceed; only OpenShell (M2) backstops it.
+  [gap]  No OpenShell: the agent runs with your permissions; config-tamper and the ConfigChange hook stop the settings and binary changes Claude Code sees, but every deny is best-effort until those files are read-only to the agent (T1, T4).
+  [gap]  `policy_settings` (managed settings) changes cannot be blocked by a hook; they are reported to copsd only.
+  [gap]  `kill` ends the turn (`continue: false`) and latches the session: every later call is denied and every later prompt blocked. Claude Code cannot be exited from a hook; `--fork-session` or a new session starts a new, unlatched root, and a `claude` started through Bash is its own root session.
+  [gap]  Hooks do not run under `--bare`, `--safe-mode`, `--setting-sources` without the install's source, `--settings '{"disableAllHooks": true}'`, `--restricted`, `allowManagedHooksOnly` (for a non-managed install), or in a folder whose workspace trust was not accepted (interactive); a managed install survives `--safe-mode`, `--restricted`, `--settings` and non-managed `disableAllHooks`.
+  [gap]  No PreToolUse fires for files referenced with `@` in a prompt, for `EndConversation`, or for commands the user types with `!`; cloud sessions and the VS Code and desktop surfaces are not verified.
+  [gap]  A hook `ask` against a bare `Bash` or `PowerShell` entry in `permissions.allow` is not documented (an exit-2 deny is documented to win); the installer refuses that allow rule unless `--force`.
+  [gap]  Another PreToolUse hook that returns `updatedInput` races jev-cops's rewrite: the last one to finish wins.
+  [gap]  The ask dialog is Claude Code's: next to jev-cops's reason, normalized command and policy summary it shows the tool input as Claude sent it, including the agent's own `description`.
+  [gap]  Headless is read from the parent `claude` argv (`-p`/`--print` or the print-only `--output-format`/`--input-format` the Agent SDK passes, without `--permission-prompt-tool`, through up to three shells). A parent that cannot be read or is not recognizably `claude` counts as headless, so holds are denied there; a launcher that runs `claude` with none of those flags and no human is taken for interactive, and its hold becomes an ask that a host-less run denies but shows, with jev-cops's command and policy summary, to Claude (seen on 2.1.280, and through Agent SDK 0.3.285 before the print-only flags counted).
+  [gap]  Claude Code writes every hook's output to the session transcript under ~/.claude/projects/ (and to the debug log with `--debug`): the text of an ask is readable there by the agent, although it never enters the model's context, even on `--resume` (verified on 2.1.280). That text is limited to jev-cops's reason, the normalized command and the policies' plain-language lines; the scored detail (feature values and evidence, floor, risk, judge answers, budget) stays with `cops explain`.
+  [gap]  Read, Glob, Grep and Claude Code's bookkeeping tools proceed when copsd is unreachable, with a warning and a line in ~/.jev-cops/claude-code-hook.log; every other tool, MCP tools included, is blocked.
+  [gap]  The hook sends no `env.git`; copsd derives repo, branch, default branch and dirty from the call's cwd, values the agent can steer in its own repository (D-067).
+  [gap]  Without OpenShell the agent can reach copsd's socket as you and post judge requests of its own; Claude Code holds carry no resolvable token, so no precedent comes from Claude Code in M1.
+  [gap]  Without OpenShell the agent runs as you and can read the judge's own records: ~/.jev-cops/audit.jsonl and the SQLite store hold every decision with its scores (the oracle no agent channel carries), next to ~/.jev-cops/claude-code-hook.log. config-tamper holds a direct read of them (cat, grep, sqlite3, the Read tool, an agent-run `cops explain`); a read it cannot see (from inside an interpreter, a recursive read of a directory above them) gets through. OpenShell makes them unreadable to the agent (M2).
+  [gap]  Stopping copsd or the hook by name (`pkill`, `killall`, `kill $(pgrep …)`, a launchctl or systemctl stop) is held; a `kill <pid>`, or the judge run under another name, is not recognized. Either way the hook then blocks every non-read call (fail closed): a denial of service, not a bypass; only OpenShell keeps the agent from signalling copsd (M2).
+  [gap]  config-tamper sees the paths a command names: a write through a variable (`d=~/.claude; … > $d/settings.json`), through a symlink made earlier, or into a directory an archive or a patch fills (`tar -x`, `unzip`, `git apply`: the directory is judged, not the files in it) is caught only when a config path is named; OpenShell's read-only mounts close it (M2).
+  [gap]  A denied call produces no post event: Claude Code fires no PostToolUseFailure for a permission denial.
+  [gap]  `harness_version` is the `claude --version` recorded in ~/.jev-cops/claude-code.json by `cops install`; it is omitted until then (Claude Code gives hooks no version), and it is wrong for an Agent SDK run, which starts its own bundled `claude` (2.1.285 in SDK 0.3.285).
+  [gap]  Windows paths (backslash separators) are passed through unnormalized in M1.
+  [gap]  A managed install (`managed-settings.d/50-jev-cops.json`) is skipped without a warning when server-managed settings or an MDM profile supply the managed policy (default `managedSourcesBehavior` first-wins); `/status` names the source Claude Code applies.
+  [gap]  With `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` (v2.1.251+) hooks do not see `CLAUDE_CONFIG_DIR`, so the ConfigChange check looks for user settings in ~/.claude: a user install under `CLAUDE_CONFIG_DIR` then fails closed on every settings change (blocked, session latched).
+
+30 ok · 3 warn · 0 fail · 23 gap → exit 0
+doctor exit 0
+(exit 0)
+$ ccsh grep -qx "doctor exit 0" ~/live/doctor.out
+(exit 0)
+==> PASS doctor exits 0 (no check failed)
+$ ccsh grep -E "\[ok\] +benign call proceeds" ~/live/doctor.out
+  [ok]   benign call proceeds    via cops-hook.ts: expected exit 0, no output; observed exit 0, no output. A benign call proceeds with no output
+(exit 0)
+==> PASS canary: a benign call proceeds through the registered hook
+$ ccsh grep -E "\[ok\] +config write is killed" ~/live/doctor.out
+  [ok]   config write is killed  via cops-hook.ts: expected exit 2, deny, continue:false (observe mode: exit 0, additionalContext); observed exit 2, deny, continue:false. The hook ran, copsd answered, config-tamper killed the write, and the kill ends the turn
+(exit 0)
+==> PASS canary: a config write is killed
+$ ccsh grep -E "\[ok\] +registered" ~/live/doctor.out
+  [ok]   registered              in force on PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, ConfigChange (exec form, every tool, D-087)
+(exit 0)
+==> PASS the hook is in force on every event

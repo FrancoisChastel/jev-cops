@@ -1,0 +1,24 @@
+$ cc /opt/jev-cops-live/bin/copsd.sh stop
+(exit 0)
+==> PASS copsd stops cleanly (shutdown line, checkpoint, forwarder flush)
+$ live_cp_out syslog /var/log/remote/copsd.log <work>/e2e-20260930T203132Z/artifacts/syslog-copsd.log
+(exit 0)
+$ live_cp_in <work>/e2e-20260930T203132Z/artifacts/syslog-copsd.log claude-code /home/dev/live/remote-copy.log
+chmod: changing permissions of '/tmp/cp-in-remote-copy.log': Operation not permitted
+(exit 0)
+$ ccsh wc -l ~/.jev-cops/audit.jsonl ~/live/remote-copy.log
+    79 /home/dev/.jev-cops/audit.jsonl
+    79 /home/dev/live/remote-copy.log
+   158 total
+(exit 0)
+$ ccsh cops audit verify ~/.jev-cops/audit.jsonl --pubkey ~/.config/jev-cops/audit-ed25519.pub --remote ~/live/remote-copy.log
+cops audit verify /home/dev/.jev-cops/audit.jsonl
+  lines          79 (head seq 79)
+  chain          ok
+  checkpoints    12 verified, signed through seq 78
+  keys           2a06a037b92ce141
+  unsigned tail  none
+  off-box copy   /home/dev/live/remote-copy.log (syslog-lines): 79 lines, last seq 79
+result: verified
+(exit 0)
+==> PASS audit verify with the public key and the remote copy: verified

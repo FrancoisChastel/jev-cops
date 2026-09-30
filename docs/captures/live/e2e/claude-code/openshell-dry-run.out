@@ -1,0 +1,58 @@
+inputs: sha256:bd77c3468f0dca6cef051f4a450dadd10cff1f81b35a695c82de2836bb0c5c87
+result: policy emitted
+judge hosts kept out (T13): api.typesafe.ai, openrouter.ai
+fragments:
+  - protection (filesystem) backs config-tamper@3
+  - judge-route (network) backs judge route (D-105)
+  - task-allowlist (network) backs exfil-after-secrets@3
+updates at the first prompt: none
+absent:
+  - path /library/application support/claudecode: not a Linux path: unlisted, inaccessible
+  - path /c/program files/claudecode: not a Linux path: unlisted, inaccessible
+  - path /home/agent/.claude/projects/*/memory: wildcard rule: Landlock paths are literal; its nearest listed ancestor decides
+  - path /home/agent/.codex: codex configuration: unlisted, inaccessible
+  - path /home/agent/.config/opencode: opencode configuration: unlisted, inaccessible
+  - path /home/agent/.pi: pi configuration: unlisted, inaccessible
+  - path /home/agent/.config/jev-cops: jev-cops configuration: unlisted, inaccessible
+  - path /home/agent/.jev-cops: the judge's private records and keys (D-098): unlisted, unreadable
+  - default-branch-guard@2: no kernel equivalent: the pushed branch is inside the git-receive-pack body, not visible at L7; a deny_rules on git-receive-pack would block every push
+  - off-repo-write@2: not deny-class (hold); the workspace read_write limit of the protection set bounds writes anyway
+  - opaque-exec@1: not deny-class (at most hold); an opaque command has no deterministic target
+  - tainted-destructive@1: no kernel equivalent: taint is not visible to the kernel or the proxy
+  - model endpoints come from the attached provider profile (`_provider_*` rules, schema.mdx:116-117); the compiler never emits or removes them
+gaps:
+  - /home/agent/.claude.json stays writable (the harness rewrites it); config-tamper keeps it kill tier (D-107)
+  - project config under the workspace stays writable (Landlock cannot carve read-only paths out of a read_write tree): /sandbox/.claude/hooks, /sandbox/.claude/settings.json, /sandbox/.claude/settings.local.json, /sandbox/.codex, /sandbox/.cops.toml, /sandbox/.opencode/plugin, /sandbox/.opencode/plugins, /sandbox/.pi/extensions, /sandbox/.pi/settings.json, /sandbox/opencode.json, /sandbox/opencode.jsonc; config-tamper keeps it kill tier, and Claude Code's hook is installed managed under /etc/claude-code
+  - every process the agent starts shares the agent's network rules (network-rules.mdx:71-73): the task allowlist bounds where data can go, not which tool sends it
+  - T13 is asserted on the base policy only: the gateway composes provider rules (`_provider_*`) into the effective policy, so a provider profile that allows a judge host (OpenRouter as both Pi's model provider and the judge) opens that route; check `policy get --full` (cops doctor, step 7)
+refusals: none
+diff against an empty policy:
+  + rule jev_cops_judge
+  + read_only /app
+  + read_only /dev/urandom
+  + read_only /etc
+  + read_only /etc/claude-code
+  + read_only /home/agent/.claude
+  + read_only /home/agent/.claude/hooks
+  + read_only /home/agent/.claude/plugins
+  + read_only /home/agent/.claude/settings.json
+  + read_only /home/agent/.claude/settings.local.json
+  + read_only /lib
+  + read_only /proc
+  + read_only /usr
+  + read_only /usr/local/libexec/jev-cops
+  + read_only /var/log
+  + read_write /dev/null
+  + read_write /home/agent/.cache
+  + read_write /home/agent/.claude.json
+  + read_write /home/agent/.claude/plans
+  + read_write /home/agent/.claude/projects
+  + read_write /home/agent/.claude/todos
+  + read_write /home/agent/.npm
+  + read_write /sandbox
+  + read_write /tmp
+  ~ include_workdir
+  ~ landlock
+  ~ process
+  note: filesystem, Landlock and process changes take effect only in a new sandbox (manage-policies.mdx:189-195)
+exit 3

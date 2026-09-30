@@ -1,0 +1,40 @@
+$ bash -c docker network inspect jev-cops-live_live --format '{{.Internal}}' | grep -qx true
+(exit 0)
+==> PASS the network is internal (no route out)
+$ bash -c docker inspect jev-cops-live-fake-api-1 --format '{{range .Mounts}}{{.Type}}:{{.Name}} {{end}}' | tee /dev/stderr | grep -vq bind
+
+(exit 0)
+==> PASS fake-api mounts no host path
+$ bash -c docker inspect jev-cops-live-syslog-1 --format '{{range .Mounts}}{{.Type}}:{{.Name}} {{end}}' | tee /dev/stderr | grep -vq bind
+volume:jev-cops-live_certs 
+(exit 0)
+==> PASS syslog mounts no host path
+$ bash -c docker inspect jev-cops-live-claude-code-1 --format '{{range .Mounts}}{{.Type}}:{{.Name}} {{end}}' | tee /dev/stderr | grep -vq bind
+volume:jev-cops-live_certs 
+(exit 0)
+==> PASS claude-code mounts no host path
+$ bash -c docker inspect jev-cops-live-pi-1 --format '{{range .Mounts}}{{.Type}}:{{.Name}} {{end}}' | tee /dev/stderr | grep -vq bind
+volume:jev-cops-live_certs 
+(exit 0)
+==> PASS pi mounts no host path
+$ bash -c docker inspect jev-cops-live-codex-1 --format '{{range .Mounts}}{{.Type}}:{{.Name}} {{end}}' | tee /dev/stderr | grep -vq bind
+volume:jev-cops-live_certs 
+(exit 0)
+==> PASS codex mounts no host path
+$ bash -c docker inspect jev-cops-live-opencode-1 --format '{{range .Mounts}}{{.Type}}:{{.Name}} {{end}}' | tee /dev/stderr | grep -vq bind
+volume:jev-cops-live_certs 
+(exit 0)
+==> PASS opencode mounts no host path
+$ cc getent hosts api.anthropic.com
+(exit 2)
+==> PASS no DNS for api.anthropic.com from the Claude Code container
+$ cc curl -sS --max-time 5 https://1.1.1.1
+curl: (7) Failed to connect to 1.1.1.1 port 443 after 0 ms: Couldn't connect to server
+(exit 7)
+==> PASS no route to a public address (1.1.1.1:443)
+$ cc curl -sf http://fake-api.live.internal:8080/health
+{"ok":true}(exit 0)
+==> PASS the fake API answers on the internal network
+$ ccsh test "$ANTHROPIC_API_KEY" = dummy-jev-cops-live-key-not-a-real-credential-0000
+(exit 0)
+==> PASS Claude Code's key is the dummy

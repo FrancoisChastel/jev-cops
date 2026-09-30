@@ -1,0 +1,29 @@
+$ ccsh cops --version | grep -qx '0.1.0'
+(exit 0)
+==> PASS cops --version prints 0.1.0
+$ ccsh copsd --help | head -1 | grep -F 'copsd 0.1.0'
+copsd 0.1.0 — the jev-cops judging daemon
+(exit 0)
+==> PASS copsd --help names 0.1.0
+$ ccsh cops-hook --version | grep -qx '0.1.0'
+(exit 0)
+==> PASS cops-hook --version prints 0.1.0
+$ ccsh command -v cops copsd cops-hook
+/home/dev/.bun/bin/cops
+/home/dev/.bun/bin/copsd
+/home/dev/.bun/bin/cops-hook
+(exit 0)
+==> PASS cops, copsd and cops-hook are on PATH (bun add -g)
+$ ccsh cd ~/.bun/install/global/node_modules && for p in jev-cops @jev-cops/*; do printf "%s %s\n" "$p" "$(grep -m1 "\"version\"" "$p/package.json" | tr -d " ,\"" | cut -d: -f2)"; done
+jev-cops 0.1.0
+@jev-cops/adapter-claude-code 0.1.0
+@jev-cops/adapter-pi 0.1.0
+@jev-cops/cli 0.1.0
+@jev-cops/core 0.1.0
+@jev-cops/daemon 0.1.0
+@jev-cops/judge 0.1.0
+@jev-cops/openshell 0.1.0
+@jev-cops/policies 0.1.0
+@jev-cops/sdk 0.1.0
+(exit 0)
+@jev-cops/scanner is packed but not installed: no installed package depends on it yet.
