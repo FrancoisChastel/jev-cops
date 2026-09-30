@@ -6,8 +6,8 @@ import type { DaemonConfig } from "./config.ts";
 import {
   compiledBinary,
   defaultJudgeInputs,
-  type JudgeInputs,
   installedCodeDirs,
+  type JudgeInputs,
   judgeInputPaths,
   judgePrivatePaths,
   protectJudgeInputs,
