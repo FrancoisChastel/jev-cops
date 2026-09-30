@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { registerSdkModule } from "@jev-cops/sdk/register";
+import { runAuditCommand } from "./commands/audit.ts";
 import { runBudgetCommand } from "./commands/budget.ts";
 import { runDoctorCommand } from "./commands/doctor.ts";
 import { runExplainCommand } from "./commands/explain.ts";
@@ -49,6 +50,12 @@ ${INSTALL_USAGE}
                                            the next key pending and asks a running copsd
                                            to switch (a rotation checkpoint signed by the
                                            old key), else it switches at its next start
+  audit verify <audit.jsonl> --pubkey <file> [--pubkey <file>] [--remote <copy>] [--json]
+                                           verify the hash chain, every signed checkpoint
+                                           (following key rotations) and the unsigned tail;
+                                           with --remote, that the off-box copy (JSONL or
+                                           RFC 5424/5425 syslog) agrees: a longer copy is a
+                                           local truncation (no daemon needed)
   help                                     this text
 
 Exit codes:
@@ -57,7 +64,8 @@ Exit codes:
   1  failure (a fixture mismatch or loader problem, an unknown event or unreadable log,
      an unknown session or an unreachable daemon; doctor: a check failed)
   2  usage error; hook: the call is blocked
-  install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage`;
+  install: 0 installed (or already, removed, a dry run), 1 refused or failed, 2 usage
+  audit verify: 0 verified (warnings included), 1 a check failed or input unreadable, 2 usage`;
 
 type Command = (argv: readonly string[], io: Io) => Promise<number>;
 
@@ -71,6 +79,7 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
   install: runInstallCommand,
   doctor: runDoctorCommand,
   keygen: runKeygenCommand,
+  audit: runAuditCommand,
 };
 
 /** Runs `jev-cops` with `argv` (without the binary name); resolves with the exit code. */
